@@ -155,19 +155,13 @@ async def pin_to_ipfs(file: UploadFile):
             with open(temp_file_path, "wb") as f:
                 f.write(content)
 
-            # Prepare the HTTP request
-            url = f"https://{os.getenv('IPFS_RPC_URL')}/api/v0/add"
-            auth = (os.getenv("IPFS_RPC_USER"), os.getenv("IPFS_RPC_PASSWORD"))
-
             # Open the file and create the files parameter for the request
             with open(temp_file_path, "rb") as f:
-                files = {"file": f}
-
                 # Make the HTTP request
                 response = requests.post(
-                    url,
-                    auth=auth,  # type: ignore
-                    files=files,
+                    url=f"https://{os.getenv('IPFS_RPC_URL')}/api/v0/add",
+                    auth=(os.getenv("IPFS_RPC_USER"), os.getenv("IPFS_RPC_PASSWORD")),  # type: ignore
+                    files={"file": f},
                 )
 
                 # Raise an exception for bad status codes

@@ -1,17 +1,16 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Body
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Response
-from pydantic import BaseModel
-import subprocess
-import tempfile
-from dotenv import load_dotenv
+import json
+import logging
 import os
 import shutil
-import json
+import subprocess
+import tempfile
 from pathlib import Path
-from typing import Dict, Any
-import logging
+
 import requests
+from dotenv import load_dotenv
+from fastapi import Body, FastAPI, HTTPException, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 # Load environment variables from .env file
 # Add environment variable validation at startup
@@ -73,7 +72,7 @@ async def create_pretty_pdf(data: dict = Body(...)):
         # Create a temporary directory for processing
         with tempfile.TemporaryDirectory() as temp_dir:
             # Write metadata to JSON file
-            metadata_file = Path(temp_dir) / f"metadata.json"
+            metadata_file = Path(temp_dir) / "metadata.json"
             with open(metadata_file, 'w') as f:
                 json.dump(data, f)
 
@@ -153,7 +152,7 @@ async def pin_to_ipfs(file: UploadFile):
         logger.info("IPFS pin attempt")
         # Create a temporary directory for processing
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file_path = Path(temp_dir) / file.filename
+            temp_file_path = Path(temp_dir) / file.filename   # type: ignore
 
             # Save uploaded file
             content = await file.read()
@@ -171,7 +170,7 @@ async def pin_to_ipfs(file: UploadFile):
                 # Make the HTTP request
                 response = requests.post(
                     url,
-                    auth=auth,
+                    auth=auth,  # type: ignore
                     files=files
                 )
 

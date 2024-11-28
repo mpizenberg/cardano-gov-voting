@@ -15,3 +15,20 @@ I suggest you use [`uv`](https://docs.astral.sh/uv/) for that, which takes care 
 mkdir static
 uv run server.py
 ```
+
+To trigger the `pretty-gov-pdf` endpoint, you can use a request like this:
+
+```sh
+curl -X POST "http://localhost:8000/pretty-gov-pdf" \
+      -H "Content-Type: application/json" \
+      -d @cf-ikigai-modified.json \
+      --output metadata.pdf
+```
+
+To trigger the `ipfs-pin` endpoint, you can use a request like this:
+
+```sh
+curl -X POST "http://localhost:8000/ipfs-pin" \
+     -H "Content-Type: multipart/form-data" \
+     -F "file=@some-file.pdf"
+```

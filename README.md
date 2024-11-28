@@ -8,9 +8,10 @@ IPFS_RPC_USER=user
 IPFS_RPC_PASSWORD=password
 ```
 
-Then you can run the python server.
+Then create a `static/` folder and you can run the python server.
 I suggest you use [`uv`](https://docs.astral.sh/uv/) for that, which takes care of all the dependency stuff.
 
 ```sh
+mkdir static
 uv run server.py
 ```

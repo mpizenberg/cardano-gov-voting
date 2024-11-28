@@ -1,0 +1,18 @@
+# Environment config
+.env
+
+# Project stuff
+.ropeproject
+static/
+temp/
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv

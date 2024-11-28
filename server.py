@@ -30,11 +30,6 @@ app = FastAPI(title="Custom Processing Server")
 # Mount static files from static directory
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# # Define data models
-# class GovPdfRequest(BaseModel):
-#     document_type: str
-#     parameters: Dict[str, Any]
-#     metadata: Dict[str, Any]
 
 # HTML content remains the same
 HTML_CONTENT = """

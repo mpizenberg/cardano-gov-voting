@@ -53,4 +53,4 @@ ruff check           # check the lints
 ruff format --check  # check code formatting
 ```
 
-To avoid aving to manually checking lints and code format, I suggest you install a ruff extension in your favorite editor.
+To avoid having to manually check lints and code format, I suggest you install a ruff extension in your favorite editor.

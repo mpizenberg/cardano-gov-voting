@@ -1,4 +1,6 @@
-Minimalist server for Cardano governance uses.
+Minimalist server for Cardano governance uses
+
+## Getting Started
 
 First create and modify the `.env` file containing the IPFS node access config.
 
@@ -32,3 +34,23 @@ curl -X POST "http://localhost:8000/ipfs-pin" \
      -H "Content-Type: multipart/form-data" \
      -F "file=@some-file.pdf"
 ```
+
+## Contributions
+
+All sorts of contributions are welcome!
+If you are unsure about how to proceed, the best is to start by opening an issue in this GitHub repository.
+
+**Code contributions**
+
+The python project is handled using [`uv`](https://docs.astral.sh/uv/) so please install it first.
+To start the server, follow the steps in the "Getting Started" section above.
+
+The code is linted and formatted using [`ruff`](https://docs.astral.sh/ruff/) so please install it too.
+
+```sh
+# From inside the backend/ folder:
+ruff check           # check the lints
+ruff format --check  # check code formatting
+```
+
+To avoid aving to manually checking lints and code format, I suggest you install a ruff extension in your favorite editor.

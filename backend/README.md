@@ -18,6 +18,9 @@ mkdir static
 uv run server.py
 ```
 
+The `pretty-gov-pdf` endpoint converts governance JSON metadata into pretty PDFs, easier to read.
+This conversion is based on the [Typst](https://typst.app/docs/) markup language and compiler.
+So you need Typst installed for the server to correctly perform the PDF conversion at this endpoint.
 To trigger the `pretty-gov-pdf` endpoint, you can use a request like this:
 
 ```sh

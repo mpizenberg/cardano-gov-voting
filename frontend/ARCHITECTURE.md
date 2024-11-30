@@ -20,7 +20,8 @@ This stage requires the following steps:
 - [ ] Identify the voter type: CC | DRep | SPO
 - [ ] Identify the vote credentials: Single stake key | Script
 - [ ] Identify the fee provider: Connected wallet | ?
-- [x] Select a governance action
+- [x] Load governance actions and select one
+- [ ] Retrieve gov action metadata
 - [ ] Help fill the vote rationale, following the relevant CIP standard JSON
 - [x] Generate a pretty PDF version of the JSON rationale
 - [x] Pin the rationale in permanent storage (IPFS)

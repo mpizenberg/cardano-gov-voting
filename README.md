@@ -9,6 +9,7 @@ It should help generating pretty PDFs containing the metadata rationales of vote
 
 ## Getting Started (code)
 
+To retrieve the code, clone the repository with `--recursive` (there is a git submodule).
 The code of this project is split in two parts, a Python backend, and an Elm frontend.
 The backend code lives in the `backend/` folder and similarly for the frontend code in `frontend/`.
 

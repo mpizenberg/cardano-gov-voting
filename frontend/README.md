@@ -44,3 +44,14 @@ npx elm-cardano make src/Main.elm --output static/main.js
 # (DO THIS) Build the app with the npm script command
 npm run make
 ```
+
+## Documentation
+
+To access locally the documentation of all the elm code in this project, as well as elm-cardano and all the dependencies we can use `elm-doc-preview`.
+
+```sh
+# (DON’T DO THIS) Start documentation server at port 8911
+npx elm-doc-preview --port 8911
+# (DO THIS) Start documentation server with the "docs" npm script
+npm run docs
+```

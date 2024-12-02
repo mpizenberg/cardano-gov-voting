@@ -9,7 +9,7 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 # Load environment variables from .env file
@@ -29,35 +29,17 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(title="Custom Processing Server")
 
-# Mount static files from static directory
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-
-# HTML content remains the same
-HTML_CONTENT = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Processing Server</title>
-</head>
-<body>
-    <h1>Welcome to the Processing Server</h1>
-    <div class="container">
-        <h2>Available Endpoints:</h2>
-        <ul>
-            <li><code>/pretty-gov-pdf</code> - Generate pretty PDF from JSON governance data</li>
-            <li><code>/ipfs-pin</code> - Pin files to IPFS</li>
-        </ul>
-    </div>
-</body>
-</html>
-"""
+# Statically served directory (contains the frontend build)
+static_dir = Path("../frontend/static")
 
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
-    """Serve the main HTML page."""
-    return HTML_CONTENT
+    return FileResponse(static_dir / "index.html")
+
+
+# Mount static files from static directory
+app.mount("/", StaticFiles(directory=static_dir), name="static")
 
 
 @app.post("/pretty-gov-pdf")
@@ -191,9 +173,9 @@ if __name__ == "__main__":
     import uvicorn
 
     # Ensure the static directory exists
-    if not Path("static").exists():
+    if not static_dir.exists():
         logger.warning(
-            "static/ directory does not exist. Static files will not be served."
+            "static directory does not exist. Static files will not be served."
         )
 
     # Run the server

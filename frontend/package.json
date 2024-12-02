@@ -1,0 +1,23 @@
+{
+  "name": "cf-votes",
+  "version": "1.0.0",
+  "description": "Governance voting tool for Cardano",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "make": "elm-cardano make src/Main.elm src/External.elm --output static/main.js",
+    "watch": "elm-watch hot"
+  },
+  "keywords": [
+    "Cardano"
+  ],
+  "license": "MPL-2.0",
+  "devDependencies": {
+    "elm": "^0.19.1-6",
+    "elm-cardano": "^0.1.6",
+    "elm-doc-preview": "^5.0.5",
+    "elm-format": "^0.8.7",
+    "elm-review": "^2.12.0",
+    "elm-test": "^0.19.1-revision12",
+    "elm-watch": "^2.0.0-beta.3"
+  }
+}

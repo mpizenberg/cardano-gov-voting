@@ -19,7 +19,7 @@ import Dict exposing (Dict)
 import Dict.Any
 import Hex.Convert
 import Html exposing (Html, button, div, text, wbr)
-import Html.Attributes exposing (height, src)
+import Html.Attributes as HA exposing (height, src)
 import Html.Events exposing (onClick)
 import Http
 import Integer
@@ -416,7 +416,150 @@ voteToString vote =
 
 view : Model -> Html Msg
 view model =
-    Debug.todo "view"
+    div []
+        [ viewHeader
+        , viewContent model
+        , viewErrors model.errors
+        ]
+
+
+viewHeader : Html Msg
+viewHeader =
+    div []
+        [ Html.h1 [] [ text "Cardano Governance Voting" ] ]
+
+
+viewContent : Model -> Html Msg
+viewContent model =
+    case model.page of
+        LandingPage ->
+            viewLandingPage model.walletsDiscovered
+
+        PreparationPage prepModel ->
+            viewPreparationPage prepModel
+
+        SigningPage signingModel ->
+            viewSigningPage signingModel
+
+        SubmissionPage submissionModel ->
+            viewSubmissionPage submissionModel
+
+
+viewLandingPage : List WalletDescriptor -> Html Msg
+viewLandingPage wallets =
+    div []
+        [ Html.h2 [] [ text "Welcome to the Voting App" ]
+        , Html.p [] [ text "Please connect your wallet to begin." ]
+        , viewAvailableWallets wallets
+        ]
+
+
+
+-- Preparation page
+
+
+viewPreparationPage : PreparationModel -> Html Msg
+viewPreparationPage model =
+    div []
+        [ Html.h2 [] [ text "Vote Preparation" ]
+        , viewVoterIdentificationStep model.voterStep
+        , viewProposalSelectionStep model
+        , viewRationaleStep model.rationaleCreationStep
+        , viewPermanentStorageStep model.permanentStorageStep
+        , viewBuildTxStep model.buildTxStep
+        ]
+
+
+viewVoterIdentificationStep : Step VoterPreparationForm VoterIdentified -> Html Msg
+viewVoterIdentificationStep step =
+    case step of
+        NotDone form ->
+            div []
+                [ Html.h3 [] [ text "Voter Identification" ]
+                , viewVoterTypeSelector form.voterType
+                , viewVoterCredentialsForm form.voterCred
+                , viewFeeProviderSelector form.feeProviderType
+                ]
+
+        Done voter ->
+            div []
+                [ Html.h3 [] [ text "Voter Identified" ]
+                , viewIdentifiedVoter voter
+                ]
+
+
+viewVoterTypeSelector : VoterType -> Html Msg
+viewVoterTypeSelector voterType =
+    Debug.todo "viewVoterTypeSelector"
+
+
+viewVoterCredentialsForm : VoterCredForm -> Html Msg
+viewVoterCredentialsForm voterCredForm =
+    Debug.todo "viewVoterCredentialsForm"
+
+
+viewFeeProviderSelector : FeeProviderType -> Html Msg
+viewFeeProviderSelector feeProviderType =
+    Debug.todo "viewFeeProviderSelector"
+
+
+viewIdentifiedVoter : VoterIdentified -> Html Msg
+viewIdentifiedVoter voter =
+    Debug.todo "viewIdentifiedVoter"
+
+
+viewProposalSelectionStep : PreparationModel -> Html Msg
+viewProposalSelectionStep model =
+    Debug.todo "viewProposalSelectionStep"
+
+
+viewRationaleStep : Step RationaleForm Rationale -> Html Msg
+viewRationaleStep step =
+    Debug.todo "viewRationaleStep"
+
+
+viewPermanentStorageStep : Step StoragePrep Storage -> Html Msg
+viewPermanentStorageStep step =
+    Debug.todo "viewPermanentStorageStep"
+
+
+viewBuildTxStep : Step {} Transaction -> Html Msg
+viewBuildTxStep step =
+    Debug.todo "viewBuildTxStep"
+
+
+
+-- Signing Page
+
+
+viewSigningPage : SigningModel -> Html Msg
+viewSigningPage signingModel =
+    Debug.todo "viewSigningPage"
+
+
+
+-- Submission Page
+
+
+viewSubmissionPage : SubmissionModel -> Html Msg
+viewSubmissionPage submissionModel =
+    Debug.todo "viewSubmissionPage"
+
+
+
+-- Helpers
+
+
+viewErrors : List String -> Html Msg
+viewErrors errors =
+    if List.isEmpty errors then
+        text ""
+
+    else
+        div [ HA.class "errors" ]
+            [ Html.h3 [] [ text "Errors" ]
+            , Html.ul [] (List.map (\err -> Html.li [] [ Html.pre [] [ text err ] ]) errors)
+            ]
 
 
 viewAvailableWallets : List Cip30.WalletDescriptor -> Html Msg

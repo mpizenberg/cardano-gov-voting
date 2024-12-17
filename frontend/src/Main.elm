@@ -336,6 +336,13 @@ type Msg
     | ConnectButtonClicked { id : String }
     | GotProtocolParams (Result Http.Error ProtocolParams)
     | GotProposals (Result Http.Error (List ActiveProposal))
+      -- New messages for voter identification
+    | VoterTypeSelected VoterType
+    | VoterCredentialUpdated VoterCredForm
+    | FeeProviderSelected FeeProviderType
+    | SubmitVoterIdentification
+      -- Preparation stage navigation
+    | StartPreparation
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -363,6 +370,101 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        ( StartPreparation, { protocolParams } ) ->
+            case protocolParams of
+                Just _ ->
+                    ( { model
+                        | page =
+                            PreparationPage
+                                { proposals = []
+                                , voterStep =
+                                    NotDone
+                                        { voterType = DrepVoter
+                                        , voterCred = StakeKeyVoter ""
+                                        , feeProviderType = ConnectedWalletFeeProvider
+                                        }
+                                , pickProposalStep = NotDone {}
+                                , rationaleCreationStep = NotDone initRationaleForm
+                                , rationaleSignatureStep = NotDone Dict.empty
+                                , permanentStorageStep = NotDone {}
+                                , buildTxStep = NotDone {}
+                                }
+                      }
+                    , loadGovernanceProposals
+                    )
+
+                Nothing ->
+                    ( { model | errors = "Protocol parameters not loaded" :: model.errors }
+                    , Cmd.none
+                    )
+
+        ( VoterTypeSelected newType, { page } ) ->
+            case page of
+                PreparationPage prep ->
+                    case prep.voterStep of
+                        NotDone form ->
+                            ( { model
+                                | page =
+                                    PreparationPage
+                                        { prep
+                                            | voterStep =
+                                                NotDone { form | voterType = newType }
+                                        }
+                              }
+                            , Cmd.none
+                            )
+
+                        Done _ ->
+                            ( model, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        ( VoterCredentialUpdated newCred, { page } ) ->
+            case page of
+                PreparationPage prep ->
+                    case prep.voterStep of
+                        NotDone form ->
+                            ( { model
+                                | page =
+                                    PreparationPage
+                                        { prep
+                                            | voterStep =
+                                                NotDone { form | voterCred = newCred }
+                                        }
+                              }
+                            , Cmd.none
+                            )
+
+                        Done _ ->
+                            ( model, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        ( FeeProviderSelected newProvider, { page } ) ->
+            case page of
+                PreparationPage prep ->
+                    case prep.voterStep of
+                        NotDone form ->
+                            ( { model
+                                | page =
+                                    PreparationPage
+                                        { prep
+                                            | voterStep =
+                                                NotDone
+                                                    { form | feeProviderType = newProvider }
+                                        }
+                              }
+                            , Cmd.none
+                            )
+
+                        Done _ ->
+                            ( model, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
         _ ->
             ( model, Cmd.none )
 
@@ -379,6 +481,24 @@ protocolParamsDecoder =
         (JD.at [ "result", "plutusCostModels", "plutus:v2" ] <| JD.list JD.int)
         (JD.at [ "result", "plutusCostModels", "plutus:v3" ] <| JD.list JD.int)
         (JD.at [ "result", "delegateRepresentativeDeposit", "ada", "lovelace" ] <| JD.map Natural.fromSafeInt JD.int)
+
+
+initRationaleForm : RationaleForm
+initRationaleForm =
+    { authors = []
+    , summary = {}
+    , rationaleStatement = {}
+    , precedentDiscussion = {}
+    , counterargumentDiscussion = {}
+    , conclusion = {}
+    , internalVote =
+        { constitutional = 0
+        , unconstitutional = 0
+        , abstain = 0
+        , didNotVote = 0
+        }
+    , references = {}
+    }
 
 
 stringToVote : String -> Vote
@@ -451,6 +571,9 @@ viewLandingPage wallets =
         [ Html.h2 [] [ text "Welcome to the Voting App" ]
         , Html.p [] [ text "Please connect your wallet to begin." ]
         , viewAvailableWallets wallets
+        , button
+            [ onClick StartPreparation ]
+            [ text "Start Vote Preparation" ]
         ]
 
 
@@ -489,43 +612,135 @@ viewVoterIdentificationStep step =
 
 
 viewVoterTypeSelector : VoterType -> Html Msg
-viewVoterTypeSelector voterType =
-    Debug.todo "viewVoterTypeSelector"
+viewVoterTypeSelector currentType =
+    div []
+        [ Html.h4 [] [ text "Select Voter Type" ]
+        , div []
+            [ viewVoterTypeOption CcVoter "Constitutional Committee" (currentType == CcVoter)
+            , viewVoterTypeOption DrepVoter "DRep" (currentType == DrepVoter)
+            , viewVoterTypeOption SpoVoter "SPO" (currentType == SpoVoter)
+            ]
+        ]
+
+
+viewVoterTypeOption : VoterType -> String -> Bool -> Html Msg
+viewVoterTypeOption voterType label isSelected =
+    div []
+        [ Html.input
+            [ HA.type_ "radio"
+            , HA.name "voter-type"
+            , HA.checked isSelected
+            , onClick (VoterTypeSelected voterType)
+            ]
+            []
+        , Html.label [] [ text label ]
+        ]
 
 
 viewVoterCredentialsForm : VoterCredForm -> Html Msg
-viewVoterCredentialsForm voterCredForm =
-    Debug.todo "viewVoterCredentialsForm"
+viewVoterCredentialsForm credForm =
+    div []
+        [ Html.h4 [] [ text "Voter Credentials" ]
+        , case credForm of
+            StakeKeyVoter key ->
+                div []
+                    [ Html.label [] [ text "Stake Key Hash" ]
+                    , Html.input
+                        [ HA.type_ "text"
+                        , HA.value key
+                        , Html.Events.onInput (\s -> VoterCredentialUpdated (StakeKeyVoter s))
+                        ]
+                        []
+                    ]
+
+            ScriptVoter { scriptHash, utxoRef } ->
+                div []
+                    [ Html.label [] [ text "Script Hash" ]
+                    , Html.input
+                        [ HA.type_ "text"
+                        , HA.value scriptHash
+                        , Html.Events.onInput
+                            (\s -> VoterCredentialUpdated (ScriptVoter { scriptHash = s, utxoRef = utxoRef }))
+                        ]
+                        []
+                    , Html.label [] [ text "UTxO Reference" ]
+                    , Html.input
+                        [ HA.type_ "text"
+                        , HA.value utxoRef
+                        , Html.Events.onInput
+                            (\s -> VoterCredentialUpdated (ScriptVoter { scriptHash = scriptHash, utxoRef = s }))
+                        ]
+                        []
+                    ]
+        ]
 
 
 viewFeeProviderSelector : FeeProviderType -> Html Msg
 viewFeeProviderSelector feeProviderType =
-    Debug.todo "viewFeeProviderSelector"
+    div []
+        [ Html.h4 [] [ text "Fee Provider" ]
+        , div []
+            [ viewFeeProviderOption
+                ConnectedWalletFeeProvider
+                "Use Connected Wallet"
+                (feeProviderType == ConnectedWalletFeeProvider)
+            , Html.hr [] []
+            , case feeProviderType of
+                ExternalFeeProvider { endpoint } ->
+                    div []
+                        [ Html.label [] [ text "External Provider Endpoint" ]
+                        , Html.input
+                            [ HA.type_ "text"
+                            , HA.value endpoint
+                            , Html.Events.onInput
+                                (\s -> FeeProviderSelected (ExternalFeeProvider { endpoint = s }))
+                            ]
+                            []
+                        ]
+
+                _ ->
+                    text ""
+            ]
+        ]
+
+
+viewFeeProviderOption : FeeProviderType -> String -> Bool -> Html Msg
+viewFeeProviderOption feeProviderType label isSelected =
+    div []
+        [ Html.input
+            [ HA.type_ "radio"
+            , HA.name "fee-provider"
+            , HA.checked isSelected
+            , onClick (FeeProviderSelected feeProviderType)
+            ]
+            []
+        , Html.label [] [ text label ]
+        ]
 
 
 viewIdentifiedVoter : VoterIdentified -> Html Msg
 viewIdentifiedVoter voter =
-    Debug.todo "viewIdentifiedVoter"
+    text "TODO viewIdentifiedVoter"
 
 
 viewProposalSelectionStep : PreparationModel -> Html Msg
 viewProposalSelectionStep model =
-    Debug.todo "viewProposalSelectionStep"
+    text "TODO viewProposalSelectionStep"
 
 
 viewRationaleStep : Step RationaleForm Rationale -> Html Msg
 viewRationaleStep step =
-    Debug.todo "viewRationaleStep"
+    text "TODO viewRationaleStep"
 
 
 viewPermanentStorageStep : Step StoragePrep Storage -> Html Msg
 viewPermanentStorageStep step =
-    Debug.todo "viewPermanentStorageStep"
+    text "TODO viewPermanentStorageStep"
 
 
 viewBuildTxStep : Step {} Transaction -> Html Msg
 viewBuildTxStep step =
-    Debug.todo "viewBuildTxStep"
+    text "TODO viewBuildTxStep"
 
 
 

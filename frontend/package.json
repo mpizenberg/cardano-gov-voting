@@ -4,7 +4,7 @@
   "description": "Governance voting tool for Cardano",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "make": "elm-cardano make src/Main.elm src/External.elm --output static/main.js",
+    "make": "elm-cardano make src/Main.elm --output static/main.js",
     "watch": "elm-watch hot",
     "docs": "npx elm-doc-preview --port 8911"
   },

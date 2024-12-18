@@ -637,10 +637,37 @@ viewVoterTypeOption voterType label isSelected =
         ]
 
 
+viewCredTypeOption : VoterCredForm -> String -> Bool -> Html Msg
+viewCredTypeOption voterCredType label isSelected =
+    div []
+        [ Html.input
+            [ HA.type_ "radio"
+            , HA.name "cred-type"
+            , HA.checked isSelected
+            , onClick (VoterCredentialUpdated voterCredType)
+            ]
+            []
+        , Html.label [] [ text label ]
+        ]
+
+
 viewVoterCredentialsForm : VoterCredForm -> Html Msg
 viewVoterCredentialsForm credForm =
+    let
+        isStakeKeyVoter =
+            case credForm of
+                StakeKeyVoter _ ->
+                    True
+
+                _ ->
+                    False
+    in
     div []
         [ Html.h4 [] [ text "Voter Credentials" ]
+        , div []
+            [ viewCredTypeOption (StakeKeyVoter "") "Stake Key Voter" isStakeKeyVoter
+            , viewCredTypeOption (ScriptVoter { scriptHash = "", utxoRef = "" }) "Script Voter" (not isStakeKeyVoter)
+            ]
         , case credForm of
             StakeKeyVoter key ->
                 div []

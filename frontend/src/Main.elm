@@ -340,7 +340,7 @@ type Msg
     | VoterTypeSelected VoterType
     | VoterCredentialUpdated VoterCredForm
     | FeeProviderSelected FeeProviderType
-    | SubmitVoterIdentification
+    | ValidateVoterFormButtonClicked
       -- Preparation stage navigation
     | StartPreparation
 
@@ -442,6 +442,7 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        --
         ( FeeProviderSelected newProvider, { page } ) ->
             case page of
                 PreparationPage prep ->
@@ -465,8 +466,71 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        ( ValidateVoterFormButtonClicked, { page } ) ->
+            case page of
+                PreparationPage prep ->
+                    case prep.voterStep of
+                        NotDone form ->
+                            case ( validateVoterCredForm form.voterCred, validateFeeProviderType form.feeProviderType ) of
+                                ( Ok voterCred, Ok feeProviderType ) ->
+                                    ( model
+                                    , askFeeProvider feeProviderType
+                                    )
+
+                                ( Err error, _ ) ->
+                                    ( { model | errors = error :: model.errors }
+                                    , Cmd.none
+                                    )
+
+                                ( _, Err error ) ->
+                                    ( { model | errors = error :: model.errors }
+                                    , Cmd.none
+                                    )
+
+                        Done _ ->
+                            ( model, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
         _ ->
             ( model, Cmd.none )
+
+
+validateVoterCredForm : VoterCredForm -> Result String CredentialWitness
+validateVoterCredForm voterCredForm =
+    case voterCredForm of
+        StakeKeyVoter str ->
+            stakeKeyHashFromStr str
+                |> Result.map WithKey
+
+        ScriptVoter { scriptHash, utxoRef } ->
+            -- Result.map2 (\hash utxo -> WithScript hash <| )
+            -- (scriptHashFromStr scriptHash)
+            -- (utxoRefFromStr utxoRef)
+            Debug.todo "validateVoterCredForm"
+
+
+stakeKeyHashFromStr : String -> Result String (Bytes CredentialHash)
+stakeKeyHashFromStr str =
+    -- Try to extract the stake key hash from a string that can either be:
+    --  * garbage
+    --  * directly a valid stake key hash in hex
+    --  * a stake key address in hex
+    --  * a stake key address in bech32
+    Debug.todo "stakeKeyHashFromStr"
+
+
+validateFeeProviderType : FeeProviderType -> Result String FeeProviderType
+validateFeeProviderType feeProviderType =
+    -- Check if the external endpoint seems legit
+    Debug.todo "validateFeeProviderType"
+
+
+askFeeProvider : FeeProviderType -> Cmd Msg
+askFeeProvider feeProviderType =
+    -- Create a command to ask and retrieve the address and available utxos for fees
+    Debug.todo "askFeeProvider"
 
 
 protocolParamsDecoder : Decoder ProtocolParams
@@ -586,9 +650,13 @@ viewPreparationPage model =
     div []
         [ Html.h2 [] [ text "Vote Preparation" ]
         , viewVoterIdentificationStep model.voterStep
+        , Html.hr [] []
         , viewProposalSelectionStep model
+        , Html.hr [] []
         , viewRationaleStep model.rationaleCreationStep
+        , Html.hr [] []
         , viewPermanentStorageStep model.permanentStorageStep
+        , Html.hr [] []
         , viewBuildTxStep model.buildTxStep
         ]
 
@@ -602,6 +670,7 @@ viewVoterIdentificationStep step =
                 , viewVoterTypeSelector form.voterType
                 , viewVoterCredentialsForm form.voterCred
                 , viewFeeProviderSelector form.feeProviderType
+                , div [] [ Html.button [ onClick ValidateVoterFormButtonClicked ] [ text "Confirm Voter" ] ]
                 ]
 
         Done voter ->
@@ -711,7 +780,10 @@ viewFeeProviderSelector feeProviderType =
                 ConnectedWalletFeeProvider
                 "Use Connected Wallet"
                 (feeProviderType == ConnectedWalletFeeProvider)
-            , Html.hr [] []
+            , viewFeeProviderOption
+                (ExternalFeeProvider { endpoint = "" })
+                "Use external fee provider"
+                (feeProviderType /= ConnectedWalletFeeProvider)
             , case feeProviderType of
                 ExternalFeeProvider { endpoint } ->
                     div []

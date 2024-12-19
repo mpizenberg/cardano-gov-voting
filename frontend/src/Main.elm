@@ -26,6 +26,7 @@ import Integer
 import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
 import Natural exposing (Natural)
+import Url
 
 
 main =
@@ -63,6 +64,7 @@ type alias VoterPreparationForm =
     { voterType : VoterType
     , voterCred : VoterCredForm
     , feeProviderType : FeeProviderType
+    , waitingForConfirmation : Bool
     }
 
 
@@ -221,6 +223,9 @@ type SubmissionModel
 type alias Model =
     { page : Page
     , walletsDiscovered : List WalletDescriptor
+    , wallet : Maybe Cip30.Wallet
+    , walletUtxos : Maybe (List Cip30.Utxo)
+    , walletChangeAddress : Maybe Address
     , protocolParams : Maybe ProtocolParams
     , errors : List String
     }
@@ -256,6 +261,9 @@ init : () -> ( Model, Cmd Msg )
 init _ =
     ( { page = LandingPage
       , walletsDiscovered = []
+      , wallet = Nothing
+      , walletUtxos = Nothing
+      , walletChangeAddress = Nothing
       , protocolParams = Nothing
       , errors = []
       }
@@ -334,6 +342,7 @@ encodeCborHex cborEncoder =
 type Msg
     = WalletMsg Value
     | ConnectButtonClicked { id : String }
+    | DisconnectWalletButtonClicked
     | GotProtocolParams (Result Http.Error ProtocolParams)
     | GotProposals (Result Http.Error (List ActiveProposal))
       -- New messages for voter identification
@@ -359,6 +368,11 @@ update msg model =
         ( ConnectButtonClicked { id }, _ ) ->
             ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = [] })) )
 
+        ( DisconnectWalletButtonClicked, _ ) ->
+            ( { model | wallet = Nothing, walletChangeAddress = Nothing, walletUtxos = Nothing }
+            , Cmd.none
+            )
+
         ( WalletMsg value, _ ) ->
             case JD.decodeValue Cip30.responseDecoder value of
                 -- We just discovered available wallets
@@ -367,14 +381,52 @@ update msg model =
                     , Cmd.none
                     )
 
-                _ ->
-                    ( model, Cmd.none )
+                -- We just connected to the wallet, let’s ask for all that is still missing
+                Ok (Cip30.EnabledWallet wallet) ->
+                    ( { model | wallet = Just wallet }
+                      -- Retrieve the wallet change address
+                    , toWallet (Cip30.encodeRequest (Cip30.getChangeAddress wallet))
+                    )
+
+                -- We just received the utxos
+                Ok (Cip30.ApiResponse _ (Cip30.WalletUtxos utxos)) ->
+                    confirmVoter { model | walletUtxos = Just utxos }
+
+                -- Received the wallet change address
+                Ok (Cip30.ApiResponse _ (Cip30.ChangeAddress address)) ->
+                    ( { model | walletChangeAddress = Just address }
+                    , Cmd.none
+                    )
+
+                -- TODO
+                Ok (Cip30.ApiResponse _ _) ->
+                    ( { model | errors = "TODO: unhandled response yet" :: model.errors }
+                    , Cmd.none
+                    )
+
+                -- Received an error message from the wallet
+                Ok (Cip30.ApiError { info }) ->
+                    ( { model | errors = info :: model.errors }
+                    , Cmd.none
+                    )
+
+                -- Unknown type of message received from the wallet
+                Ok (Cip30.UnhandledResponseType error) ->
+                    ( { model | errors = error :: model.errors }
+                    , Cmd.none
+                    )
+
+                Err decodingError ->
+                    ( { model | errors = JD.errorToString decodingError :: model.errors }
+                    , Cmd.none
+                    )
 
         ( StartPreparation, { protocolParams } ) ->
             case protocolParams of
                 Just _ ->
                     ( { model
-                        | page =
+                        | errors = []
+                        , page =
                             PreparationPage
                                 { proposals = []
                                 , voterStep =
@@ -382,6 +434,7 @@ update msg model =
                                         { voterType = DrepVoter
                                         , voterCred = StakeKeyVoter ""
                                         , feeProviderType = ConnectedWalletFeeProvider
+                                        , waitingForConfirmation = False
                                         }
                                 , pickProposalStep = NotDone {}
                                 , rationaleCreationStep = NotDone initRationaleForm
@@ -394,7 +447,7 @@ update msg model =
                     )
 
                 Nothing ->
-                    ( { model | errors = "Protocol parameters not loaded" :: model.errors }
+                    ( { model | errors = "Protocol parameters not loaded yet" :: model.errors }
                     , Cmd.none
                     )
 
@@ -442,7 +495,6 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        --
         ( FeeProviderSelected newProvider, { page } ) ->
             case page of
                 PreparationPage prep ->
@@ -466,31 +518,71 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        ( ValidateVoterFormButtonClicked, { page } ) ->
-            case page of
-                PreparationPage prep ->
-                    case prep.voterStep of
-                        NotDone form ->
-                            case ( validateVoterCredForm form.voterCred, validateFeeProviderType form.feeProviderType ) of
-                                ( Ok voterCred, Ok feeProviderType ) ->
-                                    ( model
-                                    , askFeeProvider feeProviderType
-                                    )
+        ( ValidateVoterFormButtonClicked, _ ) ->
+            confirmVoter model
 
-                                ( Err error, _ ) ->
-                                    ( { model | errors = error :: model.errors }
-                                    , Cmd.none
-                                    )
+        _ ->
+            ( model, Cmd.none )
 
-                                ( _, Err error ) ->
-                                    ( { model | errors = error :: model.errors }
-                                    , Cmd.none
-                                    )
 
-                        Done _ ->
-                            ( model, Cmd.none )
+confirmVoter : Model -> ( Model, Cmd Msg )
+confirmVoter model =
+    case model.page of
+        PreparationPage prep ->
+            case prep.voterStep of
+                NotDone form ->
+                    case ( validateVoterCredForm form.voterCred, validateFeeProviderType model.wallet form.feeProviderType ) of
+                        ( Ok voterCred, Ok feeProviderType ) ->
+                            case feeProviderType of
+                                ConnectedWalletFeeProvider ->
+                                    case ( model.walletChangeAddress, model.walletUtxos ) of
+                                        ( Just addr, Just utxos ) ->
+                                            ( { model
+                                                | page =
+                                                    PreparationPage
+                                                        { prep
+                                                            | voterStep =
+                                                                Done
+                                                                    { voterType = form.voterType
+                                                                    , voterCred = voterCred
+                                                                    , feeProvider =
+                                                                        { address = addr
+                                                                        , utxos = Utxo.refDictFromList utxos
+                                                                        }
+                                                                    }
+                                                        }
+                                                , errors = []
+                                              }
+                                            , Cmd.none
+                                            )
 
-                _ ->
+                                        ( Just addr, Nothing ) ->
+                                            ( { model
+                                                | page = PreparationPage { prep | voterStep = NotDone { form | waitingForConfirmation = True } }
+                                                , errors = []
+                                              }
+                                            , askFeeProvider model.wallet feeProviderType
+                                            )
+
+                                        _ ->
+                                            ( { model | errors = "Please connect wallet to use as fee provider" :: model.errors }
+                                            , Cmd.none
+                                            )
+
+                                ExternalFeeProvider { endpoint } ->
+                                    Debug.todo "validate voter with external fee provider"
+
+                        ( Err error, _ ) ->
+                            ( { model | errors = error :: model.errors }
+                            , Cmd.none
+                            )
+
+                        ( _, Err error ) ->
+                            ( { model | errors = error :: model.errors }
+                            , Cmd.none
+                            )
+
+                Done _ ->
                     ( model, Cmd.none )
 
         _ ->
@@ -518,19 +610,68 @@ stakeKeyHashFromStr str =
     --  * directly a valid stake key hash in hex
     --  * a stake key address in hex
     --  * a stake key address in bech32
-    Debug.todo "stakeKeyHashFromStr"
+    if String.length str == 56 then
+        -- Can only be a credential hash directly if 28 bytes
+        Bytes.fromHex str
+            |> Result.fromMaybe ("Invalid Hex of credential hash: " ++ str)
+
+    else
+        Address.fromString str
+            |> Result.fromMaybe ("Invalid credential hash or stake address: " ++ str)
+            |> Result.andThen
+                (\address ->
+                    case address of
+                        Address.Reward stakeAddress ->
+                            case stakeAddress.stakeCredential of
+                                VKeyHash cred ->
+                                    Ok cred
+
+                                ScriptHash _ ->
+                                    Err "This is a script address, not a Key address"
+
+                        _ ->
+                            Err "This is a full address, please use a stake (reward) address instead"
+                )
 
 
-validateFeeProviderType : FeeProviderType -> Result String FeeProviderType
-validateFeeProviderType feeProviderType =
-    -- Check if the external endpoint seems legit
-    Debug.todo "validateFeeProviderType"
+{-| Check if the external endpoint seems legit.
+-}
+validateFeeProviderType : Maybe Cip30.Wallet -> FeeProviderType -> Result String FeeProviderType
+validateFeeProviderType maybeWallet feeProviderType =
+    case ( maybeWallet, feeProviderType ) of
+        ( Nothing, ConnectedWalletFeeProvider ) ->
+            Err "No wallet connected, please connect a wallet first."
+
+        ( Just _, ConnectedWalletFeeProvider ) ->
+            Ok feeProviderType
+
+        ( _, ExternalFeeProvider { endpoint } ) ->
+            case Url.fromString endpoint of
+                Just _ ->
+                    Ok feeProviderType
+
+                Nothing ->
+                    Err ("The endpoint does not look like a valid URL: " ++ endpoint)
 
 
-askFeeProvider : FeeProviderType -> Cmd Msg
-askFeeProvider feeProviderType =
-    -- Create a command to ask and retrieve the address and available utxos for fees
-    Debug.todo "askFeeProvider"
+{-| Create a command to ask and retrieve the address and available utxos for fees.
+-}
+askFeeProvider : Maybe Cip30.Wallet -> FeeProviderType -> Cmd Msg
+askFeeProvider maybeWallet feeProviderType =
+    case ( maybeWallet, feeProviderType ) of
+        ( Just wallet, ConnectedWalletFeeProvider ) ->
+            Cmd.batch
+                -- Retrieve UTXOs from the main wallet
+                [ Cip30.getUtxos wallet { amount = Nothing, paginate = Nothing }
+                    |> Cip30.encodeRequest
+                    |> toWallet
+                ]
+
+        ( Nothing, ConnectedWalletFeeProvider ) ->
+            Cmd.none
+
+        ( _, ExternalFeeProvider { endpoint } ) ->
+            Debug.todo "askFeeProvider"
 
 
 protocolParamsDecoder : Decoder ProtocolParams
@@ -601,16 +742,53 @@ voteToString vote =
 view : Model -> Html Msg
 view model =
     div []
-        [ viewHeader
+        [ viewHeader model
         , viewContent model
         , viewErrors model.errors
         ]
 
 
-viewHeader : Html Msg
-viewHeader =
+viewHeader : Model -> Html Msg
+viewHeader model =
     div []
-        [ Html.h1 [] [ text "Cardano Governance Voting" ] ]
+        [ Html.h1 [] [ text "Cardano Governance Voting" ]
+        , viewWalletSection model
+        ]
+
+
+viewWalletSection : Model -> Html Msg
+viewWalletSection model =
+    case model.wallet of
+        Nothing ->
+            viewAvailableWallets model.walletsDiscovered
+
+        Just wallet ->
+            viewConnectedWallet wallet model.walletChangeAddress
+
+
+viewConnectedWallet : Cip30.Wallet -> Maybe Address -> Html Msg
+viewConnectedWallet wallet maybeChangeAddress =
+    div []
+        [ text <| "Connected Wallet: " ++ (Cip30.walletDescriptor wallet).name
+        , case maybeChangeAddress of
+            Just addr ->
+                text <| " (" ++ prettyAddr addr ++ ")"
+
+            Nothing ->
+                text ""
+        , button [ onClick DisconnectWalletButtonClicked ] [ text "Disconnect" ]
+        ]
+
+
+prettyAddr : Address -> String
+prettyAddr address =
+    let
+        addrHex =
+            Bytes.toHex (Address.toBytes address)
+    in
+    String.slice 0 8 addrHex
+        ++ "..."
+        ++ String.slice -8 (String.length addrHex) addrHex
 
 
 viewContent : Model -> Html Msg
@@ -633,11 +811,11 @@ viewLandingPage : List WalletDescriptor -> Html Msg
 viewLandingPage wallets =
     div []
         [ Html.h2 [] [ text "Welcome to the Voting App" ]
-        , Html.p [] [ text "Please connect your wallet to begin." ]
-        , viewAvailableWallets wallets
-        , button
-            [ onClick StartPreparation ]
-            [ text "Start Vote Preparation" ]
+        , div []
+            [ button
+                [ onClick StartPreparation ]
+                [ text "Start Vote Preparation" ]
+            ]
         ]
 
 
@@ -670,7 +848,11 @@ viewVoterIdentificationStep step =
                 , viewVoterTypeSelector form.voterType
                 , viewVoterCredentialsForm form.voterCred
                 , viewFeeProviderSelector form.feeProviderType
-                , div [] [ Html.button [ onClick ValidateVoterFormButtonClicked ] [ text "Confirm Voter" ] ]
+                , if form.waitingForConfirmation then
+                    div [] [ text "waiting for fee provider confirmation ..." ]
+
+                  else
+                    div [] [ Html.button [ onClick ValidateVoterFormButtonClicked ] [ text "Confirm Voter" ] ]
                 ]
 
         Done voter ->
@@ -735,12 +917,12 @@ viewVoterCredentialsForm credForm =
         [ Html.h4 [] [ text "Voter Credentials" ]
         , div []
             [ viewCredTypeOption (StakeKeyVoter "") "Stake Key Voter" isStakeKeyVoter
-            , viewCredTypeOption (ScriptVoter { scriptHash = "", utxoRef = "" }) "Script Voter" (not isStakeKeyVoter)
+            , viewCredTypeOption (ScriptVoter { scriptHash = "", utxoRef = "" }) "(WIP) Script Voter" (not isStakeKeyVoter)
             ]
         , case credForm of
             StakeKeyVoter key ->
                 div []
-                    [ Html.label [] [ text "Stake Key Hash" ]
+                    [ Html.label [] [ text "Stake key hash (or stake address)" ]
                     , Html.input
                         [ HA.type_ "text"
                         , HA.value key
@@ -774,15 +956,15 @@ viewVoterCredentialsForm credForm =
 viewFeeProviderSelector : FeeProviderType -> Html Msg
 viewFeeProviderSelector feeProviderType =
     div []
-        [ Html.h4 [] [ text "Fee Provider" ]
+        [ Html.h4 [] [ text "Fee Provider (TODO: split from voter type)" ]
         , div []
             [ viewFeeProviderOption
                 ConnectedWalletFeeProvider
-                "Use Connected Wallet"
+                "Use connected wallet"
                 (feeProviderType == ConnectedWalletFeeProvider)
             , viewFeeProviderOption
                 (ExternalFeeProvider { endpoint = "" })
-                "Use external fee provider"
+                "(WIP) Use external fee provider"
                 (feeProviderType /= ConnectedWalletFeeProvider)
             , case feeProviderType of
                 ExternalFeeProvider { endpoint } ->
@@ -878,19 +1060,23 @@ viewErrors errors =
 
 viewAvailableWallets : List Cip30.WalletDescriptor -> Html Msg
 viewAvailableWallets wallets =
-    let
-        walletDescription : Cip30.WalletDescriptor -> String
-        walletDescription w =
-            "id: " ++ w.id ++ ", name: " ++ w.name
+    if List.isEmpty wallets then
+        Html.p [] [ text "It seems like you don’t have any CIP30 wallet?" ]
 
-        walletIcon : Cip30.WalletDescriptor -> Html Msg
-        walletIcon { icon } =
-            Html.img [ src icon, height 32 ] []
+    else
+        let
+            walletDescription : Cip30.WalletDescriptor -> String
+            walletDescription w =
+                "id: " ++ w.id ++ ", name: " ++ w.name
 
-        connectButton { id } =
-            Html.button [ onClick (ConnectButtonClicked { id = id }) ] [ text "connect" ]
+            walletIcon : Cip30.WalletDescriptor -> Html Msg
+            walletIcon { icon } =
+                Html.img [ src icon, height 32 ] []
 
-        walletRow w =
-            div [] [ walletIcon w, text (walletDescription w), connectButton w ]
-    in
-    div [] (List.map walletRow wallets)
+            connectButton { id } =
+                Html.button [ onClick (ConnectButtonClicked { id = id }) ] [ text "connect" ]
+
+            walletRow w =
+                div [] [ walletIcon w, text (walletDescription w), connectButton w ]
+        in
+        div [] (List.map walletRow wallets)

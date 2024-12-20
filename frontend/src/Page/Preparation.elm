@@ -1,4 +1,4 @@
-module Page.Preparation exposing (Model, update, view)
+module Page.Preparation exposing (ActiveProposal, Model, Msg, init, update, view)
 
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..))
@@ -8,7 +8,7 @@ import Cardano.Gov exposing (ActionId)
 import Cardano.Transaction exposing (Transaction)
 import Cardano.Utxo as Utxo exposing (Output)
 import Dict exposing (Dict)
-import Html exposing (Html, div, text)
+import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
 import RemoteData exposing (WebData)
@@ -22,8 +22,7 @@ import Url
 
 
 type alias Model =
-    { proposals : List ActiveProposal
-    , voterStep : Step VoterPreparationForm {} VoterIdentified
+    { voterStep : Step VoterPreparationForm {} VoterIdentified
     , pickProposalStep : Step {} {} ActiveProposal
     , rationaleCreationStep : Step RationaleForm {} Rationale
     , rationaleSignatureStep : Step (Dict String (Maybe AuthorWitness)) {} (Dict String AuthorWitness)
@@ -37,6 +36,18 @@ type Step prep validating done
     = Preparing prep
     | Validating prep validating
     | Done done
+
+
+init : Model
+init =
+    { voterStep = Preparing initVoterForm
+    , pickProposalStep = Preparing {}
+    , rationaleCreationStep = Preparing initRationaleForm
+    , rationaleSignatureStep = Preparing Dict.empty
+    , permanentStorageStep = Preparing {}
+    , feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing })
+    , buildTxStep = Preparing {}
+    }
 
 
 
@@ -64,6 +75,14 @@ type VoterCredForm
 type alias VoterIdentified =
     { voterType : VoterType
     , voterCred : CredentialWitness
+    }
+
+
+initVoterForm : VoterPreparationForm
+initVoterForm =
+    { voterType = DrepVoter
+    , voterCred = StakeKeyVoter ""
+    , error = Nothing
     }
 
 
@@ -121,6 +140,24 @@ type alias ReferencesForm =
     {}
 
 
+initRationaleForm : RationaleForm
+initRationaleForm =
+    { authors = []
+    , summary = {}
+    , rationaleStatement = {}
+    , precedentDiscussion = {}
+    , counterargumentDiscussion = {}
+    , conclusion = {}
+    , internalVote =
+        { constitutional = 0
+        , unconstitutional = 0
+        , abstain = 0
+        , didNotVote = 0
+        }
+    , references = {}
+    }
+
+
 type alias Rationale =
     { authors : Dict String (Maybe AuthorWitness)
     , summary : String
@@ -158,8 +195,8 @@ type alias Storage =
 
 
 type FeeProviderForm
-    = ConnectedWalletFeeProvider { error : String }
-    | ExternalFeeProvider { endpoint : String, error : String }
+    = ConnectedWalletFeeProvider { error : Maybe String }
+    | ExternalFeeProvider { endpoint : String, error : Maybe String }
 
 
 type alias FeeProviderTemp =
@@ -359,7 +396,7 @@ validateFeeProviderForm : Maybe LoadedWallet -> FeeProviderForm -> Step FeeProvi
 validateFeeProviderForm maybeWallet feeProviderForm =
     case ( maybeWallet, feeProviderForm ) of
         ( Nothing, ConnectedWalletFeeProvider _ ) ->
-            Preparing (ConnectedWalletFeeProvider { error = "No wallet connected, please connect a wallet first." })
+            Preparing (ConnectedWalletFeeProvider { error = Just "No wallet connected, please connect a wallet first." })
 
         ( Just { changeAddress, utxos }, ConnectedWalletFeeProvider _ ) ->
             Done { address = changeAddress, utxos = utxos }
@@ -370,7 +407,7 @@ validateFeeProviderForm maybeWallet feeProviderForm =
                     Validating feeProviderForm { address = Nothing, utxos = Nothing }
 
                 Nothing ->
-                    Preparing (ConnectedWalletFeeProvider { error = "The endpoint does not look like a valid URL: " ++ endpoint })
+                    Preparing (ExternalFeeProvider { endpoint = endpoint, error = Just <| "The endpoint does not look like a valid URL: " ++ endpoint })
 
 
 
@@ -416,6 +453,13 @@ viewVoterIdentificationStep ctx step =
                 [ Html.h3 [] [ text "Voter Identification" ]
                 , Html.map ctx.wrapMsg <| viewVoterTypeSelector form.voterType
                 , Html.map ctx.wrapMsg <| viewVoterCredentialsForm form.voterCred
+                , Html.p [] [ button [ onClick <| ctx.wrapMsg ValidateVoterFormButtonClicked ] [ text "Confirm Voter" ] ]
+                , case form.error of
+                    Just error ->
+                        Html.p [] [ Html.pre [] [ text error ] ]
+
+                    Nothing ->
+                        text ""
                 ]
 
         Validating _ _ ->
@@ -573,6 +617,22 @@ viewFeeProviderStep ctx step =
             div []
                 [ Html.h3 [] [ text "Fee Provider" ]
                 , Html.map ctx.wrapMsg <| viewFeeProviderForm form
+                , Html.p [] [ button [ onClick <| ctx.wrapMsg ValidateFeeProviderFormButtonClicked ] [ text "Confirm Fee Provider" ] ]
+                , let
+                    maybeError =
+                        case form of
+                            ConnectedWalletFeeProvider { error } ->
+                                error
+
+                            ExternalFeeProvider { error } ->
+                                error
+                  in
+                  case maybeError of
+                    Just error ->
+                        Html.p [] [ Html.pre [] [ text error ] ]
+
+                    Nothing ->
+                        text ""
                 ]
 
         Validating _ _ ->
@@ -600,32 +660,29 @@ viewFeeProviderForm feeProviderForm =
                     False
     in
     div []
-        [ Html.h4 [] [ text "Fee Provider (TODO: split from voter type)" ]
-        , div []
-            [ viewFeeProviderOption
-                (ConnectedWalletFeeProvider { error = "" })
-                "Use connected wallet"
-                isUsingWalletForFees
-            , viewFeeProviderOption
-                (ExternalFeeProvider { endpoint = "", error = "" })
-                "(WIP) Use external fee provider"
-                (not isUsingWalletForFees)
-            , case feeProviderForm of
-                ExternalFeeProvider { endpoint, error } ->
-                    div []
-                        [ Html.label [] [ text "External Provider Endpoint" ]
-                        , Html.input
-                            [ HA.type_ "text"
-                            , HA.value endpoint
-                            , Html.Events.onInput
-                                (\s -> FeeProviderUpdated (ExternalFeeProvider { endpoint = s, error = error }))
-                            ]
-                            []
+        [ viewFeeProviderOption
+            (ConnectedWalletFeeProvider { error = Nothing })
+            "Use connected wallet"
+            isUsingWalletForFees
+        , viewFeeProviderOption
+            (ExternalFeeProvider { endpoint = "", error = Nothing })
+            "(WIP) Use external fee provider"
+            (not isUsingWalletForFees)
+        , case feeProviderForm of
+            ExternalFeeProvider { endpoint, error } ->
+                div []
+                    [ Html.label [] [ text "External Provider Endpoint" ]
+                    , Html.input
+                        [ HA.type_ "text"
+                        , HA.value endpoint
+                        , Html.Events.onInput
+                            (\s -> FeeProviderUpdated (ExternalFeeProvider { endpoint = s, error = error }))
                         ]
+                        []
+                    ]
 
-                _ ->
-                    text ""
-            ]
+            _ ->
+                text ""
         ]
 
 

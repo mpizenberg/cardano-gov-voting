@@ -16,7 +16,6 @@ import Cardano.Utxo as Utxo exposing (DatumOption(..), Output, OutputReference, 
 import Cardano.Value
 import Cbor.Encode
 import Dict exposing (Dict)
-import Dict.Any
 import Hex.Convert
 import Html exposing (Html, button, div, text, wbr)
 import Html.Attributes as HA exposing (height, src)
@@ -26,7 +25,8 @@ import Integer
 import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
 import Natural exposing (Natural)
-import Url
+import Page.Preparation exposing (ActiveProposal)
+import RemoteData
 
 
 main =
@@ -57,149 +57,6 @@ port fromExternalApp : (Value -> msg) -> Sub msg
 -- #########################################################
 -- MODEL
 -- #########################################################
--- Voter Preparation
-
-
-type alias VoterPreparationForm =
-    { voterType : VoterType
-    , voterCred : VoterCredForm
-    , feeProviderType : FeeProviderType
-    , waitingForConfirmation : Bool
-    }
-
-
-type VoterType
-    = CcVoter
-    | DrepVoter
-    | SpoVoter
-
-
-type VoterCredForm
-    = StakeKeyVoter String
-    | ScriptVoter { scriptHash : String, utxoRef : String }
-
-
-type FeeProviderType
-    = ConnectedWalletFeeProvider
-    | ExternalFeeProvider { endpoint : String }
-
-
-type alias VoterIdentified =
-    { voterType : VoterType
-    , voterCred : CredentialWitness
-    , feeProvider : FeeProvider
-    }
-
-
-
--- Picking Gov Action
-
-
-type alias ActiveProposal =
-    { id : ActionId
-    , actionType : String
-    , metadata : RemoteData ProposalMetadata
-    }
-
-
-type alias ProposalMetadata =
-    { title : String
-    , abstract : String
-    , rawJson : String
-    }
-
-
-type RemoteData a
-    = Loading
-    | Retrieved a
-    | Error String
-
-
-
--- Filling Rationale
-
-
-type alias RationaleForm =
-    { authors : List AuthorForm
-    , summary : MarkdownForm
-    , rationaleStatement : MarkdownForm
-    , precedentDiscussion : MarkdownForm
-    , counterargumentDiscussion : MarkdownForm
-    , conclusion : MarkdownForm
-    , internalVote : InternalVote
-    , references : ReferencesForm
-    }
-
-
-type alias AuthorForm =
-    {}
-
-
-type alias MarkdownForm =
-    {}
-
-
-type alias InternalVote =
-    { constitutional : Int
-    , unconstitutional : Int
-    , abstain : Int
-    , didNotVote : Int
-    }
-
-
-type alias ReferencesForm =
-    {}
-
-
-type alias Rationale =
-    { authors : Dict String (Maybe AuthorWitness)
-    , summary : String
-    , rationaleStatement : String
-    , precedentDiscussion : String
-    , counterargumentDiscussion : String
-    , conclusion : String
-    , internalVote : InternalVote
-    , references : List Reference
-    }
-
-
-type alias AuthorWitness =
-    {}
-
-
-type alias Reference =
-    {}
-
-
-
--- Preparation Model
-
-
-type Step prep done
-    = NotDone prep
-    | Done done
-
-
-type alias PreparationModel =
-    { proposals : List ActiveProposal
-    , voterStep : Step VoterPreparationForm VoterIdentified
-    , pickProposalStep : Step {} ActiveProposal
-    , rationaleCreationStep : Step RationaleForm Rationale
-    , rationaleSignatureStep : Step (Dict String (Maybe AuthorWitness)) (Dict String AuthorWitness)
-    , permanentStorageStep : Step StoragePrep Storage
-    , buildTxStep : Step {} Transaction
-    }
-
-
-type alias StoragePrep =
-    {}
-
-
-type alias Storage =
-    {}
-
-
-
 -- SigningModel
 
 
@@ -224,8 +81,8 @@ type alias Model =
     { page : Page
     , walletsDiscovered : List WalletDescriptor
     , wallet : Maybe Cip30.Wallet
-    , walletUtxos : Maybe (List Cip30.Utxo)
     , walletChangeAddress : Maybe Address
+    , walletUtxos : Maybe (Utxo.RefDict Output)
     , protocolParams : Maybe ProtocolParams
     , errors : List String
     }
@@ -233,7 +90,7 @@ type alias Model =
 
 type Page
     = LandingPage
-    | PreparationPage PreparationModel
+    | PreparationPage Page.Preparation.Model
     | SigningPage SigningModel
     | SubmissionPage SubmissionModel
 
@@ -241,19 +98,6 @@ type Page
 type alias ProtocolParams =
     { costModels : CostModels
     , drepDeposit : Natural
-    }
-
-
-type alias LoadedWallet =
-    { wallet : Cip30.Wallet
-    , utxos : Utxo.RefDict Output
-    , changeAddress : Address
-    }
-
-
-type alias FeeProvider =
-    { address : Address
-    , utxos : Utxo.RefDict Output
     }
 
 
@@ -319,7 +163,7 @@ proposalsDecoder =
                     (JD.at [ "proposal", "index" ] JD.int)
                 )
                 (JD.at [ "action", "type" ] JD.string)
-                (JD.succeed Loading)
+                (JD.succeed RemoteData.Loading)
 
 
 
@@ -344,14 +188,10 @@ type Msg
     | ConnectButtonClicked { id : String }
     | DisconnectWalletButtonClicked
     | GotProtocolParams (Result Http.Error ProtocolParams)
-    | GotProposals (Result Http.Error (List ActiveProposal))
-      -- New messages for voter identification
-    | VoterTypeSelected VoterType
-    | VoterCredentialUpdated VoterCredForm
-    | FeeProviderSelected FeeProviderType
-    | ValidateVoterFormButtonClicked
-      -- Preparation stage navigation
+    | GotProposals (Result Http.Error (List Page.Preparation.ActiveProposal))
     | StartPreparation
+      -- Preparation page
+    | PreparationPageMsg Page.Preparation.Msg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -384,17 +224,26 @@ update msg model =
                 -- We just connected to the wallet, let’s ask for all that is still missing
                 Ok (Cip30.EnabledWallet wallet) ->
                     ( { model | wallet = Just wallet }
-                      -- Retrieve the wallet change address
-                    , toWallet (Cip30.encodeRequest (Cip30.getChangeAddress wallet))
-                    )
+                    , Cmd.batch
+                        -- Retrieve the wallet change address
+                        [ toWallet (Cip30.encodeRequest (Cip30.getChangeAddress wallet))
 
-                -- We just received the utxos
-                Ok (Cip30.ApiResponse _ (Cip30.WalletUtxos utxos)) ->
-                    confirmVoter { model | walletUtxos = Just utxos }
+                        -- Retrieve UTXOs from the main wallet
+                        , Cip30.getUtxos wallet { amount = Nothing, paginate = Nothing }
+                            |> Cip30.encodeRequest
+                            |> toWallet
+                        ]
+                    )
 
                 -- Received the wallet change address
                 Ok (Cip30.ApiResponse _ (Cip30.ChangeAddress address)) ->
                     ( { model | walletChangeAddress = Just address }
+                    , Cmd.none
+                    )
+
+                -- We just received the utxos
+                Ok (Cip30.ApiResponse _ (Cip30.WalletUtxos utxos)) ->
+                    ( { model | walletUtxos = Just (Utxo.refDictFromList utxos) }
                     , Cmd.none
                     )
 
@@ -426,22 +275,7 @@ update msg model =
                 Just _ ->
                     ( { model
                         | errors = []
-                        , page =
-                            PreparationPage
-                                { proposals = []
-                                , voterStep =
-                                    NotDone
-                                        { voterType = DrepVoter
-                                        , voterCred = StakeKeyVoter ""
-                                        , feeProviderType = ConnectedWalletFeeProvider
-                                        , waitingForConfirmation = False
-                                        }
-                                , pickProposalStep = NotDone {}
-                                , rationaleCreationStep = NotDone initRationaleForm
-                                , rationaleSignatureStep = NotDone Dict.empty
-                                , permanentStorageStep = NotDone {}
-                                , buildTxStep = NotDone {}
-                                }
+                        , page = PreparationPage Page.Preparation.init
                       }
                     , loadGovernanceProposals
                     )
@@ -451,227 +285,32 @@ update msg model =
                     , Cmd.none
                     )
 
-        ( VoterTypeSelected newType, { page } ) ->
+        ( PreparationPageMsg pageMsg, { page } ) ->
             case page of
-                PreparationPage prep ->
-                    case prep.voterStep of
-                        NotDone form ->
-                            ( { model
-                                | page =
-                                    PreparationPage
-                                        { prep
-                                            | voterStep =
-                                                NotDone { form | voterType = newType }
-                                        }
-                              }
-                            , Cmd.none
-                            )
+                PreparationPage pageModel ->
+                    let
+                        loadedWallet =
+                            case ( model.wallet, model.walletChangeAddress, model.walletUtxos ) of
+                                ( Just wallet, Just address, Just utxos ) ->
+                                    Just { wallet = wallet, changeAddress = address, utxos = utxos }
 
-                        Done _ ->
-                            ( model, Cmd.none )
+                                _ ->
+                                    Nothing
+
+                        ctx =
+                            { wrapMsg = PreparationPageMsg
+                            , loadedWallet = loadedWallet
+                            , feeProviderAskUtxosCmd = Cmd.none -- TODO
+                            }
+                    in
+                    Page.Preparation.update ctx pageMsg pageModel
+                        |> Tuple.mapFirst (\newPageModel -> { model | page = PreparationPage newPageModel })
 
                 _ ->
-                    ( model, Cmd.none )
-
-        ( VoterCredentialUpdated newCred, { page } ) ->
-            case page of
-                PreparationPage prep ->
-                    case prep.voterStep of
-                        NotDone form ->
-                            ( { model
-                                | page =
-                                    PreparationPage
-                                        { prep
-                                            | voterStep =
-                                                NotDone { form | voterCred = newCred }
-                                        }
-                              }
-                            , Cmd.none
-                            )
-
-                        Done _ ->
-                            ( model, Cmd.none )
-
-                _ ->
-                    ( model, Cmd.none )
-
-        ( FeeProviderSelected newProvider, { page } ) ->
-            case page of
-                PreparationPage prep ->
-                    case prep.voterStep of
-                        NotDone form ->
-                            ( { model
-                                | page =
-                                    PreparationPage
-                                        { prep
-                                            | voterStep =
-                                                NotDone
-                                                    { form | feeProviderType = newProvider }
-                                        }
-                              }
-                            , Cmd.none
-                            )
-
-                        Done _ ->
-                            ( model, Cmd.none )
-
-                _ ->
-                    ( model, Cmd.none )
-
-        ( ValidateVoterFormButtonClicked, _ ) ->
-            confirmVoter model
-
-        _ ->
-            ( model, Cmd.none )
-
-
-confirmVoter : Model -> ( Model, Cmd Msg )
-confirmVoter model =
-    case model.page of
-        PreparationPage prep ->
-            case prep.voterStep of
-                NotDone form ->
-                    case ( validateVoterCredForm form.voterCred, validateFeeProviderType model.wallet form.feeProviderType ) of
-                        ( Ok voterCred, Ok feeProviderType ) ->
-                            case feeProviderType of
-                                ConnectedWalletFeeProvider ->
-                                    case ( model.walletChangeAddress, model.walletUtxos ) of
-                                        ( Just addr, Just utxos ) ->
-                                            ( { model
-                                                | page =
-                                                    PreparationPage
-                                                        { prep
-                                                            | voterStep =
-                                                                Done
-                                                                    { voterType = form.voterType
-                                                                    , voterCred = voterCred
-                                                                    , feeProvider =
-                                                                        { address = addr
-                                                                        , utxos = Utxo.refDictFromList utxos
-                                                                        }
-                                                                    }
-                                                        }
-                                                , errors = []
-                                              }
-                                            , Cmd.none
-                                            )
-
-                                        ( Just addr, Nothing ) ->
-                                            ( { model
-                                                | page = PreparationPage { prep | voterStep = NotDone { form | waitingForConfirmation = True } }
-                                                , errors = []
-                                              }
-                                            , askFeeProvider model.wallet feeProviderType
-                                            )
-
-                                        _ ->
-                                            ( { model | errors = "Please connect wallet to use as fee provider" :: model.errors }
-                                            , Cmd.none
-                                            )
-
-                                ExternalFeeProvider { endpoint } ->
-                                    Debug.todo "validate voter with external fee provider"
-
-                        ( Err error, _ ) ->
-                            ( { model | errors = error :: model.errors }
-                            , Cmd.none
-                            )
-
-                        ( _, Err error ) ->
-                            ( { model | errors = error :: model.errors }
-                            , Cmd.none
-                            )
-
-                Done _ ->
                     ( model, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
-
-
-validateVoterCredForm : VoterCredForm -> Result String CredentialWitness
-validateVoterCredForm voterCredForm =
-    case voterCredForm of
-        StakeKeyVoter str ->
-            stakeKeyHashFromStr str
-                |> Result.map WithKey
-
-        ScriptVoter { scriptHash, utxoRef } ->
-            -- Result.map2 (\hash utxo -> WithScript hash <| )
-            -- (scriptHashFromStr scriptHash)
-            -- (utxoRefFromStr utxoRef)
-            Debug.todo "validateVoterCredForm"
-
-
-stakeKeyHashFromStr : String -> Result String (Bytes CredentialHash)
-stakeKeyHashFromStr str =
-    -- Try to extract the stake key hash from a string that can either be:
-    --  * garbage
-    --  * directly a valid stake key hash in hex
-    --  * a stake key address in hex
-    --  * a stake key address in bech32
-    if String.length str == 56 then
-        -- Can only be a credential hash directly if 28 bytes
-        Bytes.fromHex str
-            |> Result.fromMaybe ("Invalid Hex of credential hash: " ++ str)
-
-    else
-        Address.fromString str
-            |> Result.fromMaybe ("Invalid credential hash or stake address: " ++ str)
-            |> Result.andThen
-                (\address ->
-                    case address of
-                        Address.Reward stakeAddress ->
-                            case stakeAddress.stakeCredential of
-                                VKeyHash cred ->
-                                    Ok cred
-
-                                ScriptHash _ ->
-                                    Err "This is a script address, not a Key address"
-
-                        _ ->
-                            Err "This is a full address, please use a stake (reward) address instead"
-                )
-
-
-{-| Check if the external endpoint seems legit.
--}
-validateFeeProviderType : Maybe Cip30.Wallet -> FeeProviderType -> Result String FeeProviderType
-validateFeeProviderType maybeWallet feeProviderType =
-    case ( maybeWallet, feeProviderType ) of
-        ( Nothing, ConnectedWalletFeeProvider ) ->
-            Err "No wallet connected, please connect a wallet first."
-
-        ( Just _, ConnectedWalletFeeProvider ) ->
-            Ok feeProviderType
-
-        ( _, ExternalFeeProvider { endpoint } ) ->
-            case Url.fromString endpoint of
-                Just _ ->
-                    Ok feeProviderType
-
-                Nothing ->
-                    Err ("The endpoint does not look like a valid URL: " ++ endpoint)
-
-
-{-| Create a command to ask and retrieve the address and available utxos for fees.
--}
-askFeeProvider : Maybe Cip30.Wallet -> FeeProviderType -> Cmd Msg
-askFeeProvider maybeWallet feeProviderType =
-    case ( maybeWallet, feeProviderType ) of
-        ( Just wallet, ConnectedWalletFeeProvider ) ->
-            Cmd.batch
-                -- Retrieve UTXOs from the main wallet
-                [ Cip30.getUtxos wallet { amount = Nothing, paginate = Nothing }
-                    |> Cip30.encodeRequest
-                    |> toWallet
-                ]
-
-        ( Nothing, ConnectedWalletFeeProvider ) ->
-            Cmd.none
-
-        ( _, ExternalFeeProvider { endpoint } ) ->
-            Debug.todo "askFeeProvider"
 
 
 protocolParamsDecoder : Decoder ProtocolParams
@@ -686,24 +325,6 @@ protocolParamsDecoder =
         (JD.at [ "result", "plutusCostModels", "plutus:v2" ] <| JD.list JD.int)
         (JD.at [ "result", "plutusCostModels", "plutus:v3" ] <| JD.list JD.int)
         (JD.at [ "result", "delegateRepresentativeDeposit", "ada", "lovelace" ] <| JD.map Natural.fromSafeInt JD.int)
-
-
-initRationaleForm : RationaleForm
-initRationaleForm =
-    { authors = []
-    , summary = {}
-    , rationaleStatement = {}
-    , precedentDiscussion = {}
-    , counterargumentDiscussion = {}
-    , conclusion = {}
-    , internalVote =
-        { constitutional = 0
-        , unconstitutional = 0
-        , abstain = 0
-        , didNotVote = 0
-        }
-    , references = {}
-    }
 
 
 stringToVote : String -> Vote
@@ -798,7 +419,7 @@ viewContent model =
             viewLandingPage model.walletsDiscovered
 
         PreparationPage prepModel ->
-            viewPreparationPage prepModel
+            Page.Preparation.view { wrapMsg = PreparationPageMsg } prepModel
 
         SigningPage signingModel ->
             viewSigningPage signingModel
@@ -817,211 +438,6 @@ viewLandingPage wallets =
                 [ text "Start Vote Preparation" ]
             ]
         ]
-
-
-
--- Preparation page
-
-
-viewPreparationPage : PreparationModel -> Html Msg
-viewPreparationPage model =
-    div []
-        [ Html.h2 [] [ text "Vote Preparation" ]
-        , viewVoterIdentificationStep model.voterStep
-        , Html.hr [] []
-        , viewProposalSelectionStep model
-        , Html.hr [] []
-        , viewRationaleStep model.rationaleCreationStep
-        , Html.hr [] []
-        , viewPermanentStorageStep model.permanentStorageStep
-        , Html.hr [] []
-        , viewBuildTxStep model.buildTxStep
-        ]
-
-
-viewVoterIdentificationStep : Step VoterPreparationForm VoterIdentified -> Html Msg
-viewVoterIdentificationStep step =
-    case step of
-        NotDone form ->
-            div []
-                [ Html.h3 [] [ text "Voter Identification" ]
-                , viewVoterTypeSelector form.voterType
-                , viewVoterCredentialsForm form.voterCred
-                , viewFeeProviderSelector form.feeProviderType
-                , if form.waitingForConfirmation then
-                    div [] [ text "waiting for fee provider confirmation ..." ]
-
-                  else
-                    div [] [ Html.button [ onClick ValidateVoterFormButtonClicked ] [ text "Confirm Voter" ] ]
-                ]
-
-        Done voter ->
-            div []
-                [ Html.h3 [] [ text "Voter Identified" ]
-                , viewIdentifiedVoter voter
-                ]
-
-
-viewVoterTypeSelector : VoterType -> Html Msg
-viewVoterTypeSelector currentType =
-    div []
-        [ Html.h4 [] [ text "Select Voter Type" ]
-        , div []
-            [ viewVoterTypeOption CcVoter "Constitutional Committee" (currentType == CcVoter)
-            , viewVoterTypeOption DrepVoter "DRep" (currentType == DrepVoter)
-            , viewVoterTypeOption SpoVoter "SPO" (currentType == SpoVoter)
-            ]
-        ]
-
-
-viewVoterTypeOption : VoterType -> String -> Bool -> Html Msg
-viewVoterTypeOption voterType label isSelected =
-    div []
-        [ Html.input
-            [ HA.type_ "radio"
-            , HA.name "voter-type"
-            , HA.checked isSelected
-            , onClick (VoterTypeSelected voterType)
-            ]
-            []
-        , Html.label [] [ text label ]
-        ]
-
-
-viewCredTypeOption : VoterCredForm -> String -> Bool -> Html Msg
-viewCredTypeOption voterCredType label isSelected =
-    div []
-        [ Html.input
-            [ HA.type_ "radio"
-            , HA.name "cred-type"
-            , HA.checked isSelected
-            , onClick (VoterCredentialUpdated voterCredType)
-            ]
-            []
-        , Html.label [] [ text label ]
-        ]
-
-
-viewVoterCredentialsForm : VoterCredForm -> Html Msg
-viewVoterCredentialsForm credForm =
-    let
-        isStakeKeyVoter =
-            case credForm of
-                StakeKeyVoter _ ->
-                    True
-
-                _ ->
-                    False
-    in
-    div []
-        [ Html.h4 [] [ text "Voter Credentials" ]
-        , div []
-            [ viewCredTypeOption (StakeKeyVoter "") "Stake Key Voter" isStakeKeyVoter
-            , viewCredTypeOption (ScriptVoter { scriptHash = "", utxoRef = "" }) "(WIP) Script Voter" (not isStakeKeyVoter)
-            ]
-        , case credForm of
-            StakeKeyVoter key ->
-                div []
-                    [ Html.label [] [ text "Stake key hash (or stake address)" ]
-                    , Html.input
-                        [ HA.type_ "text"
-                        , HA.value key
-                        , Html.Events.onInput (\s -> VoterCredentialUpdated (StakeKeyVoter s))
-                        ]
-                        []
-                    ]
-
-            ScriptVoter { scriptHash, utxoRef } ->
-                div []
-                    [ Html.label [] [ text "Script Hash" ]
-                    , Html.input
-                        [ HA.type_ "text"
-                        , HA.value scriptHash
-                        , Html.Events.onInput
-                            (\s -> VoterCredentialUpdated (ScriptVoter { scriptHash = s, utxoRef = utxoRef }))
-                        ]
-                        []
-                    , Html.label [] [ text "UTxO Reference" ]
-                    , Html.input
-                        [ HA.type_ "text"
-                        , HA.value utxoRef
-                        , Html.Events.onInput
-                            (\s -> VoterCredentialUpdated (ScriptVoter { scriptHash = scriptHash, utxoRef = s }))
-                        ]
-                        []
-                    ]
-        ]
-
-
-viewFeeProviderSelector : FeeProviderType -> Html Msg
-viewFeeProviderSelector feeProviderType =
-    div []
-        [ Html.h4 [] [ text "Fee Provider (TODO: split from voter type)" ]
-        , div []
-            [ viewFeeProviderOption
-                ConnectedWalletFeeProvider
-                "Use connected wallet"
-                (feeProviderType == ConnectedWalletFeeProvider)
-            , viewFeeProviderOption
-                (ExternalFeeProvider { endpoint = "" })
-                "(WIP) Use external fee provider"
-                (feeProviderType /= ConnectedWalletFeeProvider)
-            , case feeProviderType of
-                ExternalFeeProvider { endpoint } ->
-                    div []
-                        [ Html.label [] [ text "External Provider Endpoint" ]
-                        , Html.input
-                            [ HA.type_ "text"
-                            , HA.value endpoint
-                            , Html.Events.onInput
-                                (\s -> FeeProviderSelected (ExternalFeeProvider { endpoint = s }))
-                            ]
-                            []
-                        ]
-
-                _ ->
-                    text ""
-            ]
-        ]
-
-
-viewFeeProviderOption : FeeProviderType -> String -> Bool -> Html Msg
-viewFeeProviderOption feeProviderType label isSelected =
-    div []
-        [ Html.input
-            [ HA.type_ "radio"
-            , HA.name "fee-provider"
-            , HA.checked isSelected
-            , onClick (FeeProviderSelected feeProviderType)
-            ]
-            []
-        , Html.label [] [ text label ]
-        ]
-
-
-viewIdentifiedVoter : VoterIdentified -> Html Msg
-viewIdentifiedVoter voter =
-    text "TODO viewIdentifiedVoter"
-
-
-viewProposalSelectionStep : PreparationModel -> Html Msg
-viewProposalSelectionStep model =
-    text "TODO viewProposalSelectionStep"
-
-
-viewRationaleStep : Step RationaleForm Rationale -> Html Msg
-viewRationaleStep step =
-    text "TODO viewRationaleStep"
-
-
-viewPermanentStorageStep : Step StoragePrep Storage -> Html Msg
-viewPermanentStorageStep step =
-    text "TODO viewPermanentStorageStep"
-
-
-viewBuildTxStep : Step {} Transaction -> Html Msg
-viewBuildTxStep step =
-    text "TODO viewBuildTxStep"
 
 
 

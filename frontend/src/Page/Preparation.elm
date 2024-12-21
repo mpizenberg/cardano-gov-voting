@@ -125,7 +125,7 @@ type alias AuthorForm =
 
 
 type alias MarkdownForm =
-    {}
+    String
 
 
 type alias InternalVote =
@@ -143,11 +143,11 @@ type alias ReferencesForm =
 initRationaleForm : RationaleForm
 initRationaleForm =
     { authors = []
-    , summary = {}
-    , rationaleStatement = {}
-    , precedentDiscussion = {}
-    , counterargumentDiscussion = {}
-    , conclusion = {}
+    , summary = ""
+    , rationaleStatement = ""
+    , precedentDiscussion = ""
+    , counterargumentDiscussion = ""
+    , conclusion = ""
     , internalVote =
         { constitutional = 0
         , unconstitutional = 0

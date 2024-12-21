@@ -215,55 +215,8 @@ update msg model =
 
         ( WalletMsg value, _ ) ->
             case JD.decodeValue Cip30.responseDecoder value of
-                -- We just discovered available wallets
-                Ok (Cip30.AvailableWallets wallets) ->
-                    ( { model | walletsDiscovered = wallets }
-                    , Cmd.none
-                    )
-
-                -- We just connected to the wallet, let’s ask for all that is still missing
-                Ok (Cip30.EnabledWallet wallet) ->
-                    ( { model | wallet = Just wallet }
-                    , Cmd.batch
-                        -- Retrieve the wallet change address
-                        [ toWallet (Cip30.encodeRequest (Cip30.getChangeAddress wallet))
-
-                        -- Retrieve UTXOs from the main wallet
-                        , Cip30.getUtxos wallet { amount = Nothing, paginate = Nothing }
-                            |> Cip30.encodeRequest
-                            |> toWallet
-                        ]
-                    )
-
-                -- Received the wallet change address
-                Ok (Cip30.ApiResponse _ (Cip30.ChangeAddress address)) ->
-                    ( { model | walletChangeAddress = Just address }
-                    , Cmd.none
-                    )
-
-                -- We just received the utxos
-                Ok (Cip30.ApiResponse _ (Cip30.WalletUtxos utxos)) ->
-                    ( { model | walletUtxos = Just (Utxo.refDictFromList utxos) }
-                    , Cmd.none
-                    )
-
-                -- TODO
-                Ok (Cip30.ApiResponse _ _) ->
-                    ( { model | errors = "TODO: unhandled response yet" :: model.errors }
-                    , Cmd.none
-                    )
-
-                -- Received an error message from the wallet
-                Ok (Cip30.ApiError { info }) ->
-                    ( { model | errors = info :: model.errors }
-                    , Cmd.none
-                    )
-
-                -- Unknown type of message received from the wallet
-                Ok (Cip30.UnhandledResponseType error) ->
-                    ( { model | errors = error :: model.errors }
-                    , Cmd.none
-                    )
+                Ok response ->
+                    handleWalletResponse response model
 
                 Err decodingError ->
                     ( { model | errors = JD.errorToString decodingError :: model.errors }
@@ -311,6 +264,60 @@ update msg model =
 
         _ ->
             ( model, Cmd.none )
+
+
+handleWalletResponse : Cip30.Response -> Model -> ( Model, Cmd Msg )
+handleWalletResponse response model =
+    case response of
+        -- We just discovered available wallets
+        Cip30.AvailableWallets wallets ->
+            ( { model | walletsDiscovered = wallets }
+            , Cmd.none
+            )
+
+        -- We just connected to the wallet, let’s ask for all that is still missing
+        Cip30.EnabledWallet wallet ->
+            ( { model | wallet = Just wallet }
+            , Cmd.batch
+                -- Retrieve the wallet change address
+                [ toWallet (Cip30.encodeRequest (Cip30.getChangeAddress wallet))
+
+                -- Retrieve UTXOs from the main wallet
+                , Cip30.getUtxos wallet { amount = Nothing, paginate = Nothing }
+                    |> Cip30.encodeRequest
+                    |> toWallet
+                ]
+            )
+
+        -- Received the wallet change address
+        Cip30.ApiResponse _ (Cip30.ChangeAddress address) ->
+            ( { model | walletChangeAddress = Just address }
+            , Cmd.none
+            )
+
+        -- We just received the utxos
+        Cip30.ApiResponse _ (Cip30.WalletUtxos utxos) ->
+            ( { model | walletUtxos = Just (Utxo.refDictFromList utxos) }
+            , Cmd.none
+            )
+
+        -- TODO
+        Cip30.ApiResponse _ _ ->
+            ( { model | errors = "TODO: unhandled CIP30 response yet" :: model.errors }
+            , Cmd.none
+            )
+
+        -- Received an error message from the wallet
+        Cip30.ApiError { info } ->
+            ( { model | errors = info :: model.errors }
+            , Cmd.none
+            )
+
+        -- Unknown type of message received from the wallet
+        Cip30.UnhandledResponseType error ->
+            ( { model | errors = error :: model.errors }
+            , Cmd.none
+            )
 
 
 protocolParamsDecoder : Decoder ProtocolParams

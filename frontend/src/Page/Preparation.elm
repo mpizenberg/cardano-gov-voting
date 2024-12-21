@@ -1,14 +1,14 @@
 module Page.Preparation exposing (ActiveProposal, Model, Msg, init, update, view)
 
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano exposing (CredentialWitness(..))
+import Cardano exposing (CredentialWitness(..), ScriptWitness(..))
 import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash)
 import Cardano.Cip30 as Cip30
 import Cardano.Gov exposing (ActionId)
 import Cardano.Transaction exposing (Transaction)
 import Cardano.Utxo as Utxo exposing (Output)
 import Dict exposing (Dict)
-import Html exposing (Html, button, div, text)
+import Html exposing (Html, button, div, text, wbr)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
 import RemoteData exposing (WebData)
@@ -567,8 +567,31 @@ viewVoterCredentialsForm credForm =
 
 
 viewIdentifiedVoter : VoterIdentified -> Html Msg
-viewIdentifiedVoter voter =
-    text "TODO viewIdentifiedVoter"
+viewIdentifiedVoter { voterType, voterCred } =
+    let
+        voterTypeText =
+            case voterType of
+                CcVoter ->
+                    "Constitutional Committee Voter"
+
+                DrepVoter ->
+                    "DRep Voter"
+
+                SpoVoter ->
+                    "SPO Voter"
+    in
+    div []
+        [ Html.p [] [ text voterTypeText ]
+        , case voterCred of
+            WithKey cred ->
+                Html.p [] [ text <| "Using key for credential hash: " ++ Bytes.toHex cred ]
+
+            WithScript cred (NativeWitness witness) ->
+                Html.p [] [ text "TODO: display native script witness" ]
+
+            WithScript cred (PlutusWitness witness) ->
+                Html.p [] [ text "TODO: display Plutus script witness" ]
+        ]
 
 
 

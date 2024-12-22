@@ -113,7 +113,7 @@ type alias RationaleForm =
     , summary : MarkdownForm
     , rationaleStatement : MarkdownForm
     , precedentDiscussion : MarkdownForm
-    , counterargumentDiscussion : MarkdownForm
+    , counterArgumentDiscussion : MarkdownForm
     , conclusion : MarkdownForm
     , internalVote : InternalVote
     , references : ReferencesForm
@@ -146,7 +146,7 @@ initRationaleForm =
     , summary = ""
     , rationaleStatement = ""
     , precedentDiscussion = ""
-    , counterargumentDiscussion = ""
+    , counterArgumentDiscussion = ""
     , conclusion = ""
     , internalVote =
         { constitutional = 0
@@ -223,6 +223,16 @@ type Msg
     | VoterTypeSelected VoterType
     | VoterCredentialUpdated VoterCredForm
     | ValidateVoterFormButtonClicked
+      -- Rationale
+    | RationaleSummaryChange String
+    | RationaleStatementChange String
+    | PrecedentDiscussionChange String
+    | CounterArgumentChange String
+    | ConclusionChange String
+    | InternalConstitutionalVoteChange String
+    | InternalUnconstitutionalVoteChange String
+    | InternalAbstainVoteChange String
+    | InternalDidNotVoteChange String
       -- Fee Provider Step
     | FeeProviderUpdated FeeProviderForm
     | ValidateFeeProviderFormButtonClicked
@@ -269,6 +279,54 @@ update ctx msg model =
 
                 _ ->
                     ( model, Cmd.none )
+
+        --
+        -- Rationale Step
+        --
+        RationaleSummaryChange summary ->
+            ( updateRationaleForm (\form -> { form | summary = summary }) model
+            , Cmd.none
+            )
+
+        RationaleStatementChange statement ->
+            ( updateRationaleForm (\form -> { form | rationaleStatement = statement }) model
+            , Cmd.none
+            )
+
+        PrecedentDiscussionChange precedentDiscussion ->
+            ( updateRationaleForm (\form -> { form | precedentDiscussion = precedentDiscussion }) model
+            , Cmd.none
+            )
+
+        CounterArgumentChange argument ->
+            ( updateRationaleForm (\form -> { form | counterArgumentDiscussion = argument }) model
+            , Cmd.none
+            )
+
+        ConclusionChange conclusion ->
+            ( updateRationaleForm (\form -> { form | conclusion = conclusion }) model
+            , Cmd.none
+            )
+
+        InternalConstitutionalVoteChange constitutionalStr ->
+            ( updateRationaleInternalVoteForm (\n internal -> { internal | constitutional = n }) constitutionalStr model
+            , Cmd.none
+            )
+
+        InternalUnconstitutionalVoteChange unconstitutionalStr ->
+            ( updateRationaleInternalVoteForm (\n internal -> { internal | unconstitutional = n }) unconstitutionalStr model
+            , Cmd.none
+            )
+
+        InternalAbstainVoteChange abstainStr ->
+            ( updateRationaleInternalVoteForm (\n internal -> { internal | abstain = n }) abstainStr model
+            , Cmd.none
+            )
+
+        InternalDidNotVoteChange didNotVoteStr ->
+            ( updateRationaleInternalVoteForm (\n internal -> { internal | didNotVote = n }) didNotVoteStr model
+            , Cmd.none
+            )
 
         --
         -- Fee Provider Step
@@ -374,6 +432,32 @@ stakeKeyHashFromStr str =
                         _ ->
                             Err "This is a full address, please use a stake (reward) address instead"
                 )
+
+
+
+-- Rationale Step
+
+
+updateRationaleForm : (RationaleForm -> RationaleForm) -> Model -> Model
+updateRationaleForm f ({ rationaleCreationStep } as model) =
+    case rationaleCreationStep of
+        Preparing form ->
+            { model | rationaleCreationStep = Preparing (f form) }
+
+        _ ->
+            model
+
+
+updateRationaleInternalVoteForm : (Int -> InternalVote -> InternalVote) -> String -> Model -> Model
+updateRationaleInternalVoteForm updateF numberStr model =
+    let
+        rationaleUpdate : RationaleForm -> RationaleForm
+        rationaleUpdate form =
+            String.toInt numberStr
+                |> Maybe.map (\n -> { form | internalVote = updateF n form.internalVote })
+                |> Maybe.withDefault form
+    in
+    updateRationaleForm rationaleUpdate model
 
 
 
@@ -613,7 +697,147 @@ viewProposalSelectionStep ctx model =
 
 viewRationaleStep : ViewContext msg -> Step RationaleForm {} Rationale -> Html msg
 viewRationaleStep ctx step =
-    text "TODO viewRationaleStep"
+    Html.map ctx.wrapMsg <|
+        case step of
+            Preparing form ->
+                div []
+                    [ Html.h3 [] [ text "Vote Rationale" ]
+                    , viewAuthorsForm form.authors
+                    , viewSummaryForm form.summary
+                    , viewStatementForm form.rationaleStatement
+                    , viewPrecedentDiscussionForm form.precedentDiscussion
+                    , viewCounterArgumentForm form.counterArgumentDiscussion
+                    , viewConclusionForm form.conclusion
+                    , viewInternalVoteForm form.internalVote
+                    , viewReferencesForm form.references
+                    ]
+
+            Validating _ _ ->
+                div []
+                    [ Html.h3 [] [ text "Vote Rationale" ]
+                    , Html.p [] [ text "validating rationale data ..." ]
+                    ]
+
+            Done rationale ->
+                div []
+                    [ Html.h3 [] [ text "Vote Rationale" ]
+                    , Html.p [] [ text "TODO: display rationale" ]
+                    ]
+
+
+viewAuthorsForm : List AuthorForm -> Html Msg
+viewAuthorsForm authors =
+    div []
+        [ Html.h4 [] [ text "Authors" ]
+        , text "TODO: view authors form"
+        ]
+
+
+viewSummaryForm : MarkdownForm -> Html Msg
+viewSummaryForm form =
+    div []
+        [ Html.h4 [] [ text "Summary" ]
+        , div []
+            [ Html.input
+                [ HA.type_ "text"
+                , HA.value form
+                , Html.Events.onInput RationaleSummaryChange
+                ]
+                []
+            ]
+        ]
+
+
+viewStatementForm : MarkdownForm -> Html Msg
+viewStatementForm form =
+    div []
+        [ Html.h4 [] [ text "Rationale Statement" ]
+        , div []
+            [ Html.input
+                [ HA.type_ "text"
+                , HA.value form
+                , Html.Events.onInput RationaleStatementChange
+                ]
+                []
+            ]
+        ]
+
+
+viewPrecedentDiscussionForm : MarkdownForm -> Html Msg
+viewPrecedentDiscussionForm form =
+    div []
+        [ Html.h4 [] [ text "Precedent Discussion" ]
+        , div []
+            [ Html.input
+                [ HA.type_ "text"
+                , HA.value form
+                , Html.Events.onInput PrecedentDiscussionChange
+                ]
+                []
+            ]
+        ]
+
+
+viewCounterArgumentForm : MarkdownForm -> Html Msg
+viewCounterArgumentForm form =
+    div []
+        [ Html.h4 [] [ text "Counter Argument Discussion" ]
+        , div []
+            [ Html.input
+                [ HA.type_ "text"
+                , HA.value form
+                , Html.Events.onInput CounterArgumentChange
+                ]
+                []
+            ]
+        ]
+
+
+viewConclusionForm : MarkdownForm -> Html Msg
+viewConclusionForm form =
+    div []
+        [ Html.h4 [] [ text "Conclusion" ]
+        , div []
+            [ Html.input
+                [ HA.type_ "text"
+                , HA.value form
+                , Html.Events.onInput ConclusionChange
+                ]
+                []
+            ]
+        ]
+
+
+viewInternalVoteForm : InternalVote -> Html Msg
+viewInternalVoteForm { constitutional, unconstitutional, abstain, didNotVote } =
+    div []
+        [ Html.h4 [] [ text "Internal Vote" ]
+        , viewNumberInput "Constitutional: " constitutional InternalConstitutionalVoteChange
+        , viewNumberInput "Unconstitutional: " unconstitutional InternalUnconstitutionalVoteChange
+        , viewNumberInput "Abstain: " abstain InternalAbstainVoteChange
+        , viewNumberInput "Did not vote: " didNotVote InternalDidNotVoteChange
+        ]
+
+
+viewNumberInput : String -> Int -> (String -> Msg) -> Html Msg
+viewNumberInput label n msgOnInput =
+    div []
+        [ text label
+        , Html.input
+            [ HA.type_ "number"
+            , HA.value (String.fromInt n)
+            , Html.Events.onInput msgOnInput
+            ]
+            []
+        ]
+
+
+viewReferencesForm : ReferencesForm -> Html Msg
+viewReferencesForm _ =
+    div []
+        [ Html.h4 [] [ text "References" ]
+        , text "TODO: viewReferencesForm"
+        ]
 
 
 

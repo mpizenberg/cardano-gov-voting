@@ -224,19 +224,24 @@ update msg model =
                     )
 
         ( StartPreparation, { protocolParams } ) ->
-            case protocolParams of
-                Just _ ->
-                    ( { model
-                        | errors = []
-                        , page = PreparationPage Page.Preparation.init
-                      }
-                    , loadGovernanceProposals
-                    )
-
-                Nothing ->
-                    ( { model | errors = "Protocol parameters not loaded yet" :: model.errors }
-                    , Cmd.none
-                    )
+            -- case protocolParams of
+            --     Just _ ->
+            --         ( { model
+            --             | errors = []
+            --             , page = PreparationPage Page.Preparation.init
+            --           }
+            --         , loadGovernanceProposals
+            --         )
+            --     Nothing ->
+            --         ( { model | errors = "Protocol parameters not loaded yet" :: model.errors }
+            --         , Cmd.none
+            --         )
+            ( { model
+                | errors = []
+                , page = PreparationPage Page.Preparation.init
+              }
+            , Cmd.none
+            )
 
         ( PreparationPageMsg pageMsg, { page } ) ->
             case page of

@@ -8,9 +8,10 @@ import Cardano.Gov exposing (ActionId)
 import Cardano.Transaction exposing (Transaction)
 import Cardano.Utxo as Utxo exposing (Output)
 import Dict exposing (Dict)
-import Html exposing (Html, button, div, text, wbr)
+import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
+import List.Extra
 import RemoteData exposing (WebData)
 import Url
 
@@ -25,7 +26,7 @@ type alias Model =
     { voterStep : Step VoterPreparationForm {} VoterIdentified
     , pickProposalStep : Step {} {} ActiveProposal
     , rationaleCreationStep : Step RationaleForm {} Rationale
-    , rationaleSignatureStep : Step (Dict String (Maybe AuthorWitness)) {} (Dict String AuthorWitness)
+    , rationaleSignatureStep : Step (Dict String AuthorWitness) {} (Dict String AuthorWitness)
     , permanentStorageStep : Step StoragePrep {} Storage
     , feeProviderStep : Step FeeProviderForm FeeProviderTemp FeeProvider
     , buildTxStep : Step {} {} Transaction
@@ -121,7 +122,18 @@ type alias RationaleForm =
 
 
 type alias AuthorForm =
-    {}
+    { name : String
+    , witnessAlgorithm : String
+    , publicKey : String
+    }
+
+
+initAuthorForm : AuthorForm
+initAuthorForm =
+    { name = "John Doe"
+    , witnessAlgorithm = "ed25519"
+    , publicKey = ""
+    }
 
 
 type alias MarkdownForm =
@@ -159,7 +171,7 @@ initRationaleForm =
 
 
 type alias Rationale =
-    { authors : Dict String (Maybe AuthorWitness)
+    { authors : Dict String AuthorWitness
     , summary : String
     , rationaleStatement : String
     , precedentDiscussion : String
@@ -171,7 +183,10 @@ type alias Rationale =
 
 
 type alias AuthorWitness =
-    {}
+    { witnessAlgorithm : String
+    , publicKey : String
+    , signature : Maybe String
+    }
 
 
 type alias Reference =
@@ -224,6 +239,11 @@ type Msg
     | VoterCredentialUpdated VoterCredForm
     | ValidateVoterFormButtonClicked
       -- Rationale
+    | AddAuthorButtonClicked
+    | DeleteAuthorButtonClicked Int
+    | AuthorNameChange Int String
+    | AuthorWitnessAlgoChange Int String
+    | AuthorPubKeyChange Int String
     | RationaleSummaryChange String
     | RationaleStatementChange String
     | PrecedentDiscussionChange String
@@ -283,6 +303,31 @@ update ctx msg model =
         --
         -- Rationale Step
         --
+        AddAuthorButtonClicked ->
+            ( updateRationaleForm (\form -> { form | authors = initAuthorForm :: form.authors }) model
+            , Cmd.none
+            )
+
+        DeleteAuthorButtonClicked n ->
+            ( updateRationaleForm (\form -> { form | authors = List.Extra.removeAt n form.authors }) model
+            , Cmd.none
+            )
+
+        AuthorNameChange n name ->
+            ( updateRationaleForm (\form -> { form | authors = List.Extra.updateAt n (\author -> { author | name = name }) form.authors }) model
+            , Cmd.none
+            )
+
+        AuthorWitnessAlgoChange n algo ->
+            ( updateRationaleForm (\form -> { form | authors = List.Extra.updateAt n (\author -> { author | witnessAlgorithm = algo }) form.authors }) model
+            , Cmd.none
+            )
+
+        AuthorPubKeyChange n pubKey ->
+            ( updateRationaleForm (\form -> { form | authors = List.Extra.updateAt n (\author -> { author | publicKey = pubKey }) form.authors }) model
+            , Cmd.none
+            )
+
         RationaleSummaryChange summary ->
             ( updateRationaleForm (\form -> { form | summary = summary }) model
             , Cmd.none
@@ -729,7 +774,36 @@ viewAuthorsForm : List AuthorForm -> Html Msg
 viewAuthorsForm authors =
     div []
         [ Html.h4 [] [ text "Authors" ]
-        , text "TODO: view authors form"
+        , Html.p [] [ button [ onClick AddAuthorButtonClicked ] [ text "Add an author" ] ]
+        , div [] (List.indexedMap viewOneAuthorForm authors)
+        ]
+
+
+viewOneAuthorForm : Int -> AuthorForm -> Html Msg
+viewOneAuthorForm n author =
+    Html.p []
+        [ button [ onClick (DeleteAuthorButtonClicked n) ] [ text "Delete" ]
+        , Html.text " name: "
+        , Html.input
+            [ HA.type_ "text"
+            , HA.value author.name
+            , Html.Events.onInput (AuthorNameChange n)
+            ]
+            []
+        , Html.text " witness algorithm: "
+        , Html.input
+            [ HA.type_ "text"
+            , HA.value author.witnessAlgorithm
+            , Html.Events.onInput (AuthorWitnessAlgoChange n)
+            ]
+            []
+        , Html.text " public key: "
+        , Html.input
+            [ HA.type_ "text"
+            , HA.value author.publicKey
+            , Html.Events.onInput (AuthorPubKeyChange n)
+            ]
+            []
         ]
 
 

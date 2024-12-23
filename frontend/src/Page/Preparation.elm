@@ -143,7 +143,7 @@ type alias ReferencesForm =
 initRationaleForm : RationaleForm
 initRationaleForm =
     { authors = []
-    , summary = ""
+    , summary = "We include compulsory summary with limited size to allow for the creation of tooling which layers of inspection to vote rationale. This allows readers to get a summary of a rationale at a high level before reading all the details."
     , rationaleStatement = ""
     , precedentDiscussion = ""
     , counterArgumentDiscussion = ""
@@ -738,9 +738,8 @@ viewSummaryForm form =
     div []
         [ Html.h4 [] [ text "Summary" ]
         , div []
-            [ Html.input
-                [ HA.type_ "text"
-                , HA.value form
+            [ Html.textarea
+                [ HA.value form
                 , Html.Events.onInput RationaleSummaryChange
                 ]
                 []

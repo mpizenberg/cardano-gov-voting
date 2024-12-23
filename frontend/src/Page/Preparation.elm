@@ -117,7 +117,7 @@ type alias RationaleForm =
     , counterArgumentDiscussion : MarkdownForm
     , conclusion : MarkdownForm
     , internalVote : InternalVote
-    , references : ReferencesForm
+    , references : List Reference
     }
 
 
@@ -148,10 +148,6 @@ type alias InternalVote =
     }
 
 
-type alias ReferencesForm =
-    {}
-
-
 initRationaleForm : RationaleForm
 initRationaleForm =
     { authors = []
@@ -166,7 +162,7 @@ initRationaleForm =
         , abstain = 0
         , didNotVote = 0
         }
-    , references = {}
+    , references = []
     }
 
 
@@ -190,7 +186,52 @@ type alias AuthorWitness =
 
 
 type alias Reference =
-    {}
+    { type_ : ReferenceType
+    , label : String
+    , uri : String
+    }
+
+
+type ReferenceType
+    = OtherRefType
+    | GovernanceMetadataRefType
+    | RelevantArticlesRefType
+
+
+allRefTypes : List ReferenceType
+allRefTypes =
+    [ RelevantArticlesRefType
+    , GovernanceMetadataRefType
+    , OtherRefType
+    ]
+
+
+refTypeToString : ReferenceType -> String
+refTypeToString refType =
+    case refType of
+        RelevantArticlesRefType ->
+            "relevant articles"
+
+        GovernanceMetadataRefType ->
+            "governance metadata"
+
+        OtherRefType ->
+            "other"
+
+
+refTypeFromString : String -> ReferenceType
+refTypeFromString str =
+    List.filter (\refType -> refTypeToString refType == str) allRefTypes
+        |> List.head
+        |> Maybe.withDefault OtherRefType
+
+
+initRefForm : Reference
+initRefForm =
+    { type_ = RelevantArticlesRefType
+    , label = ""
+    , uri = ""
+    }
 
 
 
@@ -253,6 +294,11 @@ type Msg
     | InternalUnconstitutionalVoteChange String
     | InternalAbstainVoteChange String
     | InternalDidNotVoteChange String
+    | AddRefButtonClicked
+    | DeleteRefButtonClicked Int
+    | ReferenceLabelChange Int String
+    | ReferenceUriChange Int String
+    | ReferenceTypeChange Int String
       -- Fee Provider Step
     | FeeProviderUpdated FeeProviderForm
     | ValidateFeeProviderFormButtonClicked
@@ -370,6 +416,31 @@ update ctx msg model =
 
         InternalDidNotVoteChange didNotVoteStr ->
             ( updateRationaleInternalVoteForm (\n internal -> { internal | didNotVote = n }) didNotVoteStr model
+            , Cmd.none
+            )
+
+        AddRefButtonClicked ->
+            ( updateRationaleForm (\form -> { form | references = initRefForm :: form.references }) model
+            , Cmd.none
+            )
+
+        DeleteRefButtonClicked n ->
+            ( updateRationaleForm (\form -> { form | references = List.Extra.removeAt n form.references }) model
+            , Cmd.none
+            )
+
+        ReferenceLabelChange n label ->
+            ( updateRationaleForm (\form -> { form | references = List.Extra.updateAt n (\ref -> { ref | label = label }) form.references }) model
+            , Cmd.none
+            )
+
+        ReferenceUriChange n uri ->
+            ( updateRationaleForm (\form -> { form | references = List.Extra.updateAt n (\ref -> { ref | uri = uri }) form.references }) model
+            , Cmd.none
+            )
+
+        ReferenceTypeChange n refTypeStr ->
+            ( updateRationaleForm (\form -> { form | references = List.Extra.updateAt n (\ref -> { ref | type_ = refTypeFromString refTypeStr }) form.references }) model
             , Cmd.none
             )
 
@@ -905,12 +976,49 @@ viewNumberInput label n msgOnInput =
         ]
 
 
-viewReferencesForm : ReferencesForm -> Html Msg
-viewReferencesForm _ =
+viewReferencesForm : List Reference -> Html Msg
+viewReferencesForm references =
     div []
         [ Html.h4 [] [ text "References" ]
-        , text "TODO: viewReferencesForm"
+        , Html.p [] [ button [ onClick AddRefButtonClicked ] [ text "Add a reference" ] ]
+        , div [] (List.indexedMap viewOneRefForm references)
         ]
+
+
+viewOneRefForm : Int -> Reference -> Html Msg
+viewOneRefForm n reference =
+    Html.p []
+        [ button [ onClick (DeleteRefButtonClicked n) ] [ text "Delete" ]
+        , Html.label [ HA.for "ref-type" ] [ text " reference type: " ]
+        , Html.select
+            [ HA.id "ref-type"
+            , HA.value (refTypeToString reference.type_)
+            , Html.Events.onInput (ReferenceTypeChange n)
+            ]
+            (List.map viewRefOption allRefTypes)
+        , Html.text " label: "
+        , Html.input
+            [ HA.type_ "text"
+            , HA.value reference.label
+            , Html.Events.onInput (ReferenceLabelChange n)
+            ]
+            []
+        , Html.text " uri: "
+        , Html.input
+            [ HA.type_ "text"
+            , HA.value reference.uri
+            , Html.Events.onInput (ReferenceUriChange n)
+            ]
+            []
+        ]
+
+
+viewRefOption : ReferenceType -> Html Msg
+viewRefOption refType =
+    Html.option
+        [ HA.value <| refTypeToString refType
+        ]
+        [ text <| refTypeToString refType ]
 
 
 

@@ -283,6 +283,7 @@ type Msg
     | VoterTypeSelected VoterType
     | VoterCredentialUpdated VoterCredForm
     | ValidateVoterFormButtonClicked
+    | ChangeVoterButtonClicked
       -- Pick Proposal Step
     | PickProposalButtonClicked String
       -- Rationale
@@ -350,6 +351,25 @@ update ctx msg model =
             case model.voterStep of
                 Preparing form ->
                     ( { model | voterStep = confirmVoter form }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        ChangeVoterButtonClicked ->
+            case model.voterStep of
+                Done { voterType, voterCred } ->
+                    let
+                        voterCredForm =
+                            case voterCred of
+                                WithKey credHash ->
+                                    StakeKeyVoter (Bytes.toHex credHash)
+
+                                WithScript scriptHash _ ->
+                                    ScriptVoter { scriptHash = Bytes.toHex scriptHash, utxoRef = "TODO" }
+                    in
+                    ( { model | voterStep = Preparing { voterType = voterType, voterCred = voterCredForm, error = Nothing } }
+                    , Cmd.none
+                    )
 
                 _ ->
                     ( model, Cmd.none )
@@ -1024,6 +1044,7 @@ viewIdentifiedVoter { voterType, voterCred } =
 
             WithScript cred (PlutusWitness witness) ->
                 Html.p [] [ text "TODO: display Plutus script witness" ]
+        , Html.p [] [ button [ onClick <| ChangeVoterButtonClicked ] [ text "Change Voter" ] ]
         ]
 
 

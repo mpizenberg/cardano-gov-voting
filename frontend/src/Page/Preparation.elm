@@ -4,15 +4,16 @@ import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..))
 import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash)
 import Cardano.Cip30 as Cip30
-import Cardano.Gov exposing (ActionId)
+import Cardano.Gov as Gov exposing (ActionId)
 import Cardano.Transaction exposing (Transaction)
 import Cardano.Utxo as Utxo exposing (Output)
+import Cbor.Encode
 import Dict exposing (Dict)
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
 import List.Extra
-import RemoteData exposing (WebData)
+import RemoteData exposing (RemoteData, WebData)
 import Set exposing (Set)
 import Url
 
@@ -282,6 +283,8 @@ type Msg
     | VoterTypeSelected VoterType
     | VoterCredentialUpdated VoterCredForm
     | ValidateVoterFormButtonClicked
+      -- Pick Proposal Step
+    | PickProposalButtonClicked String
       -- Rationale
     | AddAuthorButtonClicked
     | DeleteAuthorButtonClicked Int
@@ -311,6 +314,7 @@ type Msg
 
 type alias UpdateContext msg =
     { wrapMsg : Msg -> msg
+    , proposals : WebData (Dict String ActiveProposal)
     , loadedWallet : Maybe LoadedWallet
     , feeProviderAskUtxosCmd : Cmd msg
     }
@@ -346,6 +350,24 @@ update ctx msg model =
             case model.voterStep of
                 Preparing form ->
                     ( { model | voterStep = confirmVoter form }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        --
+        -- Pick Proposal Step
+        --
+        PickProposalButtonClicked actionId ->
+            case ( model.pickProposalStep, ctx.proposals ) of
+                ( Preparing {}, RemoteData.Success proposalsDict ) ->
+                    case Dict.get actionId proposalsDict of
+                        Just prop ->
+                            ( { model | pickProposalStep = Done prop }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            ( model, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
@@ -828,6 +850,7 @@ validateFeeProviderForm maybeWallet feeProviderForm =
 
 type alias ViewContext msg =
     { wrapMsg : Msg -> msg
+    , proposals : WebData (Dict String ActiveProposal)
     }
 
 
@@ -1012,7 +1035,115 @@ viewIdentifiedVoter { voterType, voterCred } =
 
 viewProposalSelectionStep : ViewContext msg -> Model -> Html msg
 viewProposalSelectionStep ctx model =
-    text "TODO viewProposalSelectionStep"
+    case model.pickProposalStep of
+        Preparing {} ->
+            div []
+                [ Html.h3 [] [ text "Pick a Proposal" ]
+                , case ctx.proposals of
+                    RemoteData.NotAsked ->
+                        text "Proposals are not loading, please report this error."
+
+                    RemoteData.Loading ->
+                        text "Proposals loading ..."
+
+                    RemoteData.Failure httpError ->
+                        Html.pre []
+                            [ text "Something went wrong while loading proposals."
+                            , text <| Debug.toString httpError
+                            ]
+
+                    RemoteData.Success proposalsDict ->
+                        -- Sorted by ActionId for now
+                        Dict.values proposalsDict
+                            |> List.map viewActiveProposal
+                            |> div []
+                            |> Html.map ctx.wrapMsg
+                ]
+
+        Validating {} {} ->
+            div []
+                [ Html.h3 [] [ text "Pick a Proposal" ]
+                , Html.p [] [ text "Validating the picked proposal ..." ]
+                ]
+
+        Done { id, actionType, metadata } ->
+            div []
+                [ Html.h3 [] [ text "Pick a Proposal" ]
+                , Html.p []
+                    [ text "Picked: "
+                    , cardanoScanLink id
+                    , text <| ", type: " ++ actionType
+                    , text ", title: "
+                    , text <|
+                        case metadata of
+                            RemoteData.NotAsked ->
+                                "not loading"
+
+                            RemoteData.Loading ->
+                                "loading ..."
+
+                            RemoteData.Failure error ->
+                                "ERROR: " ++ Debug.toString error
+
+                            RemoteData.Success meta ->
+                                meta.title
+                    ]
+                ]
+
+
+viewActiveProposal : ActiveProposal -> Html Msg
+viewActiveProposal { id, actionType, metadata } =
+    Html.p []
+        [ button [ onClick (PickProposalButtonClicked <| Gov.actionIdToString id) ] [ text "Pick this proposal" ]
+        , text " "
+        , cardanoScanLink id
+        , text <| ", type: " ++ actionType
+        , text ", title: "
+        , text <|
+            case metadata of
+                RemoteData.NotAsked ->
+                    "not loading"
+
+                RemoteData.Loading ->
+                    "loading ..."
+
+                RemoteData.Failure error ->
+                    "ERROR: " ++ Debug.toString error
+
+                RemoteData.Success meta ->
+                    meta.title
+        ]
+
+
+cardanoScanLink : ActionId -> Html msg
+cardanoScanLink id =
+    Html.a
+        [ HA.href <|
+            "https://preview.cardanoscan.io/govAction/"
+                ++ (id.transactionId |> Bytes.toHex)
+                ++ (Bytes.toHex <| Bytes.fromBytes <| Cbor.Encode.encode (Cbor.Encode.int id.govActionIndex))
+        , HA.target "_blank"
+        , HA.rel "noopener noreferrer"
+        ]
+        [ text <| "Id: " ++ (strBothEnds 8 8 <| Bytes.toHex id.transactionId)
+        , text <| "#" ++ String.fromInt id.govActionIndex
+        ]
+
+
+strBothEnds : Int -> Int -> String -> String
+strBothEnds startLength endLength str =
+    -- Helper function to only display the start and end of a long string
+    let
+        strLength =
+            String.length str
+    in
+    if strLength <= startLength + endLength then
+        str
+
+    else
+        String.slice 0 startLength str
+            ++ "..."
+            ++ String.slice (strLength - endLength) strLength str
 
 
 

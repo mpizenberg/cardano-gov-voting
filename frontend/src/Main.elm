@@ -26,7 +26,8 @@ import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
 import Natural exposing (Natural)
 import Page.Preparation exposing (ActiveProposal)
-import RemoteData
+import Platform.Cmd as Cmd
+import RemoteData exposing (WebData)
 
 
 main =
@@ -84,6 +85,7 @@ type alias Model =
     , walletChangeAddress : Maybe Address
     , walletUtxos : Maybe (Utxo.RefDict Output)
     , protocolParams : Maybe ProtocolParams
+    , proposals : WebData (Dict String ActiveProposal)
     , errors : List String
     }
 
@@ -109,6 +111,7 @@ init _ =
       , walletUtxos = Nothing
       , walletChangeAddress = Nothing
       , protocolParams = Nothing
+      , proposals = RemoteData.NotAsked
       , errors = []
       }
     , Cmd.batch
@@ -224,24 +227,26 @@ update msg model =
                     )
 
         ( StartPreparation, { protocolParams } ) ->
-            -- case protocolParams of
-            --     Just _ ->
-            --         ( { model
-            --             | errors = []
-            --             , page = PreparationPage Page.Preparation.init
-            --           }
-            --         , loadGovernanceProposals
-            --         )
-            --     Nothing ->
-            --         ( { model | errors = "Protocol parameters not loaded yet" :: model.errors }
-            --         , Cmd.none
-            --         )
-            ( { model
-                | errors = []
-                , page = PreparationPage Page.Preparation.init
-              }
-            , Cmd.none
-            )
+            -- ( { model
+            --     | errors = []
+            --     , page = PreparationPage Page.Preparation.init
+            --   }
+            -- , Cmd.none
+            -- )
+            case protocolParams of
+                Just _ ->
+                    ( { model
+                        | errors = []
+                        , page = PreparationPage Page.Preparation.init
+                        , proposals = RemoteData.Loading
+                      }
+                    , loadGovernanceProposals
+                    )
+
+                Nothing ->
+                    ( { model | errors = "Protocol parameters not loaded yet" :: model.errors }
+                    , Cmd.none
+                    )
 
         ( PreparationPageMsg pageMsg, { page } ) ->
             case page of
@@ -257,6 +262,7 @@ update msg model =
 
                         ctx =
                             { wrapMsg = PreparationPageMsg
+                            , proposals = model.proposals
                             , loadedWallet = loadedWallet
                             , feeProviderAskUtxosCmd = Cmd.none -- TODO
                             }
@@ -267,8 +273,25 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        _ ->
-            ( model, Cmd.none )
+        -- Result Http.Error (List Page.Preparation.ActiveProposal)
+        ( GotProposals result, _ ) ->
+            case result of
+                Err httpError ->
+                    ( { model | proposals = RemoteData.Failure httpError }
+                    , Cmd.none
+                    )
+
+                Ok activeProposals ->
+                    let
+                        proposalsDict =
+                            activeProposals
+                                |> List.map (\p -> ( Gov.actionIdToString p.id, p ))
+                                |> Dict.fromList
+                    in
+                    ( { model | proposals = RemoteData.Success proposalsDict }
+                      -- TODO: load proposals metadata
+                    , Cmd.none
+                    )
 
 
 handleWalletResponse : Cip30.Response -> Model -> ( Model, Cmd Msg )
@@ -431,7 +454,11 @@ viewContent model =
             viewLandingPage model.walletsDiscovered
 
         PreparationPage prepModel ->
-            Page.Preparation.view { wrapMsg = PreparationPageMsg } prepModel
+            Page.Preparation.view
+                { wrapMsg = PreparationPageMsg
+                , proposals = model.proposals
+                }
+                prepModel
 
         SigningPage signingModel ->
             viewSigningPage signingModel

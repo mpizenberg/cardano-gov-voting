@@ -13,6 +13,7 @@ import Html.Attributes as HA
 import Html.Events exposing (onClick)
 import List.Extra
 import RemoteData exposing (WebData)
+import Set exposing (Set)
 import Url
 
 
@@ -111,13 +112,14 @@ type alias ProposalMetadata =
 
 type alias RationaleForm =
     { authors : List AuthorForm
-    , summary : MarkdownForm
+    , summary : String
     , rationaleStatement : MarkdownForm
     , precedentDiscussion : MarkdownForm
     , counterArgumentDiscussion : MarkdownForm
     , conclusion : MarkdownForm
     , internalVote : InternalVote
     , references : List Reference
+    , error : Maybe String
     }
 
 
@@ -163,6 +165,7 @@ initRationaleForm =
         , didNotVote = 0
         }
     , references = []
+    , error = Nothing
     }
 
 
@@ -171,7 +174,7 @@ type alias Rationale =
     , summary : String
     , rationaleStatement : String
     , precedentDiscussion : String
-    , counterargumentDiscussion : String
+    , counterArgumentDiscussion : String
     , conclusion : String
     , internalVote : InternalVote
     , references : List Reference
@@ -299,6 +302,7 @@ type Msg
     | ReferenceLabelChange Int String
     | ReferenceUriChange Int String
     | ReferenceTypeChange Int String
+    | ValidateRationaleButtonClicked
       -- Fee Provider Step
     | FeeProviderUpdated FeeProviderForm
     | ValidateFeeProviderFormButtonClicked
@@ -444,6 +448,11 @@ update ctx msg model =
             , Cmd.none
             )
 
+        ValidateRationaleButtonClicked ->
+            ( { model | rationaleCreationStep = validateRationale model.rationaleCreationStep }
+            , Cmd.none
+            )
+
         --
         -- Fee Provider Step
         --
@@ -574,6 +583,207 @@ updateRationaleInternalVoteForm updateF numberStr model =
                 |> Maybe.withDefault form
     in
     updateRationaleForm rationaleUpdate model
+
+
+validateRationale : Step RationaleForm {} Rationale -> Step RationaleForm {} Rationale
+validateRationale step =
+    case step of
+        Preparing form ->
+            let
+                rationaleValidation =
+                    validateRationaleAuthorsForm form.authors
+                        |> Result.andThen (\_ -> validateRationaleSummary form.summary)
+                        |> Result.andThen (\_ -> validateRationaleStatement form.rationaleStatement)
+                        |> Result.andThen (\_ -> validateRationaleDiscussion form.precedentDiscussion)
+                        |> Result.andThen (\_ -> validateRationaleCounterArg form.counterArgumentDiscussion)
+                        |> Result.andThen (\_ -> validateRationaleConclusion form.conclusion)
+                        |> Result.andThen (\_ -> validateRationaleInternVote form.internalVote)
+                        |> Result.andThen (\_ -> validateRationaleRefs form.references)
+            in
+            case rationaleValidation of
+                Ok _ ->
+                    Done (rationaleFromForm form)
+
+                Err err ->
+                    Preparing { form | error = Just err }
+
+        _ ->
+            step
+
+
+validateRationaleAuthorsForm : List AuthorForm -> Result String ()
+validateRationaleAuthorsForm authors =
+    let
+        -- Check that there are no duplicate names in the authors
+        validateNoDuplicate =
+            case findDuplicate (List.map .name authors) of
+                Just dup ->
+                    Err ("There is a duplicate name in the authors list: " ++ dup)
+
+                Nothing ->
+                    Ok ()
+
+        -- Check that witnessAlgorithm are authorized by the CIP
+        authorizedAlgorithms =
+            Set.fromList [ "ed25519" ]
+
+        checkWitnessAlgo algo =
+            if Set.member algo authorizedAlgorithms then
+                Ok ()
+
+            else
+                Err ("The witness algorithm (" ++ algo ++ ") is not in the authorized standard list: " ++ String.join ", " (Set.toList authorizedAlgorithms))
+    in
+    validateNoDuplicate
+        |> Result.andThen
+            (\_ ->
+                List.map .witnessAlgorithm authors
+                    |> List.map checkWitnessAlgo
+                    |> reduceResults
+                    |> Result.map (always ())
+            )
+
+
+findDuplicate : List comparable -> Maybe comparable
+findDuplicate list =
+    findDuplicateHelper list Set.empty
+
+
+findDuplicateHelper : List comparable -> Set comparable -> Maybe comparable
+findDuplicateHelper list seen =
+    case list of
+        [] ->
+            Nothing
+
+        x :: xs ->
+            if Set.member x seen then
+                Just x
+
+            else
+                findDuplicateHelper xs (Set.insert x seen)
+
+
+reduceResults : List (Result a b) -> Result a (List b)
+reduceResults results =
+    List.foldr
+        (\result acc ->
+            case ( result, acc ) of
+                ( Err err, _ ) ->
+                    Err err
+
+                ( Ok value, Ok values ) ->
+                    Ok (value :: values)
+
+                ( _, Err err ) ->
+                    Err err
+        )
+        (Ok [])
+        results
+
+
+validateRationaleSummary : String -> Result String ()
+validateRationaleSummary summary =
+    -- Limited to 300 characters
+    -- Should NOT support markdown (implied by not providing MD editor)
+    let
+        summaryLength =
+            String.length summary
+    in
+    if summaryLength > 300 then
+        Err ("Summary is limited to 300 characters, and is currently " ++ String.fromInt summaryLength)
+
+    else if String.isEmpty (String.trim summary) then
+        Err "The summary field is mandatory"
+
+    else
+        Ok ()
+
+
+validateRationaleStatement : MarkdownForm -> Result String ()
+validateRationaleStatement statement =
+    if String.isEmpty (String.trim statement) then
+        Err "The rationale statement field is mandatory"
+
+    else
+        Ok ()
+
+
+validateRationaleDiscussion : MarkdownForm -> Result String ()
+validateRationaleDiscussion discussion =
+    -- Nothing to check really, except markdown syntax, implied by the editor
+    Ok ()
+
+
+validateRationaleCounterArg : MarkdownForm -> Result String ()
+validateRationaleCounterArg counterArg =
+    -- Nothing to check really, except markdown syntax, implied by the editor
+    Ok ()
+
+
+validateRationaleConclusion : MarkdownForm -> Result String ()
+validateRationaleConclusion conclusion =
+    -- Nothing to check really, except markdown syntax, implied by the editor
+    Ok ()
+
+
+validateRationaleInternVote : InternalVote -> Result String ()
+validateRationaleInternVote internVote =
+    -- Check that all numbers are positive
+    if internVote.constitutional < 0 then
+        Err "Constitutional internal vote must be >= 0"
+
+    else if internVote.unconstitutional < 0 then
+        Err "Unconstitutional internal vote must be >= 0"
+
+    else if internVote.abstain < 0 then
+        Err "Abstain internal vote must be >= 0"
+
+    else if internVote.didNotVote < 0 then
+        Err "DidNotVote internal vote must be >= 0"
+
+    else
+        Ok ()
+
+
+validateRationaleRefs : List Reference -> Result String ()
+validateRationaleRefs references =
+    let
+        -- Check that there are no duplicate label in the references
+        validateNoDuplicate =
+            case findDuplicate (List.map .label references) of
+                Just dup ->
+                    Err ("There is a duplicate label in the references: " ++ dup)
+
+                Nothing ->
+                    Ok ()
+
+        -- TODO: Check that URIs seem valid
+        checkUris ref =
+            Ok ()
+    in
+    validateNoDuplicate
+        |> Result.andThen
+            (\_ ->
+                List.map checkUris references
+                    |> reduceResults
+                    |> Result.map (always ())
+            )
+
+
+rationaleFromForm : RationaleForm -> Rationale
+rationaleFromForm form =
+    { authors =
+        form.authors
+            |> List.map (\a -> ( a.name, { witnessAlgorithm = a.witnessAlgorithm, publicKey = a.publicKey, signature = Nothing } ))
+            |> Dict.fromList
+    , summary = form.summary
+    , rationaleStatement = form.rationaleStatement
+    , precedentDiscussion = form.precedentDiscussion
+    , counterArgumentDiscussion = form.counterArgumentDiscussion
+    , conclusion = form.conclusion
+    , internalVote = form.internalVote
+    , references = form.references
+    }
 
 
 
@@ -826,6 +1036,16 @@ viewRationaleStep ctx step =
                     , viewConclusionForm form.conclusion
                     , viewInternalVoteForm form.internalVote
                     , viewReferencesForm form.references
+                    , Html.p [] [ Html.button [ onClick ValidateRationaleButtonClicked ] [ text "Confirm rationale" ] ]
+                    , case form.error of
+                        Nothing ->
+                            text ""
+
+                        Just error ->
+                            Html.p []
+                                [ text "Error:"
+                                , Html.pre [] [ text error ]
+                                ]
                     ]
 
             Validating _ _ ->

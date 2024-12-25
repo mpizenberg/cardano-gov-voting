@@ -154,7 +154,7 @@ type alias InternalVote =
 initRationaleForm : RationaleForm
 initRationaleForm =
     { authors = []
-    , summary = "We include compulsory summary with limited size to allow for the creation of tooling which layers of inspection to vote rationale. This allows readers to get a summary of a rationale at a high level before reading all the details."
+    , summary = ""
     , rationaleStatement = ""
     , precedentDiscussion = ""
     , counterArgumentDiscussion = ""
@@ -1261,6 +1261,9 @@ viewSummaryForm : MarkdownForm -> Html Msg
 viewSummaryForm form =
     div []
         [ Html.h4 [] [ text "Summary" ]
+        , Html.p [] [ text "Compulsory." ]
+        , Html.p [] [ text "Clearly state your stance, summarize your rationale with your main argument." ]
+        , Html.p [] [ text "Limited to 300 characters, does NOT support markdown." ]
         , div []
             [ Html.textarea
                 [ HA.value form
@@ -1275,6 +1278,9 @@ viewStatementForm : MarkdownForm -> Html Msg
 viewStatementForm form =
     div []
         [ Html.h4 [] [ text "Rationale Statement" ]
+        , Html.p [] [ text "Compulsory." ]
+        , Html.p [] [ text "Fully describe your rationale, with your arguments in full details." ]
+        , Html.p [] [ text "No size limit and markdown is supported." ]
         , div []
             [ Html.textarea
                 [ HA.value form
@@ -1289,6 +1295,9 @@ viewPrecedentDiscussionForm : MarkdownForm -> Html Msg
 viewPrecedentDiscussionForm form =
     div []
         [ Html.h4 [] [ text "Precedent Discussion" ]
+        , Html.p [] [ text "Optional." ]
+        , Html.p [] [ text "Discuss what you feel is relevant precedent." ]
+        , Html.p [] [ text "No size limit and markdown is supported." ]
         , div []
             [ Html.textarea
                 [ HA.value form
@@ -1303,6 +1312,9 @@ viewCounterArgumentForm : MarkdownForm -> Html Msg
 viewCounterArgumentForm form =
     div []
         [ Html.h4 [] [ text "Counter Argument Discussion" ]
+        , Html.p [] [ text "Optional." ]
+        , Html.p [] [ text "Discuss significant counter arguments to your position." ]
+        , Html.p [] [ text "No size limit and markdown is supported." ]
         , div []
             [ Html.textarea
                 [ HA.value form
@@ -1317,6 +1329,8 @@ viewConclusionForm : MarkdownForm -> Html Msg
 viewConclusionForm form =
     div []
         [ Html.h4 [] [ text "Conclusion" ]
+        , Html.p [] [ text "Optional." ]
+        , Html.p [] [ text "No size limit, does NOT support markdown." ]
         , div []
             [ Html.textarea
                 [ HA.value form
@@ -1331,6 +1345,7 @@ viewInternalVoteForm : InternalVote -> Html Msg
 viewInternalVoteForm { constitutional, unconstitutional, abstain, didNotVote } =
     div []
         [ Html.h4 [] [ text "Internal Vote" ]
+        , Html.p [] [ text "If you vote as a group, you can report the group internal votes." ]
         , viewNumberInput "Constitutional: " constitutional InternalConstitutionalVoteChange
         , viewNumberInput "Unconstitutional: " unconstitutional InternalUnconstitutionalVoteChange
         , viewNumberInput "Abstain: " abstain InternalAbstainVoteChange

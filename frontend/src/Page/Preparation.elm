@@ -286,6 +286,7 @@ type Msg
     | ChangeVoterButtonClicked
       -- Pick Proposal Step
     | PickProposalButtonClicked String
+    | ChangeProposalButtonClicked
       -- Rationale
     | AddAuthorButtonClicked
     | DeleteAuthorButtonClicked Int
@@ -391,6 +392,11 @@ update ctx msg model =
 
                 _ ->
                     ( model, Cmd.none )
+
+        ChangeProposalButtonClicked ->
+            ( { model | pickProposalStep = Preparing {} }
+            , Cmd.none
+            )
 
         --
         -- Rationale Step
@@ -1109,6 +1115,7 @@ viewProposalSelectionStep ctx model =
                             RemoteData.Success meta ->
                                 meta.title
                     ]
+                , Html.p [] [ button [ onClick <| ctx.wrapMsg ChangeProposalButtonClicked ] [ text "Change Proposal" ] ]
                 ]
 
 

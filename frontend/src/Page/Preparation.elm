@@ -1276,9 +1276,8 @@ viewStatementForm form =
     div []
         [ Html.h4 [] [ text "Rationale Statement" ]
         , div []
-            [ Html.input
-                [ HA.type_ "text"
-                , HA.value form
+            [ Html.textarea
+                [ HA.value form
                 , Html.Events.onInput RationaleStatementChange
                 ]
                 []
@@ -1291,9 +1290,8 @@ viewPrecedentDiscussionForm form =
     div []
         [ Html.h4 [] [ text "Precedent Discussion" ]
         , div []
-            [ Html.input
-                [ HA.type_ "text"
-                , HA.value form
+            [ Html.textarea
+                [ HA.value form
                 , Html.Events.onInput PrecedentDiscussionChange
                 ]
                 []
@@ -1306,9 +1304,8 @@ viewCounterArgumentForm form =
     div []
         [ Html.h4 [] [ text "Counter Argument Discussion" ]
         , div []
-            [ Html.input
-                [ HA.type_ "text"
-                , HA.value form
+            [ Html.textarea
+                [ HA.value form
                 , Html.Events.onInput CounterArgumentChange
                 ]
                 []
@@ -1321,9 +1318,8 @@ viewConclusionForm form =
     div []
         [ Html.h4 [] [ text "Conclusion" ]
         , div []
-            [ Html.input
-                [ HA.type_ "text"
-                , HA.value form
+            [ Html.textarea
+                [ HA.value form
                 , Html.Events.onInput ConclusionChange
                 ]
                 []

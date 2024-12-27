@@ -174,9 +174,9 @@ type alias Rationale =
     { authors : Dict String AuthorWitness
     , summary : String
     , rationaleStatement : String
-    , precedentDiscussion : String
-    , counterArgumentDiscussion : String
-    , conclusion : String
+    , precedentDiscussion : Maybe String
+    , counterArgumentDiscussion : Maybe String
+    , conclusion : Maybe String
     , internalVote : InternalVote
     , references : List Reference
     }
@@ -308,6 +308,7 @@ type Msg
     | ReferenceUriChange Int String
     | ReferenceTypeChange Int String
     | ValidateRationaleButtonClicked
+    | EditRationaleButtonClicked
       -- Fee Provider Step
     | FeeProviderUpdated FeeProviderForm
     | ValidateFeeProviderFormButtonClicked
@@ -497,7 +498,12 @@ update ctx msg model =
             )
 
         ValidateRationaleButtonClicked ->
-            ( { model | rationaleCreationStep = validateRationale model.rationaleCreationStep }
+            ( { model | rationaleCreationStep = validateRationaleForm model.rationaleCreationStep }
+            , Cmd.none
+            )
+
+        EditRationaleButtonClicked ->
+            ( { model | rationaleCreationStep = editRationale model.rationaleCreationStep }
             , Cmd.none
             )
 
@@ -633,8 +639,8 @@ updateRationaleInternalVoteForm updateF numberStr model =
     updateRationaleForm rationaleUpdate model
 
 
-validateRationale : Step RationaleForm {} Rationale -> Step RationaleForm {} Rationale
-validateRationale step =
+validateRationaleForm : Step RationaleForm {} Rationale -> Step RationaleForm {} Rationale
+validateRationaleForm step =
     case step of
         Preparing form ->
             let
@@ -820,18 +826,52 @@ validateRationaleRefs references =
 
 rationaleFromForm : RationaleForm -> Rationale
 rationaleFromForm form =
+    let
+        cleanup str =
+            case String.trim str of
+                "" ->
+                    Nothing
+
+                trimmed ->
+                    Just trimmed
+    in
     { authors =
         form.authors
             |> List.map (\a -> ( a.name, { witnessAlgorithm = a.witnessAlgorithm, publicKey = a.publicKey, signature = Nothing } ))
             |> Dict.fromList
-    , summary = form.summary
-    , rationaleStatement = form.rationaleStatement
-    , precedentDiscussion = form.precedentDiscussion
-    , counterArgumentDiscussion = form.counterArgumentDiscussion
-    , conclusion = form.conclusion
+    , summary = String.trim form.summary
+    , rationaleStatement = String.trim form.rationaleStatement
+    , precedentDiscussion = cleanup form.precedentDiscussion
+    , counterArgumentDiscussion = cleanup form.counterArgumentDiscussion
+    , conclusion = cleanup form.conclusion
     , internalVote = form.internalVote
     , references = form.references
     }
+
+
+editRationale : Step RationaleForm {} Rationale -> Step RationaleForm {} Rationale
+editRationale step =
+    case step of
+        Preparing _ ->
+            step
+
+        Validating rationaleForm _ ->
+            Preparing rationaleForm
+
+        Done rationale ->
+            Preparing
+                { authors =
+                    Dict.toList rationale.authors
+                        |> List.map (\( name, w ) -> { name = name, witnessAlgorithm = w.witnessAlgorithm, publicKey = w.publicKey })
+                , summary = rationale.summary
+                , rationaleStatement = rationale.rationaleStatement
+                , precedentDiscussion = Maybe.withDefault "" rationale.precedentDiscussion
+                , counterArgumentDiscussion = Maybe.withDefault "" rationale.counterArgumentDiscussion
+                , conclusion = Maybe.withDefault "" rationale.conclusion
+                , internalVote = rationale.internalVote
+                , references = rationale.references
+                , error = Nothing
+                }
 
 
 
@@ -1211,12 +1251,21 @@ viewRationaleStep ctx step =
                 div []
                     [ Html.h3 [] [ text "Vote Rationale" ]
                     , Html.p [] [ text "validating rationale data ..." ]
+                    , Html.p [] [ button [ onClick EditRationaleButtonClicked ] [ text "Edit rationale" ] ]
                     ]
 
             Done rationale ->
                 div []
                     [ Html.h3 [] [ text "Vote Rationale" ]
-                    , Html.p [] [ text "TODO: display rationale" ]
+                    , viewAuthors rationale.authors
+                    , viewSummary rationale.summary
+                    , viewStatementMd rationale.rationaleStatement
+                    , viewPrecedentDiscussionMd rationale.precedentDiscussion
+                    , viewCounterArgumentMd rationale.counterArgumentDiscussion
+                    , viewConclusion rationale.conclusion
+                    , viewInternalVote rationale.internalVote
+                    , viewReferences rationale.references
+                    , Html.p [] [ button [ onClick EditRationaleButtonClicked ] [ text "Edit rationale" ] ]
                     ]
 
 
@@ -1409,6 +1458,123 @@ viewRefOption refType =
         [ HA.value <| refTypeToString refType
         ]
         [ text <| refTypeToString refType ]
+
+
+viewAuthors : Dict String AuthorWitness -> Html Msg
+viewAuthors authors =
+    div []
+        [ Html.h4 [] [ text "Authors" ]
+        , if Dict.isEmpty authors then
+            Html.p [] [ text "No author recorded in the rationale." ]
+
+          else
+            Html.ul [] (List.map viewValidatedAuthor <| Dict.toList authors)
+        ]
+
+
+viewValidatedAuthor : ( String, AuthorWitness ) -> Html msg
+viewValidatedAuthor ( name, { witnessAlgorithm, publicKey, signature } ) =
+    Html.li []
+        [ text <| "Name: " ++ name
+        , text <| " , witness algorithm: " ++ witnessAlgorithm
+        , text <| " , public key: " ++ publicKey
+        ]
+
+
+viewSummary : String -> Html msg
+viewSummary summary =
+    div []
+        [ Html.h4 [] [ text "Summary" ]
+        , Html.p [] [ text summary ]
+        ]
+
+
+viewStatementMd : String -> Html msg
+viewStatementMd statement =
+    div []
+        [ Html.h4 [] [ text "Rationale Statement" ]
+        , text "TODO: support markdown"
+        , Html.p [] [ text statement ]
+        ]
+
+
+viewPrecedentDiscussionMd : Maybe String -> Html msg
+viewPrecedentDiscussionMd maybeDiscussion =
+    case maybeDiscussion of
+        Nothing ->
+            text ""
+
+        Just discussion ->
+            div []
+                [ Html.h4 [] [ text "Precedent Discussion" ]
+                , text "TODO: support markdown"
+                , Html.p [] [ text discussion ]
+                ]
+
+
+viewCounterArgumentMd : Maybe String -> Html msg
+viewCounterArgumentMd maybeArgument =
+    case maybeArgument of
+        Nothing ->
+            text ""
+
+        Just argument ->
+            div []
+                [ Html.h4 [] [ text "Counter Argument" ]
+                , text "TODO: support markdown"
+                , Html.p [] [ text argument ]
+                ]
+
+
+viewConclusion : Maybe String -> Html msg
+viewConclusion maybeConclusion =
+    case maybeConclusion of
+        Nothing ->
+            text ""
+
+        Just conclusion ->
+            div []
+                [ Html.h4 [] [ text "Conclusion" ]
+                , Html.p [] [ text conclusion ]
+                ]
+
+
+viewInternalVote : InternalVote -> Html msg
+viewInternalVote { constitutional, unconstitutional, abstain, didNotVote } =
+    if constitutional == 0 && unconstitutional == 0 && abstain == 0 && didNotVote == 0 then
+        text ""
+
+    else
+        div []
+            [ Html.h4 [] [ text "Internal Vote" ]
+            , Html.ul []
+                [ Html.li [] [ text <| "Constitutional: " ++ String.fromInt constitutional ]
+                , Html.li [] [ text <| "Unconstitutional: " ++ String.fromInt unconstitutional ]
+                , Html.li [] [ text <| "Abstain: " ++ String.fromInt abstain ]
+                , Html.li [] [ text <| "Did not vote: " ++ String.fromInt didNotVote ]
+                ]
+            ]
+
+
+viewReferences : List Reference -> Html msg
+viewReferences references =
+    if List.isEmpty references then
+        text ""
+
+    else
+        div []
+            [ Html.h4 [] [ text "References" ]
+            , Html.ul [] (List.map viewRef references)
+            ]
+
+
+viewRef : Reference -> Html msg
+viewRef ref =
+    Html.li []
+        [ text <| "ref type: " ++ refTypeToString ref.type_
+        , text <| " , label: " ++ ref.label
+        , text <| " , URI: " ++ ref.uri
+        ]
 
 
 

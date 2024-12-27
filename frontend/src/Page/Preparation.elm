@@ -13,7 +13,10 @@ import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
 import List.Extra
-import RemoteData exposing (RemoteData, WebData)
+import Markdown.Block as Md
+import Markdown.Parser as Md
+import Markdown.Renderer as Md
+import RemoteData exposing (WebData)
 import Set exposing (Set)
 import Url
 
@@ -755,28 +758,41 @@ validateRationaleSummary summary =
 
 validateRationaleStatement : MarkdownForm -> Result String ()
 validateRationaleStatement statement =
-    if String.isEmpty (String.trim statement) then
-        Err "The rationale statement field is mandatory"
+    case String.trim statement of
+        "" ->
+            Err "The rationale statement field is mandatory"
 
-    else
-        Ok ()
+        str ->
+            checkValidMarkdown str
+
+
+checkValidMarkdown : String -> Result String ()
+checkValidMarkdown str =
+    case Md.parse str of
+        Ok _ ->
+            Ok ()
+
+        Err deadEnds ->
+            List.map Md.deadEndToString deadEnds
+                |> String.join "\n"
+                |> Err
 
 
 validateRationaleDiscussion : MarkdownForm -> Result String ()
 validateRationaleDiscussion discussion =
     -- Nothing to check really, except markdown syntax, implied by the editor
-    Ok ()
+    checkValidMarkdown (String.trim discussion)
 
 
 validateRationaleCounterArg : MarkdownForm -> Result String ()
 validateRationaleCounterArg counterArg =
     -- Nothing to check really, except markdown syntax, implied by the editor
-    Ok ()
+    checkValidMarkdown (String.trim counterArg)
 
 
 validateRationaleConclusion : MarkdownForm -> Result String ()
-validateRationaleConclusion conclusion =
-    -- Nothing to check really, except markdown syntax, implied by the editor
+validateRationaleConclusion _ =
+    -- Nothing to check really
     Ok ()
 
 
@@ -1329,7 +1345,7 @@ viewStatementForm form =
         [ Html.h4 [] [ text "Rationale Statement" ]
         , Html.p [] [ text "Compulsory." ]
         , Html.p [] [ text "Fully describe your rationale, with your arguments in full details." ]
-        , Html.p [] [ text "No size limit and markdown is supported." ]
+        , Html.p [] [ text "No size limit and markdown is supported (preview below)." ]
         , div []
             [ Html.textarea
                 [ HA.value form
@@ -1337,7 +1353,19 @@ viewStatementForm form =
                 ]
                 []
             ]
+        , viewMdBelowForm form
         ]
+
+
+viewMdBelowForm : String -> Html msg
+viewMdBelowForm form =
+    case String.trim form of
+        "" ->
+            text ""
+
+        str ->
+            div [ HA.style "background-color" "#eeeeee", HA.style "padding" "0.01rem" ]
+                [ viewMd str ]
 
 
 viewPrecedentDiscussionForm : MarkdownForm -> Html Msg
@@ -1346,7 +1374,7 @@ viewPrecedentDiscussionForm form =
         [ Html.h4 [] [ text "Precedent Discussion" ]
         , Html.p [] [ text "Optional." ]
         , Html.p [] [ text "Discuss what you feel is relevant precedent." ]
-        , Html.p [] [ text "No size limit and markdown is supported." ]
+        , Html.p [] [ text "No size limit and markdown is supported (preview below)." ]
         , div []
             [ Html.textarea
                 [ HA.value form
@@ -1354,6 +1382,7 @@ viewPrecedentDiscussionForm form =
                 ]
                 []
             ]
+        , viewMdBelowForm form
         ]
 
 
@@ -1363,7 +1392,7 @@ viewCounterArgumentForm form =
         [ Html.h4 [] [ text "Counter Argument Discussion" ]
         , Html.p [] [ text "Optional." ]
         , Html.p [] [ text "Discuss significant counter arguments to your position." ]
-        , Html.p [] [ text "No size limit and markdown is supported." ]
+        , Html.p [] [ text "No size limit and markdown is supported (preview below)." ]
         , div []
             [ Html.textarea
                 [ HA.value form
@@ -1371,6 +1400,7 @@ viewCounterArgumentForm form =
                 ]
                 []
             ]
+        , viewMdBelowForm form
         ]
 
 
@@ -1493,9 +1523,34 @@ viewStatementMd : String -> Html msg
 viewStatementMd statement =
     div []
         [ Html.h4 [] [ text "Rationale Statement" ]
-        , text "TODO: support markdown"
-        , Html.p [] [ text statement ]
+        , viewMd statement
         ]
+
+
+viewMd : String -> Html msg
+viewMd str =
+    case Md.parse str of
+        Err deadEnds ->
+            let
+                deadEndsString =
+                    List.map Md.deadEndToString deadEnds
+                        |> String.join "\n"
+            in
+            Html.p []
+                [ Html.pre [] [ text "Unexpected error while parsing markdown:" ]
+                , Html.pre [] [ text deadEndsString ]
+                ]
+
+        Ok blocks ->
+            case Md.render Md.defaultHtmlRenderer blocks of
+                Err errors ->
+                    Html.p []
+                        [ Html.pre [] [ text "Unexpected error while rendering markdown:" ]
+                        , Html.pre [] [ text errors ]
+                        ]
+
+                Ok rendered ->
+                    Html.p [] rendered
 
 
 viewPrecedentDiscussionMd : Maybe String -> Html msg
@@ -1507,8 +1562,7 @@ viewPrecedentDiscussionMd maybeDiscussion =
         Just discussion ->
             div []
                 [ Html.h4 [] [ text "Precedent Discussion" ]
-                , text "TODO: support markdown"
-                , Html.p [] [ text discussion ]
+                , viewMd discussion
                 ]
 
 
@@ -1521,8 +1575,7 @@ viewCounterArgumentMd maybeArgument =
         Just argument ->
             div []
                 [ Html.h4 [] [ text "Counter Argument" ]
-                , text "TODO: support markdown"
-                , Html.p [] [ text argument ]
+                , viewMd argument
                 ]
 
 

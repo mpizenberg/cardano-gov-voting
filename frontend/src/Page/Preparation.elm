@@ -405,7 +405,7 @@ update ctx msg model =
         --
         PickProposalButtonClicked actionId ->
             case ( model.pickProposalStep, ctx.proposals ) of
-                ( Preparing {}, RemoteData.Success proposalsDict ) ->
+                ( Preparing _, RemoteData.Success proposalsDict ) ->
                     case Dict.get actionId proposalsDict of
                         Just prop ->
                             ( { model | pickProposalStep = Done prop }
@@ -620,7 +620,7 @@ validateVoterCredForm voterCredForm =
             stakeKeyHashFromStr str
                 |> Result.map WithKey
 
-        ScriptVoter { scriptHash, utxoRef } ->
+        ScriptVoter _ ->
             -- Result.map2 (\hash utxo -> WithScript hash <| )
             -- (scriptHashFromStr scriptHash)
             -- (utxoRefFromStr utxoRef)
@@ -799,7 +799,7 @@ validateRationaleRefs references =
                     Ok ()
 
         -- TODO: Check that URIs seem valid
-        checkUris ref =
+        checkUris _ =
             Ok ()
     in
     validateNoDuplicate
@@ -1225,10 +1225,10 @@ viewIdentifiedVoter { voterType, voterCred } =
             WithKey cred ->
                 Html.p [] [ text <| "Using key for credential hash: " ++ Bytes.toHex cred ]
 
-            WithScript cred (NativeWitness witness) ->
+            WithScript _ (NativeWitness _) ->
                 Html.p [] [ text "TODO: display native script witness" ]
 
-            WithScript cred (PlutusWitness witness) ->
+            WithScript _ (PlutusWitness _) ->
                 Html.p [] [ text "TODO: display Plutus script witness" ]
         , Html.p [] [ button [ onClick <| ChangeVoterButtonClicked ] [ text "Change Voter" ] ]
         ]
@@ -1243,7 +1243,7 @@ viewIdentifiedVoter { voterType, voterCred } =
 viewProposalSelectionStep : ViewContext msg -> Model -> Html msg
 viewProposalSelectionStep ctx model =
     case model.pickProposalStep of
-        Preparing {} ->
+        Preparing _ ->
             div []
                 [ Html.h3 [] [ text "Pick a Proposal" ]
                 , case ctx.proposals of
@@ -1267,7 +1267,7 @@ viewProposalSelectionStep ctx model =
                             |> Html.map ctx.wrapMsg
                 ]
 
-        Validating {} {} ->
+        Validating _ _ ->
             div []
                 [ Html.h3 [] [ text "Pick a Proposal" ]
                 , Html.p [] [ text "Validating the picked proposal ..." ]
@@ -1575,27 +1575,6 @@ viewRefOption refType =
         [ text <| refTypeToString refType ]
 
 
-viewAuthors : Dict String AuthorWitness -> Html Msg
-viewAuthors authors =
-    div []
-        [ Html.h4 [] [ text "Authors" ]
-        , if Dict.isEmpty authors then
-            Html.p [] [ text "No author recorded in the rationale." ]
-
-          else
-            Html.ul [] (List.map viewValidatedAuthor <| Dict.toList authors)
-        ]
-
-
-viewValidatedAuthor : ( String, AuthorWitness ) -> Html msg
-viewValidatedAuthor ( name, { witnessAlgorithm, publicKey, signature } ) =
-    Html.li []
-        [ text <| "Name: " ++ name
-        , text <| " , witness algorithm: " ++ witnessAlgorithm
-        , text <| " , public key: " ++ publicKey
-        ]
-
-
 viewSummary : String -> Html msg
 viewSummary summary =
     div []
@@ -1868,7 +1847,7 @@ viewSigner { name, witnessAlgorithm, publicKey, signature } =
 
 
 viewPermanentStorageStep : ViewContext msg -> Step StoragePrep {} Storage -> Html msg
-viewPermanentStorageStep ctx step =
+viewPermanentStorageStep _ _ =
     text "TODO viewPermanentStorageStep"
 
 
@@ -1909,7 +1888,7 @@ viewFeeProviderStep ctx step =
                 , Html.p [] [ text "validating fee provider information ..." ]
                 ]
 
-        Done feeProvider ->
+        Done _ ->
             div []
                 [ Html.h3 [] [ text "Fee Provider" ]
                 , Html.p [] [ text "TODO: display address and utxos" ]
@@ -1975,5 +1954,5 @@ viewFeeProviderOption feeProviderForm label isSelected =
 
 
 viewBuildTxStep : ViewContext msg -> Step {} {} Transaction -> Html msg
-viewBuildTxStep ctx step =
+viewBuildTxStep _ _ =
     text "TODO viewBuildTxStep"

@@ -31,7 +31,7 @@ type alias Model =
     { voterStep : Step VoterPreparationForm {} VoterIdentified
     , pickProposalStep : Step {} {} ActiveProposal
     , rationaleCreationStep : Step RationaleForm {} Rationale
-    , rationaleSignatureStep : Step (Dict String AuthorWitness) {} (Dict String AuthorWitness)
+    , rationaleSignatureStep : Step RationaleSignatureForm {} RationaleSignature
     , permanentStorageStep : Step StoragePrep {} Storage
     , feeProviderStep : Step FeeProviderForm FeeProviderTemp FeeProvider
     , buildTxStep : Step {} {} Transaction
@@ -49,7 +49,7 @@ init =
     { voterStep = Preparing initVoterForm
     , pickProposalStep = Preparing {}
     , rationaleCreationStep = Preparing initRationaleForm
-    , rationaleSignatureStep = Preparing Dict.empty
+    , rationaleSignatureStep = Preparing initRationaleSignatureForm
     , permanentStorageStep = Preparing {}
     , feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing })
     , buildTxStep = Preparing {}
@@ -115,8 +115,7 @@ type alias ProposalMetadata =
 
 
 type alias RationaleForm =
-    { authors : List AuthorForm
-    , summary : String
+    { summary : String
     , rationaleStatement : MarkdownForm
     , precedentDiscussion : MarkdownForm
     , counterArgumentDiscussion : MarkdownForm
@@ -124,21 +123,6 @@ type alias RationaleForm =
     , internalVote : InternalVote
     , references : List Reference
     , error : Maybe String
-    }
-
-
-type alias AuthorForm =
-    { name : String
-    , witnessAlgorithm : String
-    , publicKey : String
-    }
-
-
-initAuthorForm : AuthorForm
-initAuthorForm =
-    { name = "John Doe"
-    , witnessAlgorithm = "ed25519"
-    , publicKey = ""
     }
 
 
@@ -156,8 +140,7 @@ type alias InternalVote =
 
 initRationaleForm : RationaleForm
 initRationaleForm =
-    { authors = []
-    , summary = ""
+    { summary = ""
     , rationaleStatement = ""
     , precedentDiscussion = ""
     , counterArgumentDiscussion = ""
@@ -174,21 +157,13 @@ initRationaleForm =
 
 
 type alias Rationale =
-    { authors : Dict String AuthorWitness
-    , summary : String
+    { summary : String
     , rationaleStatement : String
     , precedentDiscussion : Maybe String
     , counterArgumentDiscussion : Maybe String
     , conclusion : Maybe String
     , internalVote : InternalVote
     , references : List Reference
-    }
-
-
-type alias AuthorWitness =
-    { witnessAlgorithm : String
-    , publicKey : String
-    , signature : Maybe String
     }
 
 
@@ -242,6 +217,49 @@ initRefForm =
 
 
 
+-- Rationale Signature Step
+
+
+type alias RationaleSignatureForm =
+    { authors : List AuthorWitness
+    , jsonLd : String
+    , error : Maybe String
+    }
+
+
+initRationaleSignatureForm : RationaleSignatureForm
+initRationaleSignatureForm =
+    { authors = []
+    , jsonLd = ""
+    , error = Nothing
+    }
+
+
+type alias RationaleSignature =
+    -- Currently same as Form, but might change
+    { authors : List AuthorWitness
+    , jsonLd : String
+    }
+
+
+type alias AuthorWitness =
+    { name : String
+    , witnessAlgorithm : String
+    , publicKey : String
+    , signature : Maybe String
+    }
+
+
+initAuthorForm : AuthorWitness
+initAuthorForm =
+    { name = "John Doe"
+    , witnessAlgorithm = "ed25519"
+    , publicKey = ""
+    , signature = Nothing
+    }
+
+
+
 -- Storage Step
 
 
@@ -291,11 +309,6 @@ type Msg
     | PickProposalButtonClicked String
     | ChangeProposalButtonClicked
       -- Rationale
-    | AddAuthorButtonClicked
-    | DeleteAuthorButtonClicked Int
-    | AuthorNameChange Int String
-    | AuthorWitnessAlgoChange Int String
-    | AuthorPubKeyChange Int String
     | RationaleSummaryChange String
     | RationaleStatementChange String
     | PrecedentDiscussionChange String
@@ -312,6 +325,14 @@ type Msg
     | ReferenceTypeChange Int String
     | ValidateRationaleButtonClicked
     | EditRationaleButtonClicked
+      -- Rationale Signature
+    | AddAuthorButtonClicked
+    | DeleteAuthorButtonClicked Int
+    | AuthorNameChange Int String
+    | AuthorWitnessAlgoChange Int String
+    | AuthorPubKeyChange Int String
+    | SkipRationaleSignaturesButtonClicked
+    | ChangeAuthorsButtonClicked
       -- Fee Provider Step
     | FeeProviderUpdated FeeProviderForm
     | ValidateFeeProviderFormButtonClicked
@@ -405,31 +426,6 @@ update ctx msg model =
         --
         -- Rationale Step
         --
-        AddAuthorButtonClicked ->
-            ( updateRationaleForm (\form -> { form | authors = initAuthorForm :: form.authors }) model
-            , Cmd.none
-            )
-
-        DeleteAuthorButtonClicked n ->
-            ( updateRationaleForm (\form -> { form | authors = List.Extra.removeAt n form.authors }) model
-            , Cmd.none
-            )
-
-        AuthorNameChange n name ->
-            ( updateRationaleForm (\form -> { form | authors = List.Extra.updateAt n (\author -> { author | name = name }) form.authors }) model
-            , Cmd.none
-            )
-
-        AuthorWitnessAlgoChange n algo ->
-            ( updateRationaleForm (\form -> { form | authors = List.Extra.updateAt n (\author -> { author | witnessAlgorithm = algo }) form.authors }) model
-            , Cmd.none
-            )
-
-        AuthorPubKeyChange n pubKey ->
-            ( updateRationaleForm (\form -> { form | authors = List.Extra.updateAt n (\author -> { author | publicKey = pubKey }) form.authors }) model
-            , Cmd.none
-            )
-
         RationaleSummaryChange summary ->
             ( updateRationaleForm (\form -> { form | summary = summary }) model
             , Cmd.none
@@ -501,12 +497,58 @@ update ctx msg model =
             )
 
         ValidateRationaleButtonClicked ->
-            ( { model | rationaleCreationStep = validateRationaleForm model.rationaleCreationStep }
-            , Cmd.none
-            )
+            case validateRationaleForm model.rationaleCreationStep of
+                Done newRationale ->
+                    ( { model
+                        | rationaleCreationStep = Done newRationale
+                        , rationaleSignatureStep = Preparing <| resetRationaleSignatures model.rationaleSignatureStep
+                      }
+                    , Cmd.none
+                    )
+
+                prepOrValidating ->
+                    ( { model | rationaleCreationStep = prepOrValidating }, Cmd.none )
 
         EditRationaleButtonClicked ->
             ( { model | rationaleCreationStep = editRationale model.rationaleCreationStep }
+            , Cmd.none
+            )
+
+        --
+        -- Rationale Signature Step
+        --
+        AddAuthorButtonClicked ->
+            ( updateAuthorsForm (\authors -> initAuthorForm :: authors) model
+            , Cmd.none
+            )
+
+        DeleteAuthorButtonClicked n ->
+            ( updateAuthorsForm (\authors -> List.Extra.removeAt n authors) model
+            , Cmd.none
+            )
+
+        AuthorNameChange n name ->
+            ( updateAuthorsForm (\authors -> List.Extra.updateAt n (\author -> { author | name = name }) authors) model
+            , Cmd.none
+            )
+
+        AuthorWitnessAlgoChange n algo ->
+            ( updateAuthorsForm (\authors -> List.Extra.updateAt n (\author -> { author | witnessAlgorithm = algo }) authors) model
+            , Cmd.none
+            )
+
+        AuthorPubKeyChange n pubKey ->
+            ( updateAuthorsForm (\authors -> List.Extra.updateAt n (\author -> { author | publicKey = pubKey }) authors) model
+            , Cmd.none
+            )
+
+        SkipRationaleSignaturesButtonClicked ->
+            ( { model | rationaleSignatureStep = skipRationaleSignature model.rationaleSignatureStep }
+            , Cmd.none
+            )
+
+        ChangeAuthorsButtonClicked ->
+            ( { model | rationaleSignatureStep = Preparing <| rationaleSignatureToForm model.rationaleSignatureStep }
             , Cmd.none
             )
 
@@ -648,8 +690,7 @@ validateRationaleForm step =
         Preparing form ->
             let
                 rationaleValidation =
-                    validateRationaleAuthorsForm form.authors
-                        |> Result.andThen (\_ -> validateRationaleSummary form.summary)
+                    validateRationaleSummary form.summary
                         |> Result.andThen (\_ -> validateRationaleStatement form.rationaleStatement)
                         |> Result.andThen (\_ -> validateRationaleDiscussion form.precedentDiscussion)
                         |> Result.andThen (\_ -> validateRationaleCounterArg form.counterArgumentDiscussion)
@@ -666,76 +707,6 @@ validateRationaleForm step =
 
         _ ->
             step
-
-
-validateRationaleAuthorsForm : List AuthorForm -> Result String ()
-validateRationaleAuthorsForm authors =
-    let
-        -- Check that there are no duplicate names in the authors
-        validateNoDuplicate =
-            case findDuplicate (List.map .name authors) of
-                Just dup ->
-                    Err ("There is a duplicate name in the authors list: " ++ dup)
-
-                Nothing ->
-                    Ok ()
-
-        -- Check that witnessAlgorithm are authorized by the CIP
-        authorizedAlgorithms =
-            Set.fromList [ "ed25519" ]
-
-        checkWitnessAlgo algo =
-            if Set.member algo authorizedAlgorithms then
-                Ok ()
-
-            else
-                Err ("The witness algorithm (" ++ algo ++ ") is not in the authorized standard list: " ++ String.join ", " (Set.toList authorizedAlgorithms))
-    in
-    validateNoDuplicate
-        |> Result.andThen
-            (\_ ->
-                List.map .witnessAlgorithm authors
-                    |> List.map checkWitnessAlgo
-                    |> reduceResults
-                    |> Result.map (always ())
-            )
-
-
-findDuplicate : List comparable -> Maybe comparable
-findDuplicate list =
-    findDuplicateHelper list Set.empty
-
-
-findDuplicateHelper : List comparable -> Set comparable -> Maybe comparable
-findDuplicateHelper list seen =
-    case list of
-        [] ->
-            Nothing
-
-        x :: xs ->
-            if Set.member x seen then
-                Just x
-
-            else
-                findDuplicateHelper xs (Set.insert x seen)
-
-
-reduceResults : List (Result a b) -> Result a (List b)
-reduceResults results =
-    List.foldr
-        (\result acc ->
-            case ( result, acc ) of
-                ( Err err, _ ) ->
-                    Err err
-
-                ( Ok value, Ok values ) ->
-                    Ok (value :: values)
-
-                ( _, Err err ) ->
-                    Err err
-        )
-        (Ok [])
-        results
 
 
 validateRationaleSummary : String -> Result String ()
@@ -851,11 +822,7 @@ rationaleFromForm form =
                 trimmed ->
                     Just trimmed
     in
-    { authors =
-        form.authors
-            |> List.map (\a -> ( a.name, { witnessAlgorithm = a.witnessAlgorithm, publicKey = a.publicKey, signature = Nothing } ))
-            |> Dict.fromList
-    , summary = String.trim form.summary
+    { summary = String.trim form.summary
     , rationaleStatement = String.trim form.rationaleStatement
     , precedentDiscussion = cleanup form.precedentDiscussion
     , counterArgumentDiscussion = cleanup form.counterArgumentDiscussion
@@ -876,10 +843,7 @@ editRationale step =
 
         Done rationale ->
             Preparing
-                { authors =
-                    Dict.toList rationale.authors
-                        |> List.map (\( name, w ) -> { name = name, witnessAlgorithm = w.witnessAlgorithm, publicKey = w.publicKey })
-                , summary = rationale.summary
+                { summary = rationale.summary
                 , rationaleStatement = rationale.rationaleStatement
                 , precedentDiscussion = Maybe.withDefault "" rationale.precedentDiscussion
                 , counterArgumentDiscussion = Maybe.withDefault "" rationale.counterArgumentDiscussion
@@ -888,6 +852,162 @@ editRationale step =
                 , references = rationale.references
                 , error = Nothing
                 }
+
+
+
+-- Rationale Signature Step
+
+
+resetRationaleSignatures : Step RationaleSignatureForm {} RationaleSignature -> RationaleSignatureForm
+resetRationaleSignatures step =
+    case step of
+        Preparing { authors, jsonLd } ->
+            { authors = List.map (\a -> { a | signature = Nothing }) authors
+            , jsonLd = jsonLd
+            , error = Nothing
+            }
+
+        Validating { authors, jsonLd } _ ->
+            { authors = List.map (\a -> { a | signature = Nothing }) authors
+            , jsonLd = jsonLd
+            , error = Nothing
+            }
+
+        Done { authors, jsonLd } ->
+            { authors = List.map (\a -> { a | signature = Nothing }) authors
+            , jsonLd = jsonLd
+            , error = Nothing
+            }
+
+
+updateAuthorsForm : (List AuthorWitness -> List AuthorWitness) -> Model -> Model
+updateAuthorsForm f ({ rationaleSignatureStep } as model) =
+    case rationaleSignatureStep of
+        Preparing form ->
+            { model
+                | rationaleSignatureStep =
+                    Preparing { form | authors = f form.authors }
+            }
+
+        _ ->
+            model
+
+
+skipRationaleSignature : Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
+skipRationaleSignature step =
+    case step of
+        Preparing ({ authors, jsonLd } as form) ->
+            case findDuplicate (List.map .name authors) of
+                Just dup ->
+                    Preparing { form | error = Just <| "There is a duplicate name in the authors list: " ++ dup }
+
+                Nothing ->
+                    Done
+                        { authors = List.map (\a -> { a | signature = Nothing }) authors
+                        , jsonLd = jsonLd
+                        }
+
+        Validating ({ authors, jsonLd } as form) _ ->
+            case findDuplicate (List.map .name authors) of
+                Just dup ->
+                    Preparing { form | error = Just <| "There is a duplicate name in the authors list: " ++ dup }
+
+                Nothing ->
+                    Done
+                        { authors = List.map (\a -> { a | signature = Nothing }) authors
+                        , jsonLd = jsonLd
+                        }
+
+        Done signatures ->
+            Done signatures
+
+
+rationaleSignatureToForm : Step RationaleSignatureForm {} RationaleSignature -> RationaleSignatureForm
+rationaleSignatureToForm step =
+    case step of
+        Preparing form ->
+            form
+
+        Validating form _ ->
+            form
+
+        Done s ->
+            { authors = s.authors
+
+            -- TODO: was jsonld updated with signatures???
+            , jsonLd = s.jsonLd
+            , error = Nothing
+            }
+
+
+validateAuthorsForm : List AuthorWitness -> Result String ()
+validateAuthorsForm authors =
+    let
+        -- Check that there are no duplicate names in the authors
+        validateNoDuplicate =
+            case findDuplicate (List.map .name authors) of
+                Just dup ->
+                    Err ("There is a duplicate name in the authors list: " ++ dup)
+
+                Nothing ->
+                    Ok ()
+
+        -- Check that witnessAlgorithm are authorized by the CIP
+        authorizedAlgorithms =
+            Set.fromList [ "ed25519" ]
+
+        checkWitnessAlgo algo =
+            if Set.member algo authorizedAlgorithms then
+                Ok ()
+
+            else
+                Err ("The witness algorithm (" ++ algo ++ ") is not in the authorized standard list: " ++ String.join ", " (Set.toList authorizedAlgorithms))
+    in
+    validateNoDuplicate
+        |> Result.andThen
+            (\_ ->
+                List.map .witnessAlgorithm authors
+                    |> List.map checkWitnessAlgo
+                    |> reduceResults
+                    |> Result.map (always ())
+            )
+
+
+findDuplicate : List comparable -> Maybe comparable
+findDuplicate list =
+    findDuplicateHelper list Set.empty
+
+
+findDuplicateHelper : List comparable -> Set comparable -> Maybe comparable
+findDuplicateHelper list seen =
+    case list of
+        [] ->
+            Nothing
+
+        x :: xs ->
+            if Set.member x seen then
+                Just x
+
+            else
+                findDuplicateHelper xs (Set.insert x seen)
+
+
+reduceResults : List (Result a b) -> Result a (List b)
+reduceResults results =
+    List.foldr
+        (\result acc ->
+            case ( result, acc ) of
+                ( Err err, _ ) ->
+                    Err err
+
+                ( Ok value, Ok values ) ->
+                    Ok (value :: values)
+
+                ( _, Err err ) ->
+                    Err err
+        )
+        (Ok [])
+        results
 
 
 
@@ -946,11 +1066,15 @@ view ctx model =
         , Html.hr [] []
         , viewRationaleStep ctx model.rationaleCreationStep
         , Html.hr [] []
+        , viewRationaleSignatureStep ctx model.rationaleCreationStep model.rationaleSignatureStep
+        , Html.hr [] []
         , viewPermanentStorageStep ctx model.permanentStorageStep
         , Html.hr [] []
         , viewFeeProviderStep ctx model.feeProviderStep
         , Html.hr [] []
         , viewBuildTxStep ctx model.buildTxStep
+        , Html.hr [] []
+        , Html.p [] [ text "Built with <3 by the CF, using elm-cardano" ]
         ]
 
 
@@ -1243,7 +1367,6 @@ viewRationaleStep ctx step =
             Preparing form ->
                 div []
                     [ Html.h3 [] [ text "Vote Rationale" ]
-                    , viewAuthorsForm form.authors
                     , viewSummaryForm form.summary
                     , viewStatementForm form.rationaleStatement
                     , viewPrecedentDiscussionForm form.precedentDiscussion
@@ -1273,7 +1396,6 @@ viewRationaleStep ctx step =
             Done rationale ->
                 div []
                     [ Html.h3 [] [ text "Vote Rationale" ]
-                    , viewAuthors rationale.authors
                     , viewSummary rationale.summary
                     , viewStatementMd rationale.rationaleStatement
                     , viewPrecedentDiscussionMd rationale.precedentDiscussion
@@ -1283,43 +1405,6 @@ viewRationaleStep ctx step =
                     , viewReferences rationale.references
                     , Html.p [] [ button [ onClick EditRationaleButtonClicked ] [ text "Edit rationale" ] ]
                     ]
-
-
-viewAuthorsForm : List AuthorForm -> Html Msg
-viewAuthorsForm authors =
-    div []
-        [ Html.h4 [] [ text "Authors" ]
-        , Html.p [] [ button [ onClick AddAuthorButtonClicked ] [ text "Add an author" ] ]
-        , div [] (List.indexedMap viewOneAuthorForm authors)
-        ]
-
-
-viewOneAuthorForm : Int -> AuthorForm -> Html Msg
-viewOneAuthorForm n author =
-    Html.p []
-        [ button [ onClick (DeleteAuthorButtonClicked n) ] [ text "Delete" ]
-        , Html.text " name: "
-        , Html.input
-            [ HA.type_ "text"
-            , HA.value author.name
-            , Html.Events.onInput (AuthorNameChange n)
-            ]
-            []
-        , Html.text " witness algorithm: "
-        , Html.input
-            [ HA.type_ "text"
-            , HA.value author.witnessAlgorithm
-            , Html.Events.onInput (AuthorWitnessAlgoChange n)
-            ]
-            []
-        , Html.text " public key: "
-        , Html.input
-            [ HA.type_ "text"
-            , HA.value author.publicKey
-            , Html.Events.onInput (AuthorPubKeyChange n)
-            ]
-            []
-        ]
 
 
 viewSummaryForm : MarkdownForm -> Html Msg
@@ -1628,6 +1713,152 @@ viewRef ref =
         , text <| " , label: " ++ ref.label
         , text <| " , URI: " ++ ref.uri
         ]
+
+
+
+--
+-- Rationale Signature Step
+--
+
+
+viewRationaleSignatureStep :
+    ViewContext msg
+    -> Step RationaleForm {} Rationale
+    -> Step RationaleSignatureForm {} RationaleSignature
+    -> Html msg
+viewRationaleSignatureStep ctx rationaleCreationStep step =
+    case ( rationaleCreationStep, step ) of
+        ( Preparing _, _ ) ->
+            div []
+                [ Html.h3 [] [ text "Rationale Signature" ]
+                , Html.p [] [ text "Please validate the rationale creation step first." ]
+                ]
+
+        ( Validating _ _, _ ) ->
+            div []
+                [ Html.h3 [] [ text "Rationale Signature" ]
+                , Html.p [] [ text "Please validate the rationale creation step first." ]
+                ]
+
+        ( Done _, Preparing form ) ->
+            div []
+                [ Html.h3 [] [ text "Rationale Signature" ]
+                , Html.map ctx.wrapMsg <| viewRationaleSignatureForm form.authors
+                , Html.p []
+                    [ button [ onClick <| ctx.wrapMsg SkipRationaleSignaturesButtonClicked ] [ text "Skip rationale signature" ]
+                    , text " or "
+                    , text "TODO: button to validate step"
+                    ]
+                , case form.error of
+                    Nothing ->
+                        text ""
+
+                    Just error ->
+                        Html.p []
+                            [ text "Error:"
+                            , Html.pre [] [ text error ]
+                            ]
+                ]
+
+        ( Done _, Validating _ _ ) ->
+            div []
+                [ Html.h3 [] [ text "Rationale Signature" ]
+                , Html.p [] [ text "Validating rationale author signatures ..." ]
+                ]
+
+        ( Done _, Done form ) ->
+            if List.isEmpty form.authors then
+                div []
+                    [ Html.h3 [] [ text "Rationale Signature" ]
+                    , Html.p [] [ text "No registered author." ]
+                    ]
+
+            else
+                Html.map ctx.wrapMsg <|
+                    div []
+                        [ Html.h3 [] [ text "Rationale Signature" ]
+                        , Html.ul [] (List.map viewSigner form.authors)
+                        , Html.p [] [ button [ onClick ChangeAuthorsButtonClicked ] [ text "Update authors" ] ]
+                        ]
+
+
+viewRationaleSignatureForm : List AuthorWitness -> Html Msg
+viewRationaleSignatureForm authors =
+    div []
+        [ Html.p []
+            [ text "Each author needs to sign the above metadata. "
+            , text "For now, the only supported method is to download this json file, and sign it with cardano-signer. "
+            , text "Later I plan to add the ability to sign directly with the web wallet (like Eternl)."
+            , Html.pre []
+                [ text "cardano-signer.js sign --cip100 \\\n"
+                , text "   --data-file CIP108-example.json \\\n"
+                , text "   --secret-key dummy.skey \\\n"
+                , text "   --author-name \"The great Name\" \\\n"
+                , text "   --out-file CIP108-example-signed.json"
+                ]
+            ]
+        , Html.h4 [] [ text "JSON-LD Rationale" ]
+        , Html.p [] [ text "TODO: button to download the json to sign" ]
+        , Html.h4 [] [ text "Authors" ]
+        , Html.p [] [ button [ onClick AddAuthorButtonClicked ] [ text "Add an author" ] ]
+        , div [] (List.indexedMap viewOneAuthorForm authors)
+
+        -- , Html.ul [] (List.map viewSignerForm authors)
+        ]
+
+
+viewOneAuthorForm : Int -> AuthorWitness -> Html Msg
+viewOneAuthorForm n author =
+    Html.p []
+        [ button [ onClick (DeleteAuthorButtonClicked n) ] [ text "Delete" ]
+        , Html.text " name: "
+        , Html.input
+            [ HA.type_ "text"
+            , HA.value author.name
+            , Html.Events.onInput (AuthorNameChange n)
+            ]
+            []
+        , Html.text " witness algorithm: "
+        , Html.input
+            [ HA.type_ "text"
+            , HA.value author.witnessAlgorithm
+            , Html.Events.onInput (AuthorWitnessAlgoChange n)
+            ]
+            []
+        , Html.text " public key: "
+        , Html.input
+            [ HA.type_ "text"
+            , HA.value author.publicKey
+            , Html.Events.onInput (AuthorPubKeyChange n)
+            ]
+            []
+        , Html.text " signature: "
+        , case author.signature of
+            Nothing ->
+                text "[TODO: button to load the signature]"
+
+            Just sig ->
+                Html.span []
+                    [ text sig
+                    , text "[TODO: button to change the signature]"
+                    ]
+        ]
+
+
+viewSigner : AuthorWitness -> Html Msg
+viewSigner { name, witnessAlgorithm, publicKey, signature } =
+    Html.li [] <|
+        (text <| "Name: " ++ name)
+            :: (case signature of
+                    Nothing ->
+                        [ text ", no signature provided" ]
+
+                    Just sig ->
+                        [ text <| " , witness algorithm: " ++ witnessAlgorithm
+                        , text <| " , public key: " ++ publicKey
+                        , text <| " , signature: " ++ sig
+                        ]
+               )
 
 
 

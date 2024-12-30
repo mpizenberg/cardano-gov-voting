@@ -25,7 +25,7 @@ import Integer
 import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
 import Natural exposing (Natural)
-import Page.Preparation exposing (ActiveProposal)
+import Page.Preparation exposing (ActiveProposal, JsonLdContexts)
 import Platform.Cmd as Cmd
 import RemoteData exposing (WebData)
 
@@ -86,6 +86,7 @@ type alias Model =
     , walletUtxos : Maybe (Utxo.RefDict Output)
     , protocolParams : Maybe ProtocolParams
     , proposals : WebData (Dict String ActiveProposal)
+    , jsonLdContexts : JsonLdContexts
     , errors : List String
     }
 
@@ -103,8 +104,8 @@ type alias ProtocolParams =
     }
 
 
-init : () -> ( Model, Cmd Msg )
-init _ =
+init : { jsonLdContexts : JsonLdContexts } -> ( Model, Cmd Msg )
+init { jsonLdContexts } =
     ( { page = LandingPage
       , walletsDiscovered = []
       , wallet = Nothing
@@ -112,6 +113,7 @@ init _ =
       , walletChangeAddress = Nothing
       , protocolParams = Nothing
       , proposals = RemoteData.NotAsked
+      , jsonLdContexts = jsonLdContexts
       , errors = []
       }
     , Cmd.batch
@@ -265,6 +267,7 @@ update msg model =
                             , proposals = model.proposals
                             , loadedWallet = loadedWallet
                             , feeProviderAskUtxosCmd = Cmd.none -- TODO
+                            , jsonLdContexts = model.jsonLdContexts
                             }
                     in
                     Page.Preparation.update ctx pageMsg pageModel

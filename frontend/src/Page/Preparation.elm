@@ -1,4 +1,4 @@
-module Page.Preparation exposing (ActiveProposal, Model, Msg, init, update, view)
+module Page.Preparation exposing (ActiveProposal, JsonLdContexts, Model, Msg, init, update, view)
 
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..))
@@ -12,6 +12,7 @@ import Dict exposing (Dict)
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
+import Json.Encode as JE
 import List.Extra
 import Markdown.Block as Md
 import Markdown.Parser as Md
@@ -138,6 +139,15 @@ type alias InternalVote =
     }
 
 
+noInternalVote : InternalVote
+noInternalVote =
+    { constitutional = 0
+    , unconstitutional = 0
+    , abstain = 0
+    , didNotVote = 0
+    }
+
+
 initRationaleForm : RationaleForm
 initRationaleForm =
     { summary = ""
@@ -145,12 +155,7 @@ initRationaleForm =
     , precedentDiscussion = ""
     , counterArgumentDiscussion = ""
     , conclusion = ""
-    , internalVote =
-        { constitutional = 0
-        , unconstitutional = 0
-        , abstain = 0
-        , didNotVote = 0
-        }
+    , internalVote = noInternalVote
     , references = []
     , error = Nothing
     }
@@ -344,7 +349,12 @@ type alias UpdateContext msg =
     , proposals : WebData (Dict String ActiveProposal)
     , loadedWallet : Maybe LoadedWallet
     , feeProviderAskUtxosCmd : Cmd msg
+    , jsonLdContexts : JsonLdContexts
     }
+
+
+type alias JsonLdContexts =
+    { ccCip136Context : JE.Value }
 
 
 type alias LoadedWallet =
@@ -501,7 +511,7 @@ update ctx msg model =
                 Done newRationale ->
                     ( { model
                         | rationaleCreationStep = Done newRationale
-                        , rationaleSignatureStep = Preparing <| resetRationaleSignatures model.rationaleSignatureStep
+                        , rationaleSignatureStep = Preparing <| resetRationaleSignatures ctx.jsonLdContexts newRationale model.rationaleSignatureStep
                       }
                     , Cmd.none
                     )
@@ -858,26 +868,94 @@ editRationale step =
 -- Rationale Signature Step
 
 
-resetRationaleSignatures : Step RationaleSignatureForm {} RationaleSignature -> RationaleSignatureForm
-resetRationaleSignatures step =
+resetRationaleSignatures : JsonLdContexts -> Rationale -> Step RationaleSignatureForm {} RationaleSignature -> RationaleSignatureForm
+resetRationaleSignatures jsonLdContexts rationale step =
+    let
+        jsonLd =
+            createJsonRationale jsonLdContexts rationale
+                |> JE.encode 2
+    in
     case step of
-        Preparing { authors, jsonLd } ->
+        Preparing { authors } ->
             { authors = List.map (\a -> { a | signature = Nothing }) authors
             , jsonLd = jsonLd
             , error = Nothing
             }
 
-        Validating { authors, jsonLd } _ ->
+        Validating { authors } _ ->
             { authors = List.map (\a -> { a | signature = Nothing }) authors
             , jsonLd = jsonLd
             , error = Nothing
             }
 
-        Done { authors, jsonLd } ->
+        Done { authors } ->
             { authors = List.map (\a -> { a | signature = Nothing }) authors
             , jsonLd = jsonLd
             , error = Nothing
             }
+
+
+createJsonRationale : JsonLdContexts -> Rationale -> JE.Value
+createJsonRationale jsonLdContexts rationale =
+    JE.object
+        [ ( "@context", jsonLdContexts.ccCip136Context )
+        , ( "hashAlgorithm", JE.string "blake2b-256" )
+        , ( "body", encodeJsonLd rationale )
+        ]
+
+
+encodeJsonLd : Rationale -> JE.Value
+encodeJsonLd rationale =
+    JE.object <|
+        List.filterMap identity
+            [ Just ( "summary", JE.string rationale.summary )
+            , Just ( "rationaleStatement", JE.string rationale.rationaleStatement )
+            , Maybe.map (\s -> ( "precedentDiscussion", JE.string s )) rationale.precedentDiscussion
+            , Maybe.map (\s -> ( "counterargumentDiscussion", JE.string s )) rationale.counterArgumentDiscussion
+            , Maybe.map (\s -> ( "conclusion", JE.string s )) rationale.conclusion
+            , if rationale.internalVote == noInternalVote then
+                Nothing
+
+              else
+                Just ( "internalVote", encodeInternalVote rationale.internalVote )
+            , if List.isEmpty rationale.references then
+                Nothing
+
+              else
+                Just ( "references", JE.list encodeReference rationale.references )
+            ]
+
+
+encodeInternalVote : InternalVote -> JE.Value
+encodeInternalVote { constitutional, unconstitutional, abstain, didNotVote } =
+    JE.object
+        [ ( "constitutional", JE.int constitutional )
+        , ( "unconstitutional", JE.int unconstitutional )
+        , ( "abstain", JE.int abstain )
+        , ( "didNotVote", JE.int didNotVote )
+        ]
+
+
+encodeReference : Reference -> JE.Value
+encodeReference ref =
+    JE.object
+        [ ( "@type", encodeRefType ref.type_ )
+        , ( "label", JE.string ref.label )
+        , ( "uri", JE.string ref.uri )
+        ]
+
+
+encodeRefType : ReferenceType -> JE.Value
+encodeRefType refType =
+    case refType of
+        OtherRefType ->
+            JE.string "Other"
+
+        GovernanceMetadataRefType ->
+            JE.string "GovernanceMetadata"
+
+        RelevantArticlesRefType ->
+            JE.string "RelevantArticles"
 
 
 updateAuthorsForm : (List AuthorWitness -> List AuthorWitness) -> Model -> Model
@@ -1657,8 +1735,8 @@ viewConclusion maybeConclusion =
 
 
 viewInternalVote : InternalVote -> Html msg
-viewInternalVote { constitutional, unconstitutional, abstain, didNotVote } =
-    if constitutional == 0 && unconstitutional == 0 && abstain == 0 && didNotVote == 0 then
+viewInternalVote ({ constitutional, unconstitutional, abstain, didNotVote } as internalVote) =
+    if internalVote == noInternalVote then
         text ""
 
     else
@@ -1722,7 +1800,7 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
         ( Done _, Preparing form ) ->
             div []
                 [ Html.h3 [] [ text "Rationale Signature" ]
-                , Html.map ctx.wrapMsg <| viewRationaleSignatureForm form.authors
+                , Html.map ctx.wrapMsg <| viewRationaleSignatureForm form
                 , Html.p []
                     [ button [ onClick <| ctx.wrapMsg SkipRationaleSignaturesButtonClicked ] [ text "Skip rationale signature" ]
                     , text " or "
@@ -1761,8 +1839,8 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                         ]
 
 
-viewRationaleSignatureForm : List AuthorWitness -> Html Msg
-viewRationaleSignatureForm authors =
+viewRationaleSignatureForm : RationaleSignatureForm -> Html Msg
+viewRationaleSignatureForm { authors, jsonLd } =
     div []
         [ Html.p []
             [ text "Each author needs to sign the above metadata. "
@@ -1778,6 +1856,7 @@ viewRationaleSignatureForm authors =
             ]
         , Html.h4 [] [ text "JSON-LD Rationale" ]
         , Html.p [] [ text "TODO: button to download the json to sign" ]
+        , Html.p [] [ Html.pre [] [ text jsonLd ] ]
         , Html.h4 [] [ text "Authors" ]
         , Html.p [] [ button [ onClick AddAuthorButtonClicked ] [ text "Add an author" ] ]
         , div [] (List.indexedMap viewOneAuthorForm authors)

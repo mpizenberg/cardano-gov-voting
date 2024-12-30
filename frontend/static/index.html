@@ -1,0 +1,27 @@
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>elm-cardano</title>
+    </head>
+
+    <body>
+        <div id="main-app"></div>
+        <script type="module">
+            import * as ElmCardano from "./elm-cardano.js";
+            import { jsonLdContexts } from "./json-ld-contexts.js";
+
+            // Load both the Main.elm and External.elm files compiled into the main.js bundle
+            await ElmCardano.loadMain("./main.js");
+
+            // Initialize the main Elm app
+            var mainApp = Elm.Main.init({
+                node: document.getElementById("main-app"),
+                flags: { jsonLdContexts },
+            });
+            ElmCardano.init({
+                portFromElmToWallet: mainApp.ports.toWallet,
+                portFromWalletToElm: mainApp.ports.fromWallet,
+            });
+        </script>
+    </body>
+</html>

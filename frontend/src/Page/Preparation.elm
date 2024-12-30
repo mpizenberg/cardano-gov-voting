@@ -12,6 +12,7 @@ import Dict exposing (Dict)
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
+import Json.Decode as JD
 import Json.Encode as JE
 import List.Extra
 import Markdown.Block as Md
@@ -227,7 +228,7 @@ initRefForm =
 
 type alias RationaleSignatureForm =
     { authors : List AuthorWitness
-    , jsonLd : String
+    , rationale : Rationale
     , error : Maybe String
     }
 
@@ -235,15 +236,14 @@ type alias RationaleSignatureForm =
 initRationaleSignatureForm : RationaleSignatureForm
 initRationaleSignatureForm =
     { authors = []
-    , jsonLd = ""
+    , rationale = rationaleFromForm initRationaleForm
     , error = Nothing
     }
 
 
 type alias RationaleSignature =
-    -- Currently same as Form, but might change
     { authors : List AuthorWitness
-    , jsonLd : String
+    , rationale : Rationale
     }
 
 
@@ -337,6 +337,7 @@ type Msg
     | AuthorWitnessAlgoChange Int String
     | AuthorPubKeyChange Int String
     | SkipRationaleSignaturesButtonClicked
+    | ValidateRationaleSignaturesButtonClicked
     | ChangeAuthorsButtonClicked
       -- Fee Provider Step
     | FeeProviderUpdated FeeProviderForm
@@ -349,7 +350,6 @@ type alias UpdateContext msg =
     , proposals : WebData (Dict String ActiveProposal)
     , loadedWallet : Maybe LoadedWallet
     , feeProviderAskUtxosCmd : Cmd msg
-    , jsonLdContexts : JsonLdContexts
     }
 
 
@@ -511,7 +511,7 @@ update ctx msg model =
                 Done newRationale ->
                     ( { model
                         | rationaleCreationStep = Done newRationale
-                        , rationaleSignatureStep = Preparing <| resetRationaleSignatures ctx.jsonLdContexts newRationale model.rationaleSignatureStep
+                        , rationaleSignatureStep = Preparing <| resetRationaleSignatures newRationale model.rationaleSignatureStep
                       }
                     , Cmd.none
                     )
@@ -556,6 +556,9 @@ update ctx msg model =
             ( { model | rationaleSignatureStep = skipRationaleSignature model.rationaleSignatureStep }
             , Cmd.none
             )
+
+        ValidateRationaleSignaturesButtonClicked ->
+            validateRationaleSignature model
 
         ChangeAuthorsButtonClicked ->
             ( { model | rationaleSignatureStep = Preparing <| rationaleSignatureToForm model.rationaleSignatureStep }
@@ -868,40 +871,24 @@ editRationale step =
 -- Rationale Signature Step
 
 
-resetRationaleSignatures : JsonLdContexts -> Rationale -> Step RationaleSignatureForm {} RationaleSignature -> RationaleSignatureForm
-resetRationaleSignatures jsonLdContexts rationale step =
+resetRationaleSignatures : Rationale -> Step RationaleSignatureForm {} RationaleSignature -> RationaleSignatureForm
+resetRationaleSignatures rationale step =
     let
-        jsonLd =
-            createJsonRationale jsonLdContexts rationale
-                |> JE.encode 2
+        newRatSig authors =
+            { authors = List.map (\a -> { a | signature = Nothing }) authors
+            , rationale = rationale
+            , error = Nothing
+            }
     in
     case step of
         Preparing { authors } ->
-            { authors = List.map (\a -> { a | signature = Nothing }) authors
-            , jsonLd = jsonLd
-            , error = Nothing
-            }
+            newRatSig authors
 
         Validating { authors } _ ->
-            { authors = List.map (\a -> { a | signature = Nothing }) authors
-            , jsonLd = jsonLd
-            , error = Nothing
-            }
+            newRatSig authors
 
         Done { authors } ->
-            { authors = List.map (\a -> { a | signature = Nothing }) authors
-            , jsonLd = jsonLd
-            , error = Nothing
-            }
-
-
-createJsonRationale : JsonLdContexts -> Rationale -> JE.Value
-createJsonRationale jsonLdContexts rationale =
-    JE.object
-        [ ( "@context", jsonLdContexts.ccCip136Context )
-        , ( "hashAlgorithm", JE.string "blake2b-256" )
-        , ( "body", encodeJsonLd rationale )
-        ]
+            newRatSig authors
 
 
 encodeJsonLd : Rationale -> JE.Value
@@ -974,7 +961,7 @@ updateAuthorsForm f ({ rationaleSignatureStep } as model) =
 skipRationaleSignature : Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
 skipRationaleSignature step =
     case step of
-        Preparing ({ authors, jsonLd } as form) ->
+        Preparing ({ authors, rationale } as form) ->
             case findDuplicate (List.map .name authors) of
                 Just dup ->
                     Preparing { form | error = Just <| "There is a duplicate name in the authors list: " ++ dup }
@@ -982,10 +969,10 @@ skipRationaleSignature step =
                 Nothing ->
                     Done
                         { authors = List.map (\a -> { a | signature = Nothing }) authors
-                        , jsonLd = jsonLd
+                        , rationale = rationale
                         }
 
-        Validating ({ authors, jsonLd } as form) _ ->
+        Validating ({ authors, rationale } as form) _ ->
             case findDuplicate (List.map .name authors) of
                 Just dup ->
                     Preparing { form | error = Just <| "There is a duplicate name in the authors list: " ++ dup }
@@ -993,11 +980,41 @@ skipRationaleSignature step =
                 Nothing ->
                     Done
                         { authors = List.map (\a -> { a | signature = Nothing }) authors
-                        , jsonLd = jsonLd
+                        , rationale = rationale
                         }
 
         Done signatures ->
             Done signatures
+
+
+validateRationaleSignature : Model -> ( Model, Cmd msg )
+validateRationaleSignature model =
+    case model.rationaleSignatureStep of
+        Preparing ({ authors } as form) ->
+            case validateAuthorsForm authors of
+                Err error ->
+                    ( { model | rationaleSignatureStep = Preparing { form | error = Just error } }
+                    , Cmd.none
+                    )
+
+                Ok _ ->
+                    -- TODO: change to Validating instead, and emit a command to check signatures
+                    ( { model | rationaleSignatureStep = Done <| rationaleSignatureFromForm form }
+                    , Cmd.none
+                    )
+
+        Validating _ _ ->
+            ( model, Cmd.none )
+
+        Done _ ->
+            ( model, Cmd.none )
+
+
+rationaleSignatureFromForm : RationaleSignatureForm -> RationaleSignature
+rationaleSignatureFromForm form =
+    { authors = form.authors
+    , rationale = form.rationale
+    }
 
 
 rationaleSignatureToForm : Step RationaleSignatureForm {} RationaleSignature -> RationaleSignatureForm
@@ -1011,9 +1028,7 @@ rationaleSignatureToForm step =
 
         Done s ->
             { authors = s.authors
-
-            -- TODO: was jsonld updated with signatures???
-            , jsonLd = s.jsonLd
+            , rationale = s.rationale
             , error = Nothing
             }
 
@@ -1131,6 +1146,7 @@ validateFeeProviderForm maybeWallet feeProviderForm =
 type alias ViewContext msg =
     { wrapMsg : Msg -> msg
     , proposals : WebData (Dict String ActiveProposal)
+    , jsonLdContexts : JsonLdContexts
     }
 
 
@@ -1800,11 +1816,11 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
         ( Done _, Preparing form ) ->
             div []
                 [ Html.h3 [] [ text "Rationale Signature" ]
-                , Html.map ctx.wrapMsg <| viewRationaleSignatureForm form
+                , Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts form
                 , Html.p []
-                    [ button [ onClick <| ctx.wrapMsg SkipRationaleSignaturesButtonClicked ] [ text "Skip rationale signature" ]
+                    [ button [ onClick <| ctx.wrapMsg SkipRationaleSignaturesButtonClicked ] [ text "Skip rationale signing" ]
                     , text " or "
-                    , text "TODO: button to validate step"
+                    , button [ onClick <| ctx.wrapMsg ValidateRationaleSignaturesButtonClicked ] [ text "Validate rationale signing" ]
                     ]
                 , case form.error of
                     Nothing ->
@@ -1823,29 +1839,50 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                 , Html.p [] [ text "Validating rationale author signatures ..." ]
                 ]
 
-        ( Done _, Done form ) ->
-            if List.isEmpty form.authors then
-                div []
-                    [ Html.h3 [] [ text "Rationale Signature" ]
-                    , Html.p [] [ text "No registered author." ]
-                    ]
+        ( Done _, Done ratSig ) ->
+            let
+                jsonRationale =
+                    createJsonRationale ctx.jsonLdContexts ratSig.rationale ratSig.authors
+                        |> JE.encode 2
+
+                downloadButton =
+                    Html.a
+                        [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode jsonRationale
+                        , HA.download "rationale-signed.json"
+                        ]
+                        [ button [] [ text "Download signed JSON rationale" ] ]
+            in
+            if List.isEmpty ratSig.authors then
+                Html.map ctx.wrapMsg <|
+                    div []
+                        [ Html.h3 [] [ text "Rationale Signature" ]
+                        , Html.p [] [ downloadButton ]
+                        , Html.p [] [ text "No registered author." ]
+                        , Html.p [] [ button [ onClick ChangeAuthorsButtonClicked ] [ text "Update authors" ] ]
+                        ]
 
             else
                 Html.map ctx.wrapMsg <|
                     div []
                         [ Html.h3 [] [ text "Rationale Signature" ]
-                        , Html.ul [] (List.map viewSigner form.authors)
+                        , Html.p [] [ downloadButton ]
+                        , Html.ul [] (List.map viewSigner ratSig.authors)
                         , Html.p [] [ button [ onClick ChangeAuthorsButtonClicked ] [ text "Update authors" ] ]
                         ]
 
 
-viewRationaleSignatureForm : RationaleSignatureForm -> Html Msg
-viewRationaleSignatureForm { authors, jsonLd } =
+viewRationaleSignatureForm : JsonLdContexts -> RationaleSignatureForm -> Html Msg
+viewRationaleSignatureForm jsonLdContexts { authors, rationale } =
+    let
+        jsonRationale =
+            createJsonRationale jsonLdContexts rationale []
+                |> JE.encode 2
+    in
     div []
         [ Html.p [] [ text "Here is the JSON-LD file generated from your rationale inputs." ]
         , Html.p []
             [ Html.a
-                [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode jsonLd
+                [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode jsonRationale
                 , HA.download "rationale.json"
                 ]
                 [ button [] [ text "Download JSON rationale" ] ]
@@ -1869,9 +1906,37 @@ viewRationaleSignatureForm { authors, jsonLd } =
             ]
         , Html.p [] [ button [ onClick AddAuthorButtonClicked ] [ text "Add an author" ] ]
         , div [] (List.indexedMap viewOneAuthorForm authors)
-
-        -- , Html.ul [] (List.map viewSignerForm authors)
         ]
+
+
+createJsonRationale : JsonLdContexts -> Rationale -> List AuthorWitness -> JE.Value
+createJsonRationale jsonLdContexts rationale authors =
+    JE.object <|
+        List.filterMap identity
+            [ Just ( "@context", jsonLdContexts.ccCip136Context )
+            , Just ( "hashAlgorithm", JE.string "blake2b-256" )
+            , Just ( "body", encodeJsonLd rationale )
+            , if List.isEmpty authors then
+                Nothing
+
+              else
+                Just <| ( "authors", JE.list encodeAuthorWitness authors )
+            ]
+
+
+encodeAuthorWitness : AuthorWitness -> JE.Value
+encodeAuthorWitness { name, witnessAlgorithm, publicKey, signature } =
+    case signature of
+        Nothing ->
+            JE.object [ ( "name", JE.string name ) ]
+
+        Just sig ->
+            JE.object
+                [ ( "name", JE.string name )
+                , ( "witnessAlgorithm", JE.string witnessAlgorithm )
+                , ( "publicKey", JE.string publicKey )
+                , ( "signature", JE.string sig )
+                ]
 
 
 viewOneAuthorForm : Int -> AuthorWitness -> Html Msg

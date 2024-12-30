@@ -1842,22 +1842,31 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
 viewRationaleSignatureForm : RationaleSignatureForm -> Html Msg
 viewRationaleSignatureForm { authors, jsonLd } =
     div []
-        [ Html.p []
-            [ text "Each author needs to sign the above metadata. "
-            , text "For now, the only supported method is to download this json file, and sign it with cardano-signer. "
-            , text "Later I plan to add the ability to sign directly with the web wallet (like Eternl)."
+        [ Html.p [] [ text "Here is the JSON-LD file generated from your rationale inputs." ]
+        , Html.p []
+            [ Html.a
+                [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode jsonLd
+                , HA.download "rationale.json"
+                ]
+                [ button [] [ text "Download JSON rationale" ] ]
+            ]
+        , Html.h4 [] [ text "Authors" ]
+        , Html.p []
+            [ text "Each author needs to sign the above metadata."
+            , text " For now, the only supported method is to download this json file, and sign it with cardano-signer."
+            , text " Later I plan to add the ability to sign directly with the web wallet (like Eternl)."
             , Html.pre []
                 [ text "cardano-signer.js sign --cip100 \\\n"
-                , text "   --data-file CIP108-example.json \\\n"
+                , text "   --data-file rationale.json \\\n"
                 , text "   --secret-key dummy.skey \\\n"
                 , text "   --author-name \"The great Name\" \\\n"
-                , text "   --out-file CIP108-example-signed.json"
+                , text "   --out-file rationale-signed.json"
                 ]
             ]
-        , Html.h4 [] [ text "JSON-LD Rationale" ]
-        , Html.p [] [ text "TODO: button to download the json to sign" ]
-        , Html.p [] [ Html.pre [] [ text jsonLd ] ]
-        , Html.h4 [] [ text "Authors" ]
+        , Html.p []
+            [ text "Add individual authors that contributed to this rationale."
+            , text " Provide each author signature or skip all signatures."
+            ]
         , Html.p [] [ button [ onClick AddAuthorButtonClicked ] [ text "Add an author" ] ]
         , div [] (List.indexedMap viewOneAuthorForm authors)
 

@@ -9,6 +9,8 @@ import Cardano.Transaction exposing (Transaction)
 import Cardano.Utxo as Utxo exposing (Output)
 import Cbor.Encode
 import Dict exposing (Dict)
+import File exposing (File)
+import File.Select
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
@@ -20,6 +22,7 @@ import Markdown.Parser as Md
 import Markdown.Renderer as Md
 import RemoteData exposing (WebData)
 import Set exposing (Set)
+import Task
 import Url
 
 
@@ -336,6 +339,9 @@ type Msg
     | AuthorNameChange Int String
     | AuthorWitnessAlgoChange Int String
     | AuthorPubKeyChange Int String
+    | LoadJsonSignatureButtonClicked Int String
+    | FileSelectedForJsonSignature Int String File
+    | LoadedAuthorSignatureJsonRationale Int String String
     | SkipRationaleSignaturesButtonClicked
     | ValidateRationaleSignaturesButtonClicked
     | ChangeAuthorsButtonClicked
@@ -549,6 +555,32 @@ update ctx msg model =
 
         AuthorPubKeyChange n pubKey ->
             ( updateAuthorsForm (\authors -> List.Extra.updateAt n (\author -> { author | publicKey = pubKey }) authors) model
+            , Cmd.none
+            )
+
+        LoadJsonSignatureButtonClicked n authorName ->
+            ( model
+            , Cmd.map ctx.wrapMsg <|
+                File.Select.file [ "application/json" ] <|
+                    FileSelectedForJsonSignature n authorName
+            )
+
+        FileSelectedForJsonSignature n authorName file ->
+            ( model
+            , Task.attempt (handleJsonSignatureFileRead n authorName) (File.toString file)
+                |> Cmd.map ctx.wrapMsg
+            )
+
+        LoadedAuthorSignatureJsonRationale n authorName jsonStr ->
+            ( case JD.decodeString (authorWitnessExtractDecoder authorName) jsonStr of
+                Err decodingError ->
+                    { model
+                        | rationaleSignatureStep =
+                            signatureDecodingError n authorName decodingError model.rationaleSignatureStep
+                    }
+
+                Ok authorWitness ->
+                    updateAuthorsForm (\authors -> List.Extra.updateAt n (\_ -> authorWitness) authors) model
             , Cmd.none
             )
 
@@ -951,11 +983,61 @@ updateAuthorsForm f ({ rationaleSignatureStep } as model) =
         Preparing form ->
             { model
                 | rationaleSignatureStep =
-                    Preparing { form | authors = f form.authors }
+                    Preparing { form | authors = f form.authors, error = Nothing }
             }
 
         _ ->
             model
+
+
+handleJsonSignatureFileRead : Int -> String -> Result x String -> Msg
+handleJsonSignatureFileRead n authorName result =
+    case result of
+        Err _ ->
+            NoMsg
+
+        Ok json ->
+            LoadedAuthorSignatureJsonRationale n authorName json
+
+
+authorWitnessExtractDecoder : String -> JD.Decoder AuthorWitness
+authorWitnessExtractDecoder authorName =
+    JD.field "authors" (JD.list authorWitnessDecoder)
+        |> JD.andThen
+            (\authors ->
+                case List.head <| List.filter (\a -> a.name == authorName) authors of
+                    Just author ->
+                        JD.succeed author
+
+                    Nothing ->
+                        JD.fail <| "No witness found for author: " ++ authorName
+            )
+
+
+authorWitnessDecoder : JD.Decoder AuthorWitness
+authorWitnessDecoder =
+    JD.map4
+        (\name witnessAlgorithm publicKey signature ->
+            { name = name
+            , witnessAlgorithm = witnessAlgorithm
+            , publicKey = publicKey
+            , signature = signature
+            }
+        )
+        (JD.field "name" JD.string)
+        (JD.at [ "witness", "witnessAlgorithm" ] JD.string)
+        (JD.at [ "witness", "publicKey" ] JD.string)
+        (JD.map Just <| JD.at [ "witness", "signature" ] JD.string)
+
+
+signatureDecodingError : Int -> String -> JD.Error -> Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
+signatureDecodingError n authorName decodingError rationaleSignatureStep =
+    case rationaleSignatureStep of
+        Preparing form ->
+            Preparing { form | error = Just <| JD.errorToString decodingError }
+
+        _ ->
+            rationaleSignatureStep
 
 
 skipRationaleSignature : Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
@@ -1967,12 +2049,12 @@ viewOneAuthorForm n author =
         , Html.text " signature: "
         , case author.signature of
             Nothing ->
-                text "[TODO: button to load the signature]"
+                button [ onClick <| LoadJsonSignatureButtonClicked n author.name ] [ text "Load signed JSON file" ]
 
             Just sig ->
                 Html.span []
-                    [ text sig
-                    , text "[TODO: button to change the signature]"
+                    [ text <| sig ++ " "
+                    , button [ onClick <| LoadJsonSignatureButtonClicked n author.name ] [ text "Change signature" ]
                     ]
         ]
 

@@ -337,8 +337,6 @@ type Msg
     | AddAuthorButtonClicked
     | DeleteAuthorButtonClicked Int
     | AuthorNameChange Int String
-    | AuthorWitnessAlgoChange Int String
-    | AuthorPubKeyChange Int String
     | LoadJsonSignatureButtonClicked Int String
     | FileSelectedForJsonSignature Int String File
     | LoadedAuthorSignatureJsonRationale Int String String
@@ -548,16 +546,6 @@ update ctx msg model =
             , Cmd.none
             )
 
-        AuthorWitnessAlgoChange n algo ->
-            ( updateAuthorsForm (\authors -> List.Extra.updateAt n (\author -> { author | witnessAlgorithm = algo }) authors) model
-            , Cmd.none
-            )
-
-        AuthorPubKeyChange n pubKey ->
-            ( updateAuthorsForm (\authors -> List.Extra.updateAt n (\author -> { author | publicKey = pubKey }) authors) model
-            , Cmd.none
-            )
-
         LoadJsonSignatureButtonClicked n authorName ->
             ( model
             , Cmd.map ctx.wrapMsg <|
@@ -576,7 +564,7 @@ update ctx msg model =
                 Err decodingError ->
                     { model
                         | rationaleSignatureStep =
-                            signatureDecodingError n authorName decodingError model.rationaleSignatureStep
+                            signatureDecodingError decodingError model.rationaleSignatureStep
                     }
 
                 Ok authorWitness ->
@@ -1030,8 +1018,8 @@ authorWitnessDecoder =
         (JD.map Just <| JD.at [ "witness", "signature" ] JD.string)
 
 
-signatureDecodingError : Int -> String -> JD.Error -> Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
-signatureDecodingError n authorName decodingError rationaleSignatureStep =
+signatureDecodingError : JD.Error -> Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
+signatureDecodingError decodingError rationaleSignatureStep =
     case rationaleSignatureStep of
         Preparing form ->
             Preparing { form | error = Just <| JD.errorToString decodingError }
@@ -2032,28 +2020,21 @@ viewOneAuthorForm n author =
             , Html.Events.onInput (AuthorNameChange n)
             ]
             []
-        , Html.text " witness algorithm: "
-        , Html.input
-            [ HA.type_ "text"
-            , HA.value author.witnessAlgorithm
-            , Html.Events.onInput (AuthorWitnessAlgoChange n)
-            ]
-            []
-        , Html.text " public key: "
-        , Html.input
-            [ HA.type_ "text"
-            , HA.value author.publicKey
-            , Html.Events.onInput (AuthorPubKeyChange n)
-            ]
-            []
-        , Html.text " signature: "
         , case author.signature of
             Nothing ->
-                button [ onClick <| LoadJsonSignatureButtonClicked n author.name ] [ text "Load signed JSON file" ]
+                Html.span []
+                    [ Html.text " signature: "
+                    , button [ onClick <| LoadJsonSignatureButtonClicked n author.name ] [ text "Load signed JSON file" ]
+                    ]
 
             Just sig ->
                 Html.span []
-                    [ text <| sig ++ " "
+                    [ Html.text " witness algorithm: "
+                    , Html.text author.witnessAlgorithm
+                    , Html.text ", public key: "
+                    , Html.text author.publicKey
+                    , Html.text ", signature: "
+                    , text <| sig ++ " "
                     , button [ onClick <| LoadJsonSignatureButtonClicked n author.name ] [ text "Change signature" ]
                     ]
         ]

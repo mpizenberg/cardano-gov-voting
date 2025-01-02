@@ -37,7 +37,7 @@ type alias Model =
     , pickProposalStep : Step {} {} ActiveProposal
     , rationaleCreationStep : Step RationaleForm {} Rationale
     , rationaleSignatureStep : Step RationaleSignatureForm {} RationaleSignature
-    , permanentStorageStep : Step StoragePrep {} Storage
+    , permanentStorageStep : Step StorageForm {} Storage
     , feeProviderStep : Step FeeProviderForm FeeProviderTemp FeeProvider
     , buildTxStep : Step {} {} Transaction
     }
@@ -55,7 +55,7 @@ init =
     , pickProposalStep = Preparing {}
     , rationaleCreationStep = Preparing initRationaleForm
     , rationaleSignatureStep = Preparing initRationaleSignatureForm
-    , permanentStorageStep = Preparing {}
+    , permanentStorageStep = Preparing initStorageForm
     , feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing })
     , buildTxStep = Preparing {}
     }
@@ -271,8 +271,17 @@ initAuthorForm =
 -- Storage Step
 
 
-type alias StoragePrep =
-    {}
+type alias StorageForm =
+    { ipfsServer : String
+    , headers : List ( String, String )
+    }
+
+
+initStorageForm : StorageForm
+initStorageForm =
+    { ipfsServer = "https://ipfs.blockfrost.io"
+    , headers = [ ( "project_id", "" ) ]
+    }
 
 
 type alias Storage =
@@ -343,6 +352,12 @@ type Msg
     | SkipRationaleSignaturesButtonClicked
     | ValidateRationaleSignaturesButtonClicked
     | ChangeAuthorsButtonClicked
+      -- Storage
+    | IpfsServerChange String
+    | AddHeaderButtonClicked
+    | DeleteHeaderButtonClicked Int
+    | StorageHeaderFieldChange Int String
+    | StorageHeaderValueChange Int String
       -- Fee Provider Step
     | FeeProviderUpdated FeeProviderForm
     | ValidateFeeProviderFormButtonClicked
@@ -582,6 +597,34 @@ update ctx msg model =
 
         ChangeAuthorsButtonClicked ->
             ( { model | rationaleSignatureStep = Preparing <| rationaleSignatureToForm model.rationaleSignatureStep }
+            , Cmd.none
+            )
+
+        --
+        -- Permanent Storage Step
+        --
+        IpfsServerChange ipfsServer ->
+            ( updateStorageForm (\form -> { form | ipfsServer = ipfsServer }) model
+            , Cmd.none
+            )
+
+        AddHeaderButtonClicked ->
+            ( updateStorageForm (\form -> { form | headers = ( "", "" ) :: form.headers }) model
+            , Cmd.none
+            )
+
+        DeleteHeaderButtonClicked n ->
+            ( updateStorageForm (\form -> { form | headers = List.Extra.removeAt n form.headers }) model
+            , Cmd.none
+            )
+
+        StorageHeaderFieldChange n field ->
+            ( updateStorageForm (\form -> { form | headers = List.Extra.updateAt n (\( _, v ) -> ( field, v )) form.headers }) model
+            , Cmd.none
+            )
+
+        StorageHeaderValueChange n value ->
+            ( updateStorageForm (\form -> { form | headers = List.Extra.updateAt n (\( f, _ ) -> ( f, value )) form.headers }) model
             , Cmd.none
             )
 
@@ -1174,6 +1217,23 @@ reduceResults results =
 
 
 
+-- Permanent Storage Step
+
+
+updateStorageForm : (StorageForm -> StorageForm) -> Model -> Model
+updateStorageForm formUpdate model =
+    case model.permanentStorageStep of
+        Preparing form ->
+            { model | permanentStorageStep = Preparing <| formUpdate form }
+
+        Validating _ _ ->
+            model
+
+        Done _ ->
+            model
+
+
+
 -- Fee Provider Step
 
 
@@ -1232,7 +1292,7 @@ view ctx model =
         , Html.hr [] []
         , viewRationaleSignatureStep ctx model.rationaleCreationStep model.rationaleSignatureStep
         , Html.hr [] []
-        , viewPermanentStorageStep ctx model.permanentStorageStep
+        , viewPermanentStorageStep ctx model.rationaleSignatureStep model.permanentStorageStep
         , Html.hr [] []
         , viewFeeProviderStep ctx model.feeProviderStep
         , Html.hr [] []
@@ -2062,9 +2122,70 @@ viewSigner { name, witnessAlgorithm, publicKey, signature } =
 --
 
 
-viewPermanentStorageStep : ViewContext msg -> Step StoragePrep {} Storage -> Html msg
-viewPermanentStorageStep _ _ =
-    text "TODO viewPermanentStorageStep"
+viewPermanentStorageStep : ViewContext msg -> Step RationaleSignatureForm {} RationaleSignature -> Step StorageForm {} Storage -> Html msg
+viewPermanentStorageStep ctx rationaleSigStep step =
+    case ( rationaleSigStep, step ) of
+        ( Done _, Preparing form ) ->
+            Html.map ctx.wrapMsg <|
+                div []
+                    [ Html.h3 [] [ text "Permanent Storage" ]
+                    , Html.p []
+                        [ text "Only the hash of your rationale is stored on Cardano,"
+                        , text " so it’s recommended to also store the actual JSON file containing the rationale in a permanent storage solution."
+                        , text " Here we provide an easy way to store it on IPFS."
+                        ]
+                    , Html.p []
+                        [ Html.text "IPFS server: "
+                        , Html.input
+                            [ HA.type_ "text"
+                            , HA.placeholder "e.g. https://ipfs.blockfrost.io"
+                            , HA.value form.ipfsServer
+                            , Html.Events.onInput IpfsServerChange
+                            ]
+                            []
+                        ]
+                    , Html.p []
+                        [ text "Request headers: "
+                        , button [ onClick AddHeaderButtonClicked ] [ text "add" ]
+                        ]
+                    , Html.ul [] (List.indexedMap viewHeader form.headers)
+                    , Html.p [] [ text "TODO: validate IPFS config and pin the JSON rationale" ]
+                    ]
+
+        ( Done _, Validating _ _ ) ->
+            text "TODO viewPermanentStorageStep"
+
+        ( Done _, Done _ ) ->
+            text "TODO viewPermanentStorageStep"
+
+        _ ->
+            div []
+                [ Html.h3 [] [ text "Permanent Storage" ]
+                , Html.p [] [ text "Please complete the rationale signature step first." ]
+                ]
+
+
+viewHeader : Int -> ( String, String ) -> Html Msg
+viewHeader n ( field, value ) =
+    Html.li []
+        [ button [ onClick (DeleteHeaderButtonClicked n) ] [ text "Delete" ]
+        , text " "
+        , Html.input
+            [ HA.type_ "text"
+            , HA.placeholder "e.g. project_id"
+            , HA.value field
+            , Html.Events.onInput (StorageHeaderFieldChange n)
+            ]
+            []
+        , Html.text " : "
+        , Html.input
+            [ HA.type_ "text"
+            , HA.placeholder "e.g. ipfsEnrkKWDwlA9hV4IajI4ILrFdsHJpIqNC"
+            , HA.value value
+            , Html.Events.onInput (StorageHeaderValueChange n)
+            ]
+            []
+        ]
 
 
 

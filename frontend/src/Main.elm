@@ -267,6 +267,7 @@ update msg model =
                             , proposals = model.proposals
                             , loadedWallet = loadedWallet
                             , feeProviderAskUtxosCmd = Cmd.none -- TODO
+                            , jsonLdContexts = model.jsonLdContexts
                             }
                     in
                     Page.Preparation.update ctx pageMsg pageModel

@@ -5,12 +5,15 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import List, Optional, Tuple, Annotated
 
+from pydantic import BaseModel
 import requests
 from dotenv import load_dotenv
-from fastapi import Body, FastAPI, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables from .env file
 # Add environment variable validation at startup
@@ -31,6 +34,15 @@ app = FastAPI(title="Custom Processing Server")
 
 # Statically served directory (contains the frontend build)
 static_dir = Path("../frontend/static")
+
+# Allow CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -120,53 +132,97 @@ async def create_pretty_pdf(data: dict = Body(...)):
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
-@app.post("/ipfs-pin")
-async def pin_to_ipfs(file: UploadFile):
-    """
-    Pin a file to IPFS and return the hash using HTTP request.
-    Accepts any file type and returns the IPFS add command output.
-    """
+class IPFSPinRequest(BaseModel):
+    ipfsServer: str | None = None
+    headers: List[Tuple[str, str]] | None = None
+
+
+class IPFSPinJSONRequest(IPFSPinRequest):
+    fileName: str
+    jsonContent: str
+
+
+async def pin_to_ipfs_common(
+    temp_file_path: Path,
+    ipfs_server: Optional[str] = None,
+    custom_headers: Optional[List[Tuple[str, str]]] = None,
+) -> JSONResponse:
+    """Common IPFS pinning logic used by both endpoints."""
     try:
-        logger.info("IPFS pin attempt")
-        # Create a temporary directory for processing
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file_path = Path(temp_dir) / file.filename  # type: ignore
+        # Use default IPFS settings if not provided
+        server_url = ipfs_server or os.getenv("IPFS_RPC_URL")
+        headers = {
+            "Authorization": f"Basic {os.getenv('IPFS_RPC_USER')}:{os.getenv('IPFS_RPC_PASSWORD')}"
+        }
+        if ipfs_server:
+            headers = dict(custom_headers or [])
 
-            # Save uploaded file
-            content = await file.read()
-            with open(temp_file_path, "wb") as f:
-                f.write(content)
+        # Open the file and create the files parameter for the request
+        with open(temp_file_path, "rb") as f:
+            response = requests.post(
+                url=f"{server_url}/api/v0/add",
+                headers=headers,
+                files={"file": f},
+            )
+            response.raise_for_status()
+            ipfs_result = response.json()
 
-            # Open the file and create the files parameter for the request
-            with open(temp_file_path, "rb") as f:
-                # Make the HTTP request
-                response = requests.post(
-                    url=f"https://{os.getenv('IPFS_RPC_URL')}/api/v0/add",
-                    auth=(os.getenv("IPFS_RPC_USER"), os.getenv("IPFS_RPC_PASSWORD")),  # type: ignore
-                    files={"file": f},
-                )
+        return JSONResponse(content=ipfs_result)
 
-                # Raise an exception for bad status codes
-                response.raise_for_status()
-
-                # Parse the JSON response
-                ipfs_result = response.json()
-
-            return JSONResponse(content=ipfs_result)
-
-    except subprocess.CalledProcessError as e:
-        logger.error(f"IPFS operation failed: {e.stderr}")
-        raise HTTPException(
-            status_code=500, detail=f"IPFS operation failed: {e.stderr}"
-        )
+    except requests.RequestException as e:
+        logger.error(f"IPFS request failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"IPFS request failed: {str(e)}")
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse IPFS output: {e}")
-        raise HTTPException(
-            status_code=500, detail="Failed to parse IPFS command output"
-        )
+        logger.error(f"Failed to parse IPFS output: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to parse IPFS response")
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
+
+
+@app.post("/ipfs-pin/file")
+async def pin_file_to_ipfs(
+    file: UploadFile,
+    ipfs_server: Optional[str] = None,
+    headers: Optional[List[Tuple[str, str]]] = None,
+):
+    """Pin a file to IPFS and return the hash."""
+    try:
+        logger.info("IPFS file pin attempt")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_file_path = Path(temp_dir) / file.filename  # type: ignore
+            content = await file.read()
+
+            with open(temp_file_path, "wb") as f:
+                f.write(content)
+
+            return await pin_to_ipfs_common(temp_file_path, ipfs_server, headers)
+
+    except Exception as e:
+        logger.error(f"File upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="File upload failed")
+
+
+@app.post("/ipfs-pin/json")
+async def pin_json_to_ipfs(request: IPFSPinJSONRequest):
+    """Pin JSON content to IPFS and return the hash."""
+    try:
+        logger.info("IPFS JSON pin attempt")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_file_path = Path(temp_dir) / request.fileName
+
+            with open(temp_file_path, "w", encoding="utf-8") as f:
+                f.write(request.jsonContent)
+
+            return await pin_to_ipfs_common(
+                temp_file_path, request.ipfsServer, request.headers
+            )
+
+    except Exception as e:
+        logger.error(f"JSON processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="JSON processing failed")
 
 
 if __name__ == "__main__":

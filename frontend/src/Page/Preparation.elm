@@ -8,12 +8,14 @@ import Cardano.Gov as Gov exposing (ActionId)
 import Cardano.Transaction exposing (Transaction)
 import Cardano.Utxo as Utxo exposing (Output)
 import Cbor.Encode
+import Cbor.Encode.Extra exposing (nonEmptyField)
 import Dict exposing (Dict)
 import File exposing (File)
 import File.Select
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
+import Http
 import Json.Decode as JD
 import Json.Encode as JE
 import List.Extra
@@ -274,6 +276,7 @@ initAuthorForm =
 type alias StorageForm =
     { ipfsServer : String
     , headers : List ( String, String )
+    , error : Maybe String
     }
 
 
@@ -281,11 +284,21 @@ initStorageForm : StorageForm
 initStorageForm =
     { ipfsServer = "https://ipfs.blockfrost.io"
     , headers = [ ( "project_id", "" ) ]
+    , error = Nothing
     }
 
 
 type alias Storage =
-    {}
+    { config : StorageForm
+    , jsonFile : IpfsFile
+    }
+
+
+type alias IpfsFile =
+    { name : String
+    , hash : String
+    , size : String
+    }
 
 
 
@@ -358,6 +371,8 @@ type Msg
     | DeleteHeaderButtonClicked Int
     | StorageHeaderFieldChange Int String
     | StorageHeaderValueChange Int String
+    | PinJsonIpfsButtonClicked
+    | GotIpfsAnswer (Result String IpfsAnswer)
       -- Fee Provider Step
     | FeeProviderUpdated FeeProviderForm
     | ValidateFeeProviderFormButtonClicked
@@ -369,6 +384,7 @@ type alias UpdateContext msg =
     , proposals : WebData (Dict String ActiveProposal)
     , loadedWallet : Maybe LoadedWallet
     , feeProviderAskUtxosCmd : Cmd msg
+    , jsonLdContexts : JsonLdContexts
     }
 
 
@@ -381,6 +397,11 @@ type alias LoadedWallet =
     , changeAddress : Address
     , utxos : Utxo.RefDict Output
     }
+
+
+type IpfsAnswer
+    = IpfsError String
+    | IpfsAddSuccessful IpfsFile
 
 
 update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg )
@@ -627,6 +648,41 @@ update ctx msg model =
             ( updateStorageForm (\form -> { form | headers = List.Extra.updateAt n (\( f, _ ) -> ( f, value )) form.headers }) model
             , Cmd.none
             )
+
+        PinJsonIpfsButtonClicked ->
+            case model.permanentStorageStep of
+                Preparing form ->
+                    validateIpfsFormAndSendPinRequest ctx form model
+
+                Validating _ _ ->
+                    ( model, Cmd.none )
+
+                Done _ ->
+                    ( model, Cmd.none )
+
+        GotIpfsAnswer (Err httpError) ->
+            case model.permanentStorageStep of
+                Preparing _ ->
+                    ( model, Cmd.none )
+
+                Validating form _ ->
+                    ( { model | permanentStorageStep = Preparing { form | error = Just <| Debug.toString httpError } }
+                    , Cmd.none
+                    )
+
+                Done _ ->
+                    ( model, Cmd.none )
+
+        GotIpfsAnswer (Ok ipfsAnswer) ->
+            case model.permanentStorageStep of
+                Preparing _ ->
+                    ( model, Cmd.none )
+
+                Validating form _ ->
+                    handleIpfsAnswer model form ipfsAnswer
+
+                Done _ ->
+                    ( model, Cmd.none )
 
         --
         -- Fee Provider Step
@@ -1231,6 +1287,127 @@ updateStorageForm formUpdate model =
 
         Done _ ->
             model
+
+
+validateIpfsFormAndSendPinRequest : UpdateContext msg -> StorageForm -> Model -> ( Model, Cmd msg )
+validateIpfsFormAndSendPinRequest ctx form model =
+    case ( model.rationaleSignatureStep, validateIpfsForm form ) of
+        ( Done ratSig, Ok _ ) ->
+            ( { model | permanentStorageStep = Validating form {} }
+            , Cmd.map ctx.wrapMsg <| sendPinRequest ctx.jsonLdContexts form ratSig
+            )
+
+        ( Done _, Err error ) ->
+            ( { model | permanentStorageStep = Preparing { form | error = Just error } }
+            , Cmd.none
+            )
+
+        _ ->
+            ( { model | permanentStorageStep = Preparing { form | error = Just "Validate the rationale signature step first." } }
+            , Cmd.none
+            )
+
+
+validateIpfsForm : StorageForm -> Result String ()
+validateIpfsForm form =
+    let
+        -- Check that the IPFS server url looks legit
+        ipfsServerUrlSeemsLegit =
+            case Url.fromString form.ipfsServer of
+                Just _ ->
+                    Ok ()
+
+                Nothing ->
+                    Err ("This url seems incorrect, it must look like this: https://subdomain.domain.org, instead I got this: " ++ form.ipfsServer)
+
+        -- Check that headers look valid
+        -- There are many rules, but will just check they aren’t empty
+        nonEmptyHeadersResult =
+            if List.any (\( f, _ ) -> String.isEmpty f) form.headers then
+                Err "Empty header fields are forbidden."
+
+            else
+                Ok ()
+    in
+    ipfsServerUrlSeemsLegit
+        |> Result.andThen (\_ -> nonEmptyHeadersResult)
+
+
+sendPinRequest : JsonLdContexts -> StorageForm -> RationaleSignature -> Cmd Msg
+sendPinRequest jsonLdContexts storageForm ratSig =
+    let
+        encodedRationale =
+            createJsonRationale jsonLdContexts ratSig.rationale ratSig.authors
+
+        encodedBody =
+            JE.object
+                [ ( "ipfsServer", JE.string storageForm.ipfsServer )
+                , ( "headers", JE.list (\( f, v ) -> JE.list JE.string [ f, v ]) storageForm.headers )
+                , ( "fileName", JE.string "rationale-signed.json" )
+                , ( "jsonContent", JE.string <| JE.encode 0 encodedRationale )
+                ]
+
+        responseToIpfsAnswer : Http.Response String -> Result String IpfsAnswer
+        responseToIpfsAnswer response =
+            case response of
+                Http.GoodStatus_ _ body ->
+                    JD.decodeString ipfsAnswerDecoder body
+                        |> Result.mapError JD.errorToString
+
+                Http.BadStatus_ meta body ->
+                    case JD.decodeString ipfsAnswerDecoder body of
+                        Ok answer ->
+                            Ok answer
+
+                        Err _ ->
+                            Err <| "Bad status (" ++ String.fromInt meta.statusCode ++ "): " ++ meta.statusText
+
+                Http.NetworkError_ ->
+                    Err "Network error. Maybe you lost your connection, or some other network error occured."
+
+                Http.Timeout_ ->
+                    Err "The Pin request timed out."
+
+                Http.BadUrl_ str ->
+                    Err <| "Incorrect URL: " ++ str
+    in
+    Http.request
+        { method = "POST"
+        , headers = [ Http.header "accept" "application/json" ]
+        , url = "/ipfs-pin/json"
+        , body = Http.jsonBody encodedBody
+        , expect = Http.expectStringResponse GotIpfsAnswer responseToIpfsAnswer
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+ipfsAnswerDecoder : JD.Decoder IpfsAnswer
+ipfsAnswerDecoder =
+    JD.oneOf
+        [ JD.map3 (\err msg code -> IpfsError <| String.fromInt code ++ " (" ++ err ++ "): " ++ msg)
+            (JD.field "error" JD.string)
+            (JD.field "message" JD.string)
+            (JD.field "status_code" JD.int)
+        , JD.map3 (\name hash size -> IpfsAddSuccessful <| IpfsFile name hash size)
+            (JD.field "name" JD.string)
+            (JD.field "ipfs_hash" JD.string)
+            (JD.field "size" JD.string)
+        ]
+
+
+handleIpfsAnswer : Model -> StorageForm -> IpfsAnswer -> ( Model, Cmd msg )
+handleIpfsAnswer model form ipfsAnswer =
+    case ipfsAnswer of
+        IpfsError error ->
+            ( { model | permanentStorageStep = Preparing { form | error = Just error } }
+            , Cmd.none
+            )
+
+        IpfsAddSuccessful file ->
+            ( { model | permanentStorageStep = Done { config = form, jsonFile = file } }
+            , Cmd.none
+            )
 
 
 
@@ -1973,7 +2150,7 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
             let
                 jsonRationale =
                     createJsonRationale ctx.jsonLdContexts ratSig.rationale ratSig.authors
-                        |> JE.encode 2
+                        |> JE.encode 0
 
                 downloadButton =
                     Html.a
@@ -2006,7 +2183,7 @@ viewRationaleSignatureForm jsonLdContexts { authors, rationale } =
     let
         jsonRationale =
             createJsonRationale jsonLdContexts rationale []
-                |> JE.encode 2
+                |> JE.encode 0
     in
     div []
         [ Html.p [] [ text "Here is the JSON-LD file generated from your rationale inputs." ]
@@ -2149,14 +2326,34 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                         , button [ onClick AddHeaderButtonClicked ] [ text "add" ]
                         ]
                     , Html.ul [] (List.indexedMap viewHeader form.headers)
-                    , Html.p [] [ text "TODO: validate IPFS config and pin the JSON rationale" ]
+                    , Html.p [] [ button [ onClick PinJsonIpfsButtonClicked ] [ text "Pin JSON rationale to IPFS" ] ]
+                    , case form.error of
+                        Nothing ->
+                            text ""
+
+                        Just error ->
+                            Html.p []
+                                [ text "Error:"
+                                , Html.pre [] [ text error ]
+                                ]
                     ]
 
         ( Done _, Validating _ _ ) ->
-            text "TODO viewPermanentStorageStep"
+            div []
+                [ Html.h3 [] [ text "Permanent Storage" ]
+                , Html.p [] [ text "Uploading rationale to IPFS server ..." ]
+                ]
 
-        ( Done _, Done _ ) ->
-            text "TODO viewPermanentStorageStep"
+        ( Done _, Done storage ) ->
+            div []
+                [ Html.h3 [] [ text "Permanent Storage" ]
+                , Html.p [] [ text "File uploaded:" ]
+                , Html.ul []
+                    [ Html.li [] [ text <| "name: " ++ storage.jsonFile.name ]
+                    , Html.li [] [ text <| "hash: " ++ storage.jsonFile.hash ]
+                    , Html.li [] [ text <| "size: " ++ storage.jsonFile.size ++ " Bytes" ]
+                    ]
+                ]
 
         _ ->
             div []

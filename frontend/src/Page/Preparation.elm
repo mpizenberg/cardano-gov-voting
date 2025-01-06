@@ -414,7 +414,21 @@ update ctx msg model =
         -- Voter Step
         --
         VoterTypeSelected voterType ->
-            ( updateVoterForm (\form -> { form | voterType = voterType }) model
+            -- If SPO is selected, make sure the cred type is a stake key
+            ( updateVoterForm
+                (\form ->
+                    { form
+                        | voterType = voterType
+                        , voterCred =
+                            case ( voterType, form.voterCred ) of
+                                ( SpoVoter, ScriptVoter _ ) ->
+                                    StakeKeyVoter ""
+
+                                _ ->
+                                    form.voterCred
+                    }
+                )
+                model
             , Cmd.none
             )
 
@@ -1517,8 +1531,7 @@ viewVoterIdentificationStep ctx step =
         Preparing form ->
             div []
                 [ Html.h3 [] [ text "Voter Identification" ]
-                , Html.map ctx.wrapMsg <| viewVoterTypeSelector form.voterType
-                , Html.map ctx.wrapMsg <| viewVoterCredentialsForm form.voterCred
+                , Html.map ctx.wrapMsg <| viewVoterForm form
                 , Html.p [] [ button [ onClick <| ctx.wrapMsg ValidateVoterFormButtonClicked ] [ text "Confirm Voter" ] ]
                 , case form.error of
                     Just error ->
@@ -1541,14 +1554,52 @@ viewVoterIdentificationStep ctx step =
                 ]
 
 
-viewVoterTypeSelector : VoterType -> Html Msg
-viewVoterTypeSelector currentType =
+viewVoterForm : VoterPreparationForm -> Html Msg
+viewVoterForm { voterType, voterCred } =
     div []
-        [ Html.h4 [] [ text "Select Voter Type" ]
+        [ Html.p []
+            [ viewVoterTypeOption CcVoter "Constitutional Committee" (voterType == CcVoter)
+            , viewVoterTypeOption DrepVoter "DRep" (voterType == DrepVoter)
+            , viewVoterTypeOption SpoVoter "SPO" (voterType == SpoVoter)
+            ]
         , div []
-            [ viewVoterTypeOption CcVoter "Constitutional Committee" (currentType == CcVoter)
-            , viewVoterTypeOption DrepVoter "DRep" (currentType == DrepVoter)
-            , viewVoterTypeOption SpoVoter "SPO" (currentType == SpoVoter)
+            [ Html.h4 [] [ text "Voter Credentials" ]
+            , case ( voterType, voterCred ) of
+                ( SpoVoter, StakeKeyVoter key ) ->
+                    div [] [ textField "Stake key hash (or stake address)" key (\s -> VoterCredentialUpdated (StakeKeyVoter s)) ]
+
+                ( _, StakeKeyVoter key ) ->
+                    div []
+                        [ div []
+                            [ viewCredTypeOption (StakeKeyVoter "") "Stake Key Voter" True
+                            , textField " -- Stake key hash (or stake address)" key (\s -> VoterCredentialUpdated (StakeKeyVoter s))
+                            ]
+                        , div [] [ viewCredTypeOption (ScriptVoter { scriptHash = "", utxoRef = "" }) "(WIP) Script Voter" False ]
+                        ]
+
+                ( _, ScriptVoter { scriptHash, utxoRef } ) ->
+                    div []
+                        [ div [] [ viewCredTypeOption (StakeKeyVoter "") "Stake Key Voter" False ]
+                        , div [] [ viewCredTypeOption (ScriptVoter { scriptHash = "", utxoRef = "" }) "(WIP) Script Voter" True ]
+                        , Html.p []
+                            [ Html.label [] [ text "Script Hash" ]
+                            , Html.input
+                                [ HA.type_ "text"
+                                , HA.value scriptHash
+                                , Html.Events.onInput
+                                    (\s -> VoterCredentialUpdated (ScriptVoter { scriptHash = s, utxoRef = utxoRef }))
+                                ]
+                                []
+                            , Html.label [] [ text "UTxO Reference" ]
+                            , Html.input
+                                [ HA.type_ "text"
+                                , HA.value utxoRef
+                                , Html.Events.onInput
+                                    (\s -> VoterCredentialUpdated (ScriptVoter { scriptHash = scriptHash, utxoRef = s }))
+                                ]
+                                []
+                            ]
+                        ]
             ]
         ]
 
@@ -1569,7 +1620,7 @@ viewVoterTypeOption voterType label isSelected =
 
 viewCredTypeOption : VoterCredForm -> String -> Bool -> Html Msg
 viewCredTypeOption voterCredType label isSelected =
-    div []
+    Html.span []
         [ Html.input
             [ HA.type_ "radio"
             , HA.name "cred-type"
@@ -1581,54 +1632,16 @@ viewCredTypeOption voterCredType label isSelected =
         ]
 
 
-viewVoterCredentialsForm : VoterCredForm -> Html Msg
-viewVoterCredentialsForm credForm =
-    let
-        isStakeKeyVoter =
-            case credForm of
-                StakeKeyVoter _ ->
-                    True
-
-                _ ->
-                    False
-    in
-    div []
-        [ Html.h4 [] [ text "Voter Credentials" ]
-        , div []
-            [ viewCredTypeOption (StakeKeyVoter "") "Stake Key Voter" isStakeKeyVoter
-            , viewCredTypeOption (ScriptVoter { scriptHash = "", utxoRef = "" }) "(WIP) Script Voter" (not isStakeKeyVoter)
+textField : String -> String -> (String -> msg) -> Html msg
+textField label value toMsg =
+    Html.span []
+        [ Html.label [] [ text <| label ++ " " ]
+        , Html.input
+            [ HA.type_ "text"
+            , HA.value value
+            , Html.Events.onInput toMsg
             ]
-        , case credForm of
-            StakeKeyVoter key ->
-                div []
-                    [ Html.label [] [ text "Stake key hash (or stake address)" ]
-                    , Html.input
-                        [ HA.type_ "text"
-                        , HA.value key
-                        , Html.Events.onInput (\s -> VoterCredentialUpdated (StakeKeyVoter s))
-                        ]
-                        []
-                    ]
-
-            ScriptVoter { scriptHash, utxoRef } ->
-                div []
-                    [ Html.label [] [ text "Script Hash" ]
-                    , Html.input
-                        [ HA.type_ "text"
-                        , HA.value scriptHash
-                        , Html.Events.onInput
-                            (\s -> VoterCredentialUpdated (ScriptVoter { scriptHash = s, utxoRef = utxoRef }))
-                        ]
-                        []
-                    , Html.label [] [ text "UTxO Reference" ]
-                    , Html.input
-                        [ HA.type_ "text"
-                        , HA.value utxoRef
-                        , Html.Events.onInput
-                            (\s -> VoterCredentialUpdated (ScriptVoter { scriptHash = scriptHash, utxoRef = s }))
-                        ]
-                        []
-                    ]
+            []
         ]
 
 

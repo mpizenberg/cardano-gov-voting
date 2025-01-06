@@ -8,7 +8,6 @@ import Cardano.Gov as Gov exposing (ActionId)
 import Cardano.Transaction exposing (Transaction)
 import Cardano.Utxo as Utxo exposing (Output)
 import Cbor.Encode
-import Cbor.Encode.Extra exposing (nonEmptyField)
 import Dict exposing (Dict)
 import File exposing (File)
 import File.Select
@@ -282,7 +281,7 @@ type alias StorageForm =
 
 initStorageForm : StorageForm
 initStorageForm =
-    { ipfsServer = "https://ipfs.blockfrost.io"
+    { ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
     , headers = [ ( "project_id", "" ) ]
     , error = Nothing
     }
@@ -373,6 +372,7 @@ type Msg
     | StorageHeaderValueChange Int String
     | PinJsonIpfsButtonClicked
     | GotIpfsAnswer (Result String IpfsAnswer)
+    | AddOtherStorageButtonCLicked
       -- Fee Provider Step
     | FeeProviderUpdated FeeProviderForm
     | ValidateFeeProviderFormButtonClicked
@@ -683,6 +683,19 @@ update ctx msg model =
 
                 Done _ ->
                     ( model, Cmd.none )
+
+        AddOtherStorageButtonCLicked ->
+            case model.permanentStorageStep of
+                Preparing _ ->
+                    ( model, Cmd.none )
+
+                Validating _ _ ->
+                    ( model, Cmd.none )
+
+                Done storage ->
+                    ( { model | permanentStorageStep = Preparing storage.config }
+                    , Cmd.none
+                    )
 
         --
         -- Fee Provider Step
@@ -1385,14 +1398,27 @@ sendPinRequest jsonLdContexts storageForm ratSig =
 ipfsAnswerDecoder : JD.Decoder IpfsAnswer
 ipfsAnswerDecoder =
     JD.oneOf
+        -- Error
         [ JD.map3 (\err msg code -> IpfsError <| String.fromInt code ++ " (" ++ err ++ "): " ++ msg)
             (JD.field "error" JD.string)
             (JD.field "message" JD.string)
             (JD.field "status_code" JD.int)
+        , JD.map IpfsError
+            (JD.field "detail" JD.string)
+        , JD.map (\json -> IpfsError <| JE.encode 2 json)
+            (JD.field "detail" JD.value)
+
+        -- Blockfrost format
         , JD.map3 (\name hash size -> IpfsAddSuccessful <| IpfsFile name hash size)
             (JD.field "name" JD.string)
             (JD.field "ipfs_hash" JD.string)
             (JD.field "size" JD.string)
+
+        -- CF format
+        , JD.map3 (\name hash size -> IpfsAddSuccessful <| IpfsFile name hash size)
+            (JD.field "Name" JD.string)
+            (JD.field "Hash" JD.string)
+            (JD.field "Size" JD.string)
         ]
 
 
@@ -2312,10 +2338,10 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                         , text " Here we provide an easy way to store it on IPFS."
                         ]
                     , Html.p []
-                        [ Html.text "IPFS server: "
+                        [ Html.text "IPFS RPC server: "
                         , Html.input
                             [ HA.type_ "text"
-                            , HA.placeholder "e.g. https://ipfs.blockfrost.io"
+                            , HA.placeholder "e.g. https://ipfs.blockfrost.io/api/v0/ipfs"
                             , HA.value form.ipfsServer
                             , Html.Events.onInput IpfsServerChange
                             ]
@@ -2345,15 +2371,24 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                 ]
 
         ( Done _, Done storage ) ->
-            div []
-                [ Html.h3 [] [ text "Permanent Storage" ]
-                , Html.p [] [ text "File uploaded:" ]
-                , Html.ul []
-                    [ Html.li [] [ text <| "name: " ++ storage.jsonFile.name ]
-                    , Html.li [] [ text <| "hash: " ++ storage.jsonFile.hash ]
-                    , Html.li [] [ text <| "size: " ++ storage.jsonFile.size ++ " Bytes" ]
+            Html.map ctx.wrapMsg <|
+                div []
+                    [ Html.h3 [] [ text "Permanent Storage" ]
+                    , let
+                        link =
+                            "https://ipfs.io/ipfs/" ++ storage.jsonFile.hash
+                      in
+                      Html.p []
+                        [ text "File uploaded: "
+                        , Html.a [ HA.href link, HA.download storage.jsonFile.name, HA.target "_blank" ] [ text link ]
+                        ]
+                    , Html.ul []
+                        [ Html.li [] [ text <| "name: " ++ storage.jsonFile.name ]
+                        , Html.li [] [ text <| "hash: " ++ storage.jsonFile.hash ]
+                        , Html.li [] [ text <| "size: " ++ storage.jsonFile.size ++ " Bytes" ]
+                        ]
+                    , Html.p [] [ button [ onClick AddOtherStorageButtonCLicked ] [ text "Add another storage" ] ]
                     ]
-                ]
 
         _ ->
             div []

@@ -5,15 +5,14 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import List, Optional, Tuple, Annotated
+from typing import List, Optional, Tuple
 
 from pydantic import BaseModel
 import requests
 from dotenv import load_dotenv
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, Response, FileResponse
+from fastapi import Body, FastAPI, HTTPException, UploadFile
+from fastapi.responses import HTMLResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables from .env file
 # Add environment variable validation at startup
@@ -35,23 +34,10 @@ app = FastAPI(title="Custom Processing Server")
 # Statically served directory (contains the frontend build)
 static_dir = Path("../frontend/static")
 
-# Allow CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
     return FileResponse(static_dir / "index.html")
-
-
-# Mount static files from static directory
-app.mount("/", StaticFiles(directory=static_dir), name="static")
 
 
 @app.post("/pretty-gov-pdf")
@@ -146,11 +132,11 @@ async def pin_to_ipfs_common(
     temp_file_path: Path,
     ipfs_server: Optional[str] = None,
     custom_headers: Optional[List[Tuple[str, str]]] = None,
-) -> JSONResponse:
+):
     """Common IPFS pinning logic used by both endpoints."""
     try:
         # Use default IPFS settings if not provided
-        server_url = ipfs_server or os.getenv("IPFS_RPC_URL")
+        server_url = ipfs_server or os.getenv("IPFS_RPC_URL") or ""
         headers = {
             "Authorization": f"Basic {os.getenv('IPFS_RPC_USER')}:{os.getenv('IPFS_RPC_PASSWORD')}"
         }
@@ -160,14 +146,15 @@ async def pin_to_ipfs_common(
         # Open the file and create the files parameter for the request
         with open(temp_file_path, "rb") as f:
             response = requests.post(
-                url=f"{server_url}/api/v0/add",
+                url=f"{server_url}/add",
                 headers=headers,
                 files={"file": f},
             )
-            response.raise_for_status()
-            ipfs_result = response.json()
-
-        return JSONResponse(content=ipfs_result)
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                media_type=response.headers.get("content-type"),
+            )
 
     except requests.RequestException as e:
         logger.error(f"IPFS request failed: {str(e)}")
@@ -187,42 +174,36 @@ async def pin_file_to_ipfs(
     headers: Optional[List[Tuple[str, str]]] = None,
 ):
     """Pin a file to IPFS and return the hash."""
-    try:
-        logger.info("IPFS file pin attempt")
+    logger.info("IPFS file pin attempt")
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file_path = Path(temp_dir) / file.filename  # type: ignore
-            content = await file.read()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_file_path = Path(temp_dir) / file.filename  # type: ignore
+        content = await file.read()
 
-            with open(temp_file_path, "wb") as f:
-                f.write(content)
+        with open(temp_file_path, "wb") as f:
+            f.write(content)
 
-            return await pin_to_ipfs_common(temp_file_path, ipfs_server, headers)
-
-    except Exception as e:
-        logger.error(f"File upload failed: {str(e)}")
-        raise HTTPException(status_code=500, detail="File upload failed")
+        return await pin_to_ipfs_common(temp_file_path, ipfs_server, headers)
 
 
 @app.post("/ipfs-pin/json")
 async def pin_json_to_ipfs(request: IPFSPinJSONRequest):
     """Pin JSON content to IPFS and return the hash."""
-    try:
-        logger.info("IPFS JSON pin attempt")
+    logger.info("IPFS JSON pin attempt")
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file_path = Path(temp_dir) / request.fileName
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_file_path = Path(temp_dir) / request.fileName
 
-            with open(temp_file_path, "w", encoding="utf-8") as f:
-                f.write(request.jsonContent)
+        with open(temp_file_path, "w", encoding="utf-8") as f:
+            f.write(request.jsonContent)
 
-            return await pin_to_ipfs_common(
-                temp_file_path, request.ipfsServer, request.headers
-            )
+        return await pin_to_ipfs_common(
+            temp_file_path, request.ipfsServer, request.headers
+        )
 
-    except Exception as e:
-        logger.error(f"JSON processing failed: {str(e)}")
-        raise HTTPException(status_code=500, detail="JSON processing failed")
+
+# Mount static files from static directory
+app.mount("/", StaticFiles(directory=static_dir), name="static")
 
 
 if __name__ == "__main__":

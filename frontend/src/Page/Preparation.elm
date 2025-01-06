@@ -2,7 +2,7 @@ module Page.Preparation exposing (ActiveProposal, JsonLdContexts, Model, Msg, in
 
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..))
-import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash)
+import Cardano.Address as Address exposing (Address(..), Credential(..), CredentialHash)
 import Cardano.Cip30 as Cip30
 import Cardano.Gov as Gov exposing (ActionId)
 import Cardano.Transaction exposing (Transaction)
@@ -1492,6 +1492,7 @@ validateFeeProviderForm maybeWallet feeProviderForm =
 
 type alias ViewContext msg =
     { wrapMsg : Msg -> msg
+    , walletChangeAddress : Maybe Address
     , proposals : WebData (Dict String ActiveProposal)
     , jsonLdContexts : JsonLdContexts
     }
@@ -1531,7 +1532,7 @@ viewVoterIdentificationStep ctx step =
         Preparing form ->
             div []
                 [ Html.h3 [] [ text "Voter Identification" ]
-                , Html.map ctx.wrapMsg <| viewVoterForm form
+                , Html.map ctx.wrapMsg <| viewVoterForm ctx.walletChangeAddress form
                 , Html.p [] [ button [ onClick <| ctx.wrapMsg ValidateVoterFormButtonClicked ] [ text "Confirm Voter" ] ]
                 , case form.error of
                     Just error ->
@@ -1554,8 +1555,8 @@ viewVoterIdentificationStep ctx step =
                 ]
 
 
-viewVoterForm : VoterPreparationForm -> Html Msg
-viewVoterForm { voterType, voterCred } =
+viewVoterForm : Maybe Address -> VoterPreparationForm -> Html Msg
+viewVoterForm walletChangeAddress { voterType, voterCred } =
     div []
         [ Html.p []
             [ viewVoterTypeOption CcVoter "Constitutional Committee" (voterType == CcVoter)
@@ -1566,13 +1567,21 @@ viewVoterForm { voterType, voterCred } =
             [ Html.h4 [] [ text "Voter Credentials" ]
             , case ( voterType, voterCred ) of
                 ( SpoVoter, StakeKeyVoter key ) ->
-                    div [] [ textField "Stake key hash (or stake address)" key (\s -> VoterCredentialUpdated (StakeKeyVoter s)) ]
+                    div []
+                        [ textField "Stake key hash (or stake address)" key (\s -> VoterCredentialUpdated (StakeKeyVoter s))
+                        ]
 
                 ( _, StakeKeyVoter key ) ->
                     div []
                         [ div []
                             [ viewCredTypeOption (StakeKeyVoter "") "Stake Key Voter" True
                             , textField " -- Stake key hash (or stake address)" key (\s -> VoterCredentialUpdated (StakeKeyVoter s))
+                            , case Maybe.andThen Address.extractPubKeyHash walletChangeAddress of
+                                Just cred ->
+                                    button [ onClick <| VoterCredentialUpdated (StakeKeyVoter <| Bytes.toHex cred) ] [ text "<- use wallet stake key" ]
+
+                                Nothing ->
+                                    text ""
                             ]
                         , div [] [ viewCredTypeOption (ScriptVoter { scriptHash = "", utxoRef = "" }) "(WIP) Script Voter" False ]
                         ]

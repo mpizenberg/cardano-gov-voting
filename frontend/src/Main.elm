@@ -459,6 +459,7 @@ viewContent model =
         PreparationPage prepModel ->
             Page.Preparation.view
                 { wrapMsg = PreparationPageMsg
+                , walletChangeAddress = model.walletChangeAddress
                 , proposals = model.proposals
                 , jsonLdContexts = model.jsonLdContexts
                 }

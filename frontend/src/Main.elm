@@ -16,6 +16,7 @@ import Cardano.Utxo as Utxo exposing (DatumOption(..), Output, OutputReference, 
 import Cardano.Value
 import Cbor.Encode
 import Dict exposing (Dict)
+import Helper exposing (prettyAddr)
 import Hex.Convert
 import Html exposing (Html, button, div, text, wbr)
 import Html.Attributes as HA exposing (height, src)
@@ -437,17 +438,6 @@ viewConnectedWallet wallet maybeChangeAddress =
                 text ""
         , button [ onClick DisconnectWalletButtonClicked ] [ text "Disconnect" ]
         ]
-
-
-prettyAddr : Address -> String
-prettyAddr address =
-    let
-        addrHex =
-            Bytes.toHex (Address.toBytes address)
-    in
-    String.slice 0 8 addrHex
-        ++ "..."
-        ++ String.slice -8 (String.length addrHex) addrHex
 
 
 viewContent : Model -> Html Msg

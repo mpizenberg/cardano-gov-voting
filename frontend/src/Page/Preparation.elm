@@ -9,8 +9,10 @@ import Cardano.Transaction exposing (Transaction)
 import Cardano.Utxo as Utxo exposing (Output)
 import Cbor.Encode
 import Dict exposing (Dict)
+import Dict.Any
 import File exposing (File)
 import File.Select
+import Helper exposing (prettyAddr)
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
@@ -377,6 +379,7 @@ type Msg
     | FeeProviderUpdated FeeProviderForm
     | ValidateFeeProviderFormButtonClicked
     | ReceivedFeeProviderUtxos FeeProvider
+    | ChangeFeeProviderButtonClicked
 
 
 type alias UpdateContext msg =
@@ -738,6 +741,16 @@ update ctx msg model =
             case model.feeProviderStep of
                 Validating _ _ ->
                     ( { model | feeProviderStep = Done feeProvider }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        ChangeFeeProviderButtonClicked ->
+            case model.feeProviderStep of
+                Done _ ->
+                    ( { model | feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing }) }
                     , Cmd.none
                     )
 
@@ -2479,10 +2492,12 @@ viewFeeProviderStep ctx step =
                 , Html.p [] [ text "validating fee provider information ..." ]
                 ]
 
-        Done _ ->
+        Done { address, utxos } ->
             div []
                 [ Html.h3 [] [ text "Fee Provider" ]
-                , Html.p [] [ text "TODO: display address and utxos" ]
+                , Html.p [] [ text <| "Address: " ++ prettyAddr address ]
+                , Html.p [] [ text <| "Available UTxO count: " ++ String.fromInt (Dict.Any.size utxos) ]
+                , Html.p [] [ button [ onClick <| ctx.wrapMsg ChangeFeeProviderButtonClicked ] [ text "Change fee provider" ] ]
                 ]
 
 

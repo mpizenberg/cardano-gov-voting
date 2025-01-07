@@ -1,5 +1,6 @@
 module Page.Preparation exposing (ActiveProposal, JsonLdContexts, Model, Msg, init, update, view)
 
+import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..), TxIntent(..), VoterWitness(..))
 import Cardano.Address as Address exposing (Address(..), Credential(..), CredentialHash)
@@ -246,6 +247,7 @@ initRationaleSignatureForm =
 type alias RationaleSignature =
     { authors : List AuthorWitness
     , rationale : Rationale
+    , signedJson : String
     }
 
 
@@ -293,7 +295,7 @@ type alias Storage =
 
 type alias IpfsFile =
     { name : String
-    , hash : String
+    , cid : String
     , size : String
     }
 
@@ -643,12 +645,12 @@ update ctx msg model =
             )
 
         SkipRationaleSignaturesButtonClicked ->
-            ( { model | rationaleSignatureStep = skipRationaleSignature model.rationaleSignatureStep }
+            ( { model | rationaleSignatureStep = skipRationaleSignature ctx.jsonLdContexts model.rationaleSignatureStep }
             , Cmd.none
             )
 
         ValidateRationaleSignaturesButtonClicked ->
-            validateRationaleSignature model
+            validateRationaleSignature ctx.jsonLdContexts model
 
         ChangeAuthorsButtonClicked ->
             ( { model | rationaleSignatureStep = Preparing <| rationaleSignatureToForm model.rationaleSignatureStep }
@@ -1226,37 +1228,35 @@ signatureDecodingError decodingError rationaleSignatureStep =
             rationaleSignatureStep
 
 
-skipRationaleSignature : Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
-skipRationaleSignature step =
+skipRationaleSignature : JsonLdContexts -> Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
+skipRationaleSignature jsonLdContexts step =
     case step of
-        Preparing ({ authors, rationale } as form) ->
+        Preparing ({ authors } as form) ->
             case findDuplicate (List.map .name authors) of
                 Just dup ->
                     Preparing { form | error = Just <| "There is a duplicate name in the authors list: " ++ dup }
 
                 Nothing ->
-                    Done
-                        { authors = List.map (\a -> { a | signature = Nothing }) authors
-                        , rationale = rationale
-                        }
+                    { form | authors = List.map (\a -> { a | signature = Nothing }) authors }
+                        |> rationaleSignatureFromForm jsonLdContexts
+                        |> Done
 
-        Validating ({ authors, rationale } as form) _ ->
+        Validating ({ authors } as form) _ ->
             case findDuplicate (List.map .name authors) of
                 Just dup ->
                     Preparing { form | error = Just <| "There is a duplicate name in the authors list: " ++ dup }
 
                 Nothing ->
-                    Done
-                        { authors = List.map (\a -> { a | signature = Nothing }) authors
-                        , rationale = rationale
-                        }
+                    { form | authors = List.map (\a -> { a | signature = Nothing }) authors }
+                        |> rationaleSignatureFromForm jsonLdContexts
+                        |> Done
 
         Done signatures ->
             Done signatures
 
 
-validateRationaleSignature : Model -> ( Model, Cmd msg )
-validateRationaleSignature model =
+validateRationaleSignature : JsonLdContexts -> Model -> ( Model, Cmd msg )
+validateRationaleSignature jsonLdContexts model =
     case model.rationaleSignatureStep of
         Preparing ({ authors } as form) ->
             case validateAuthorsForm authors of
@@ -1267,7 +1267,7 @@ validateRationaleSignature model =
 
                 Ok _ ->
                     -- TODO: change to Validating instead, and emit a command to check signatures
-                    ( { model | rationaleSignatureStep = Done <| rationaleSignatureFromForm form }
+                    ( { model | rationaleSignatureStep = Done <| rationaleSignatureFromForm jsonLdContexts form }
                     , Cmd.none
                     )
 
@@ -1278,10 +1278,13 @@ validateRationaleSignature model =
             ( model, Cmd.none )
 
 
-rationaleSignatureFromForm : RationaleSignatureForm -> RationaleSignature
-rationaleSignatureFromForm form =
+rationaleSignatureFromForm : JsonLdContexts -> RationaleSignatureForm -> RationaleSignature
+rationaleSignatureFromForm jsonLdContexts form =
     { authors = form.authors
     , rationale = form.rationale
+    , signedJson =
+        createJsonRationale jsonLdContexts form.rationale form.authors
+            |> JE.encode 0
     }
 
 
@@ -1393,7 +1396,7 @@ validateIpfsFormAndSendPinRequest ctx form model =
     case ( model.rationaleSignatureStep, validateIpfsForm form ) of
         ( Done ratSig, Ok _ ) ->
             ( { model | permanentStorageStep = Validating form {} }
-            , Cmd.map ctx.wrapMsg <| sendPinRequest ctx.jsonLdContexts form ratSig
+            , Cmd.map ctx.wrapMsg <| sendPinRequest form ratSig
             )
 
         ( Done _, Err error ) ->
@@ -1432,18 +1435,15 @@ validateIpfsForm form =
         |> Result.andThen (\_ -> nonEmptyHeadersResult)
 
 
-sendPinRequest : JsonLdContexts -> StorageForm -> RationaleSignature -> Cmd Msg
-sendPinRequest jsonLdContexts storageForm ratSig =
+sendPinRequest : StorageForm -> RationaleSignature -> Cmd Msg
+sendPinRequest storageForm ratSig =
     let
-        encodedRationale =
-            createJsonRationale jsonLdContexts ratSig.rationale ratSig.authors
-
         encodedBody =
             JE.object
                 [ ( "ipfsServer", JE.string storageForm.ipfsServer )
                 , ( "headers", JE.list (\( f, v ) -> JE.list JE.string [ f, v ]) storageForm.headers )
                 , ( "fileName", JE.string "rationale-signed.json" )
-                , ( "jsonContent", JE.string <| JE.encode 0 encodedRationale )
+                , ( "jsonContent", JE.string ratSig.signedJson )
                 ]
 
         responseToIpfsAnswer : Http.Response String -> Result String IpfsAnswer
@@ -1572,14 +1572,18 @@ type alias TxRequirements =
 
 allPrepSteps : Maybe CostModels -> Model -> Result String TxRequirements
 allPrepSteps maybeCostModels m =
-    case ( maybeCostModels, ( m.voterStep, m.pickProposalStep ), ( m.permanentStorageStep, m.feeProviderStep ) ) of
-        ( Just costModels, ( Done voter, Done p ), ( Done s, Done f ) ) ->
+    case ( maybeCostModels, ( m.voterStep, m.pickProposalStep, m.rationaleSignatureStep ), ( m.permanentStorageStep, m.feeProviderStep ) ) of
+        ( Just costModels, ( Done voter, Done p, Done r ), ( Done s, Done f ) ) ->
             Ok
                 { voter = voter
                 , actionId = p.id
                 , rationaleAnchor =
-                    { url = "ipfs://" ++ s.jsonFile.hash
-                    , dataHash = Bytes.fromHexUnchecked s.jsonFile.hash
+                    { url = "ipfs://" ++ s.jsonFile.cid
+                    , dataHash =
+                        Bytes.fromText r.signedJson
+                            |> Bytes.toU8
+                            |> blake2b256 Nothing
+                            |> Bytes.fromU8
                     }
                 , localStateUtxos = f.utxos
                 , feeProviderAddress = f.address
@@ -2306,13 +2310,9 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
 
         ( Done _, Done ratSig ) ->
             let
-                jsonRationale =
-                    createJsonRationale ctx.jsonLdContexts ratSig.rationale ratSig.authors
-                        |> JE.encode 0
-
                 downloadButton =
                     Html.a
-                        [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode jsonRationale
+                        [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode ratSig.signedJson
                         , HA.download "rationale-signed.json"
                         ]
                         [ button [] [ text "Download signed JSON rationale" ] ]
@@ -2337,11 +2337,10 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
 
 
 viewRationaleSignatureForm : JsonLdContexts -> RationaleSignatureForm -> Html Msg
-viewRationaleSignatureForm jsonLdContexts { authors, rationale } =
+viewRationaleSignatureForm jsonLdContexts ({ authors } as form) =
     let
         jsonRationale =
-            createJsonRationale jsonLdContexts rationale []
-                |> JE.encode 0
+            (rationaleSignatureFromForm jsonLdContexts { form | authors = [] }).signedJson
     in
     div []
         [ Html.p [] [ text "Here is the JSON-LD file generated from your rationale inputs." ]
@@ -2502,22 +2501,29 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                 , Html.p [] [ text "Uploading rationale to IPFS server ..." ]
                 ]
 
-        ( Done _, Done storage ) ->
+        ( Done r, Done storage ) ->
+            let
+                link =
+                    "https://ipfs.io/ipfs/" ++ storage.jsonFile.cid
+
+                dataHash =
+                    Bytes.fromText r.signedJson
+                        |> Bytes.toU8
+                        |> blake2b256 Nothing
+                        |> Bytes.fromU8
+            in
             Html.map ctx.wrapMsg <|
                 div []
                     [ Html.h3 [] [ text "Permanent Storage" ]
-                    , let
-                        link =
-                            "https://ipfs.io/ipfs/" ++ storage.jsonFile.hash
-                      in
-                      Html.p []
+                    , Html.p []
                         [ text "File uploaded: "
                         , Html.a [ HA.href link, HA.download storage.jsonFile.name, HA.target "_blank" ] [ text link ]
                         ]
                     , Html.ul []
                         [ Html.li [] [ text <| "name: " ++ storage.jsonFile.name ]
-                        , Html.li [] [ text <| "hash: " ++ storage.jsonFile.hash ]
+                        , Html.li [] [ text <| "cid: " ++ storage.jsonFile.cid ]
                         , Html.li [] [ text <| "size: " ++ storage.jsonFile.size ++ " Bytes" ]
+                        , Html.li [] [ text <| "file hash: " ++ Bytes.toHex dataHash ]
                         ]
                     , Html.p [] [ button [ onClick AddOtherStorageButtonCLicked ] [ text "Add another storage" ] ]
                     ]

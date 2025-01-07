@@ -269,6 +269,7 @@ update msg model =
                             , loadedWallet = loadedWallet
                             , feeProviderAskUtxosCmd = Cmd.none -- TODO
                             , jsonLdContexts = model.jsonLdContexts
+                            , costModels = Maybe.map .costModels model.protocolParams
                             }
                     in
                     Page.Preparation.update ctx pageMsg pageModel
@@ -452,6 +453,7 @@ viewContent model =
                 , walletChangeAddress = model.walletChangeAddress
                 , proposals = model.proposals
                 , jsonLdContexts = model.jsonLdContexts
+                , costModels = Maybe.map .costModels model.protocolParams
                 }
                 prepModel
 

@@ -1,11 +1,13 @@
 module Page.Preparation exposing (ActiveProposal, JsonLdContexts, Model, Msg, init, update, view)
 
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano exposing (CredentialWitness(..), ScriptWitness(..))
+import Cardano exposing (CredentialWitness(..), ScriptWitness(..), TxIntent(..), VoterWitness(..))
 import Cardano.Address as Address exposing (Address(..), Credential(..), CredentialHash)
 import Cardano.Cip30 as Cip30
-import Cardano.Gov as Gov exposing (ActionId)
+import Cardano.CoinSelection as CoinSelection
+import Cardano.Gov as Gov exposing (ActionId, Anchor, CostModels, Vote)
 import Cardano.Transaction exposing (Transaction)
+import Cardano.Uplc as Uplc
 import Cardano.Utxo as Utxo exposing (Output)
 import Cbor.Encode
 import Dict exposing (Dict)
@@ -36,13 +38,13 @@ import Url
 
 
 type alias Model =
-    { voterStep : Step VoterPreparationForm {} VoterIdentified
+    { voterStep : Step VoterPreparationForm {} VoterWitness
     , pickProposalStep : Step {} {} ActiveProposal
     , rationaleCreationStep : Step RationaleForm {} Rationale
     , rationaleSignatureStep : Step RationaleSignatureForm {} RationaleSignature
     , permanentStorageStep : Step StorageForm {} Storage
     , feeProviderStep : Step FeeProviderForm FeeProviderTemp FeeProvider
-    , buildTxStep : Step {} {} Transaction
+    , buildTxStep : Step BuildTxPrep {} Transaction
     }
 
 
@@ -60,7 +62,7 @@ init =
     , rationaleSignatureStep = Preparing initRationaleSignatureForm
     , permanentStorageStep = Preparing initStorageForm
     , feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing })
-    , buildTxStep = Preparing {}
+    , buildTxStep = Preparing { error = Nothing }
     }
 
 
@@ -84,12 +86,6 @@ type VoterType
 type VoterCredForm
     = StakeKeyVoter String
     | ScriptVoter { scriptHash : String, utxoRef : String }
-
-
-type alias VoterIdentified =
-    { voterType : VoterType
-    , voterCred : CredentialWitness
-    }
 
 
 initVoterForm : VoterPreparationForm
@@ -324,6 +320,15 @@ type alias FeeProvider =
 
 
 
+-- Build Tx Step
+
+
+type alias BuildTxPrep =
+    { error : Maybe String
+    }
+
+
+
 -- ###################################################################
 -- UPDATE
 -- ###################################################################
@@ -380,6 +385,8 @@ type Msg
     | ValidateFeeProviderFormButtonClicked
     | ReceivedFeeProviderUtxos FeeProvider
     | ChangeFeeProviderButtonClicked
+      -- Build Tx Step
+    | BuildTxButtonClicked Vote
 
 
 type alias UpdateContext msg =
@@ -388,6 +395,7 @@ type alias UpdateContext msg =
     , loadedWallet : Maybe LoadedWallet
     , feeProviderAskUtxosCmd : Cmd msg
     , jsonLdContexts : JsonLdContexts
+    , costModels : Maybe CostModels
     }
 
 
@@ -450,15 +458,24 @@ update ctx msg model =
 
         ChangeVoterButtonClicked ->
             case model.voterStep of
-                Done { voterType, voterCred } ->
+                Done voterWitness ->
                     let
-                        voterCredForm =
-                            case voterCred of
-                                WithKey credHash ->
-                                    StakeKeyVoter (Bytes.toHex credHash)
+                        ( voterType, voterCredForm ) =
+                            case voterWitness of
+                                WithCommitteeHotCred (WithKey credHash) ->
+                                    ( CcVoter, StakeKeyVoter (Bytes.toHex credHash) )
 
-                                WithScript scriptHash _ ->
-                                    ScriptVoter { scriptHash = Bytes.toHex scriptHash, utxoRef = "TODO" }
+                                WithCommitteeHotCred (WithScript scriptHash _) ->
+                                    ( CcVoter, ScriptVoter { scriptHash = Bytes.toHex scriptHash, utxoRef = "TODO" } )
+
+                                WithDrepCred (WithKey credHash) ->
+                                    ( DrepVoter, StakeKeyVoter (Bytes.toHex credHash) )
+
+                                WithDrepCred (WithScript scriptHash _) ->
+                                    ( DrepVoter, ScriptVoter { scriptHash = Bytes.toHex scriptHash, utxoRef = "TODO" } )
+
+                                WithPoolCred credHash ->
+                                    ( SpoVoter, StakeKeyVoter (Bytes.toHex credHash) )
                     in
                     ( { model | voterStep = Preparing { voterType = voterType, voterCred = voterCredForm, error = Nothing } }
                     , Cmd.none
@@ -757,6 +774,42 @@ update ctx msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        --
+        -- Build Tx Step
+        --
+        BuildTxButtonClicked vote ->
+            case allPrepSteps ctx.costModels model of
+                Err error ->
+                    ( { model | buildTxStep = Preparing { error = Just error } }
+                    , Cmd.none
+                    )
+
+                Ok { voter, actionId, rationaleAnchor, localStateUtxos, feeProviderAddress, costModels } ->
+                    let
+                        tryTx =
+                            [ Cardano.Vote voter [ { actionId = actionId, vote = vote, rationale = Just rationaleAnchor } ]
+                            ]
+                                |> Cardano.finalizeAdvanced
+                                    { govState = Cardano.emptyGovernanceState
+                                    , localStateUtxos = localStateUtxos
+                                    , coinSelectionAlgo = CoinSelection.largestFirst
+                                    , evalScriptsCosts = Uplc.evalScriptsCosts Uplc.defaultVmConfig
+                                    , costModels = costModels
+                                    }
+                                    (Cardano.AutoFee { paymentSource = feeProviderAddress })
+                                    []
+                    in
+                    case tryTx of
+                        Err error ->
+                            ( { model | buildTxStep = Preparing { error = Just <| "Error while building the Tx: " ++ Debug.toString error } }
+                            , Cmd.none
+                            )
+
+                        Ok tx ->
+                            ( { model | buildTxStep = Done tx }
+                            , Cmd.none
+                            )
+
 
 
 -- Voter Step
@@ -772,16 +825,22 @@ updateVoterForm f ({ voterStep } as model) =
             model
 
 
-confirmVoter : VoterPreparationForm -> Step VoterPreparationForm {} VoterIdentified
+confirmVoter : VoterPreparationForm -> Step VoterPreparationForm {} VoterWitness
 confirmVoter form =
-    case validateVoterCredForm form.voterCred of
-        Ok voterCred ->
-            Done
-                { voterType = form.voterType
-                , voterCred = voterCred
-                }
+    case ( form.voterType, validateVoterCredForm form.voterCred ) of
+        ( CcVoter, Ok voterCred ) ->
+            Done <| WithCommitteeHotCred voterCred
 
-        Err error ->
+        ( DrepVoter, Ok voterCred ) ->
+            Done <| WithDrepCred voterCred
+
+        ( SpoVoter, Ok (WithKey hash) ) ->
+            Done <| WithPoolCred hash
+
+        ( SpoVoter, Ok (WithScript _ _) ) ->
+            Preparing { form | error = Just "SPO cannot use script credentials" }
+
+        ( _, Err error ) ->
             Preparing { form | error = Just error }
 
 
@@ -1498,6 +1557,43 @@ validateFeeProviderForm maybeWallet feeProviderForm =
 
 
 
+-- Build Tx Step
+
+
+type alias TxRequirements =
+    { voter : VoterWitness
+    , actionId : ActionId
+    , rationaleAnchor : Anchor
+    , localStateUtxos : Utxo.RefDict Output
+    , feeProviderAddress : Address
+    , costModels : CostModels
+    }
+
+
+allPrepSteps : Maybe CostModels -> Model -> Result String TxRequirements
+allPrepSteps maybeCostModels m =
+    case ( maybeCostModels, ( m.voterStep, m.pickProposalStep ), ( m.permanentStorageStep, m.feeProviderStep ) ) of
+        ( Just costModels, ( Done voter, Done p ), ( Done s, Done f ) ) ->
+            Ok
+                { voter = voter
+                , actionId = p.id
+                , rationaleAnchor =
+                    { url = "ipfs://" ++ s.jsonFile.hash
+                    , dataHash = Bytes.fromHexUnchecked s.jsonFile.hash
+                    }
+                , localStateUtxos = f.utxos
+                , feeProviderAddress = f.address
+                , costModels = costModels
+                }
+
+        ( Nothing, _, _ ) ->
+            Err "Somehow cost models are missing, please report this issue"
+
+        _ ->
+            Err "Incomplete steps before Tx building"
+
+
+
 -- ###################################################################
 -- VIEW
 -- ###################################################################
@@ -1508,6 +1604,7 @@ type alias ViewContext msg =
     , walletChangeAddress : Maybe Address
     , proposals : WebData (Dict String ActiveProposal)
     , jsonLdContexts : JsonLdContexts
+    , costModels : Maybe CostModels
     }
 
 
@@ -1527,7 +1624,7 @@ view ctx model =
         , Html.hr [] []
         , viewFeeProviderStep ctx model.feeProviderStep
         , Html.hr [] []
-        , viewBuildTxStep ctx model.buildTxStep
+        , viewBuildTxStep ctx model
         , Html.hr [] []
         , Html.p [] [ text "Built with <3 by the CF, using elm-cardano" ]
         ]
@@ -1539,7 +1636,7 @@ view ctx model =
 --
 
 
-viewVoterIdentificationStep : ViewContext msg -> Step VoterPreparationForm {} VoterIdentified -> Html msg
+viewVoterIdentificationStep : ViewContext msg -> Step VoterPreparationForm {} VoterWitness -> Html msg
 viewVoterIdentificationStep ctx step =
     case step of
         Preparing form ->
@@ -1667,19 +1764,19 @@ textField label value toMsg =
         ]
 
 
-viewIdentifiedVoter : VoterIdentified -> Html Msg
-viewIdentifiedVoter { voterType, voterCred } =
+viewIdentifiedVoter : VoterWitness -> Html Msg
+viewIdentifiedVoter voter =
     let
-        voterTypeText =
-            case voterType of
-                CcVoter ->
-                    "Constitutional Committee Voter"
+        ( voterTypeText, voterCred ) =
+            case voter of
+                WithCommitteeHotCred cred ->
+                    ( "Constitutional Committee Voter", cred )
 
-                DrepVoter ->
-                    "DRep Voter"
+                WithDrepCred cred ->
+                    ( "DRep Voter", cred )
 
-                SpoVoter ->
-                    "SPO Voter"
+                WithPoolCred hash ->
+                    ( "SPO Voter", WithKey hash )
     in
     div []
         [ Html.p [] [ text voterTypeText ]
@@ -2559,6 +2656,44 @@ viewFeeProviderOption feeProviderForm label isSelected =
 --
 
 
-viewBuildTxStep : ViewContext msg -> Step {} {} Transaction -> Html msg
-viewBuildTxStep _ _ =
-    text "TODO viewBuildTxStep"
+viewBuildTxStep : ViewContext msg -> Model -> Html msg
+viewBuildTxStep ctx model =
+    case ( allPrepSteps ctx.costModels model, model.buildTxStep ) of
+        ( Err _, _ ) ->
+            div []
+                [ Html.h3 [] [ text "Tx Building" ]
+                , Html.p [] [ text "Complete all previous steps first." ]
+                ]
+
+        ( Ok _, Preparing { error } ) ->
+            div []
+                [ Html.h3 [] [ text "Tx Building" ]
+                , Html.p []
+                    [ button [ onClick <| ctx.wrapMsg <| BuildTxButtonClicked Gov.VoteYes ] [ text "Vote YES" ]
+                    , text " "
+                    , button [ onClick <| ctx.wrapMsg <| BuildTxButtonClicked Gov.VoteNo ] [ text "Vote NO" ]
+                    , text " "
+                    , button [ onClick <| ctx.wrapMsg <| BuildTxButtonClicked Gov.VoteAbstain ] [ text "Vote ABSTAIN" ]
+                    ]
+                , case error of
+                    Nothing ->
+                        text ""
+
+                    Just err ->
+                        Html.p []
+                            [ text "Error:"
+                            , Html.pre [] [ text err ]
+                            ]
+                ]
+
+        ( Ok _, Validating _ _ ) ->
+            div []
+                [ Html.h3 [] [ text "Tx Building" ]
+                , Html.p [] [ text "validating information ..." ]
+                ]
+
+        ( Ok _, Done _ ) ->
+            div []
+                [ Html.h3 [] [ text "Tx Building" ]
+                , Html.p [] [ text "TODO: display tx and instructions" ]
+                ]

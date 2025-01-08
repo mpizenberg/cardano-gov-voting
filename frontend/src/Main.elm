@@ -230,12 +230,6 @@ update msg model =
                     )
 
         ( StartPreparation, { protocolParams } ) ->
-            -- ( { model
-            --     | errors = []
-            --     , page = PreparationPage Page.Preparation.init
-            --   }
-            -- , Cmd.none
-            -- )
             case protocolParams of
                 Just _ ->
                     ( { model
@@ -270,6 +264,14 @@ update msg model =
                             , feeProviderAskUtxosCmd = Cmd.none -- TODO
                             , jsonLdContexts = model.jsonLdContexts
                             , costModels = Maybe.map .costModels model.protocolParams
+                            , walletSignTx =
+                                \tx ->
+                                    case model.wallet of
+                                        Nothing ->
+                                            Cmd.none
+
+                                        Just wallet ->
+                                            toWallet (Cip30.encodeRequest (Cip30.signTx wallet { partialSign = True } tx))
                             }
                     in
                     Page.Preparation.update ctx pageMsg pageModel
@@ -333,6 +335,46 @@ handleWalletResponse response model =
             ( { model | walletUtxos = Just (Utxo.refDictFromList utxos) }
             , Cmd.none
             )
+
+        -- The wallet just signed a Tx
+        Cip30.ApiResponse _ (Cip30.SignedTx vkeyWitnesses) ->
+            case model.page of
+                -- If it was the Preparation page,
+                -- it means we are trying to sign and submit directly.
+                PreparationPage prepModel ->
+                    case ( Page.Preparation.addTxSignatures vkeyWitnesses prepModel, model.wallet ) of
+                        ( _, Nothing ) ->
+                            ( { model | errors = [ "Cannot submit a Tx without a connected wallet" ] }
+                            , Cmd.none
+                            )
+
+                        ( ( Just signedTx, updatedPrepModel ), Just wallet ) ->
+                            ( { model | page = PreparationPage updatedPrepModel }
+                            , toWallet (Cip30.encodeRequest (Cip30.submitTx wallet signedTx))
+                            )
+
+                        ( ( Nothing, updatedPrepModel ), _ ) ->
+                            ( { model | page = PreparationPage updatedPrepModel }
+                            , Cmd.none
+                            )
+
+                -- TODO
+                _ ->
+                    Debug.todo "Handle signed Tx in other pages"
+
+        -- The wallet just submitted a Tx
+        Cip30.ApiResponse _ (Cip30.SubmittedTx txId) ->
+            case model.page of
+                -- If it was the Preparation page,
+                -- it means we are trying to sign and submit directly.
+                PreparationPage prepModel ->
+                    ( { model | page = PreparationPage <| Page.Preparation.recordSubmittedTx txId prepModel }
+                    , Cmd.none
+                    )
+
+                -- TODO
+                _ ->
+                    Debug.todo "Handle submitted Tx in other pages"
 
         -- TODO
         Cip30.ApiResponse _ _ ->

@@ -1,4 +1,4 @@
-module Page.Preparation exposing (ActiveProposal, JsonLdContexts, Model, Msg, init, update, view)
+module Page.Preparation exposing (ActiveProposal, JsonLdContexts, Model, Msg, addTxSignatures, init, recordSubmittedTx, update, view)
 
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
@@ -7,10 +7,10 @@ import Cardano.Address as Address exposing (Address(..), Credential(..), Credent
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
 import Cardano.Gov as Gov exposing (ActionId, Anchor, CostModels, Vote)
-import Cardano.Transaction as Transaction exposing (Transaction)
+import Cardano.Transaction as Transaction exposing (Transaction, VKeyWitness)
 import Cardano.TxExamples exposing (prettyTx)
 import Cardano.Uplc as Uplc
-import Cardano.Utxo as Utxo exposing (Output)
+import Cardano.Utxo as Utxo exposing (Output, TransactionId)
 import Cbor.Encode
 import Dict exposing (Dict)
 import Dict.Any
@@ -47,6 +47,7 @@ type alias Model =
     , permanentStorageStep : Step StorageForm {} Storage
     , feeProviderStep : Step FeeProviderForm FeeProviderTemp FeeProvider
     , buildTxStep : Step BuildTxPrep {} Transaction
+    , signTxStep : Step {} SigningTx SignedTx
     }
 
 
@@ -65,6 +66,7 @@ init =
     , permanentStorageStep = Preparing initStorageForm
     , feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing })
     , buildTxStep = Preparing { error = Nothing }
+    , signTxStep = Preparing {}
     }
 
 
@@ -332,6 +334,22 @@ type alias BuildTxPrep =
 
 
 
+-- Sign Tx Step
+
+
+type alias SigningTx =
+    { tx : Transaction
+    , vkeyWitnesses : List VKeyWitness
+    }
+
+
+type alias SignedTx =
+    { signedTx : Transaction
+    , txId : Bytes TransactionId
+    }
+
+
+
 -- ###################################################################
 -- UPDATE
 -- ###################################################################
@@ -391,6 +409,8 @@ type Msg
       -- Build Tx Step
     | BuildTxButtonClicked Vote
     | ChangeVoteButtonClicked
+      -- Sign Tx Step
+    | SignTxButtonClicked Transaction
 
 
 type alias UpdateContext msg =
@@ -400,6 +420,7 @@ type alias UpdateContext msg =
     , feeProviderAskUtxosCmd : Cmd msg
     , jsonLdContexts : JsonLdContexts
     , costModels : Maybe CostModels
+    , walletSignTx : Transaction -> Cmd msg
     }
 
 
@@ -489,6 +510,7 @@ update ctx msg model =
                       -- |> resetStorage
                       -- |> resetFeeProvider
                       -- |> resetTxBuilding
+                      -- |> resetTxSigning
                     , Cmd.none
                     )
 
@@ -824,6 +846,11 @@ update ctx msg model =
         ChangeVoteButtonClicked ->
             ( { model | buildTxStep = Preparing { error = Nothing } }
             , Cmd.none
+            )
+
+        SignTxButtonClicked tx ->
+            ( { model | signTxStep = Validating {} { tx = tx, vkeyWitnesses = [] } }
+            , ctx.walletSignTx tx
             )
 
 
@@ -1612,6 +1639,38 @@ allPrepSteps maybeCostModels m =
 
 
 
+-- Sign Tx step
+
+
+addTxSignatures : List VKeyWitness -> Model -> ( Maybe Transaction, Model )
+addTxSignatures vkeyWitnesses model =
+    case model.signTxStep of
+        Validating _ { tx } ->
+            let
+                signedTx =
+                    Transaction.updateSignatures (\_ -> Just vkeyWitnesses) tx
+            in
+            ( Just signedTx
+            , { model | signTxStep = Validating {} { tx = signedTx, vkeyWitnesses = vkeyWitnesses } }
+            )
+
+        _ ->
+            -- TODO: better handle these cases
+            ( Nothing, model )
+
+
+recordSubmittedTx : Bytes TransactionId -> Model -> Model
+recordSubmittedTx txId model =
+    case model.signTxStep of
+        Validating _ { tx } ->
+            { model | signTxStep = Done { signedTx = tx, txId = txId } }
+
+        _ ->
+            -- TODO: better handle these cases
+            model
+
+
+
 -- ###################################################################
 -- VIEW
 -- ###################################################################
@@ -1643,6 +1702,8 @@ view ctx model =
         , viewFeeProviderStep ctx model.feeProviderStep
         , Html.hr [] []
         , viewBuildTxStep ctx model
+        , Html.hr [] []
+        , viewSignTxStep ctx model.buildTxStep model.signTxStep
         , Html.hr [] []
         , Html.p [] [ text "Built with <3 by the CF, using elm-cardano" ]
         ]
@@ -1856,7 +1917,7 @@ viewProposalSelectionStep ctx model =
                 [ Html.h3 [] [ text "Pick a Proposal" ]
                 , Html.p []
                     [ text "Picked: "
-                    , cardanoScanLink id
+                    , cardanoScanActionLink id
                     , text <| ", type: " ++ actionType
                     , text ", title: "
                     , text <|
@@ -1882,7 +1943,7 @@ viewActiveProposal { id, actionType, metadata } =
     Html.p []
         [ button [ onClick (PickProposalButtonClicked <| Gov.actionIdToString id) ] [ text "Pick this proposal" ]
         , text " "
-        , cardanoScanLink id
+        , cardanoScanActionLink id
         , text <| ", type: " ++ actionType
         , text ", title: "
         , text <|
@@ -1901,8 +1962,18 @@ viewActiveProposal { id, actionType, metadata } =
         ]
 
 
-cardanoScanLink : ActionId -> Html msg
-cardanoScanLink id =
+cardanoScanTxLink : Bytes TransactionId -> List (Html msg) -> Html msg
+cardanoScanTxLink id html =
+    Html.a
+        [ HA.href <| "https://preview.cardanoscan.io/transaction/" ++ Bytes.toHex id
+        , HA.target "_blank"
+        , HA.rel "noopener noreferrer"
+        ]
+        html
+
+
+cardanoScanActionLink : ActionId -> Html msg
+cardanoScanActionLink id =
     Html.a
         [ HA.href <|
             "https://preview.cardanoscan.io/govAction/"
@@ -2717,6 +2788,28 @@ viewBuildTxStep ctx model =
             let
                 txWithoutSignatures =
                     Transaction.updateSignatures (always Nothing) tx
+            in
+            div []
+                [ Html.h3 [] [ text "Tx Building" ]
+                , Html.p [] [ text "The generated Tx (₳ displayed as lovelaces) :" ]
+                , Html.p [] [ Html.pre [] [ text <| prettyTx txWithoutSignatures ] ]
+                , Html.p [] [ button [ onClick <| ctx.wrapMsg <| ChangeVoteButtonClicked ] [ text "Change vote" ] ]
+                ]
+
+
+
+--
+-- Tx Signing Step
+--
+
+
+viewSignTxStep : ViewContext msg -> Step BuildTxPrep {} Transaction -> Step {} SigningTx SignedTx -> Html msg
+viewSignTxStep ctx buildTxStep signTxStep =
+    case ( buildTxStep, signTxStep ) of
+        ( Done tx, Preparing _ ) ->
+            let
+                txWithoutSignatures =
+                    Transaction.updateSignatures (always Nothing) tx
 
                 -- The placeholder vkey witnesses (to compute fees) should start with the 28 bytes
                 -- of the expected public key hashes.
@@ -2727,19 +2820,45 @@ viewBuildTxStep ctx model =
                         |> List.map (\{ vkey } -> Bytes.toHex vkey |> String.slice 0 (2 * 28))
             in
             div []
-                [ Html.h3 [] [ text "Tx Building" ]
-                , Html.p [] [ text "The generated Tx (₳ displayed as lovelaces) :" ]
-                , Html.p [] [ Html.pre [] [ text <| prettyTx txWithoutSignatures ] ]
-                , Html.p [] [ button [ onClick <| ctx.wrapMsg <| ChangeVoteButtonClicked ] [ text "Change vote" ] ]
+                [ Html.h3 [] [ text "Tx Signing" ]
                 , Html.p [] [ text "Expecting signatures for the following public key hashes:" ]
-                , Html.ul [] (List.map (\hash -> Html.li [] [ text hash ]) expectedSignatures)
+                , Html.ul [] (List.map (\hash -> Html.li [] [ Html.pre [] [ text hash ] ]) expectedSignatures)
                 , if ctx.walletChangeAddress == Nothing then
                     text ""
 
                   else
-                    Html.p []
-                        [ text "If these keys are all maintained by the connected wallet,"
-                        , text " you can try signing and submitting here directly."
-                        , text "TODO: add a TxSigning step which either sign here or redirect to a dedicated page."
+                    Html.div []
+                        [ Html.p []
+                            [ text "If these keys are all maintained by the connected wallet,"
+                            , text " you can try signing and submitting here directly."
+                            ]
+                        , Html.p [] [ button [ onClick <| ctx.wrapMsg <| SignTxButtonClicked txWithoutSignatures ] [ text "Sign Tx" ] ]
                         ]
+                , Html.p [] [ text "TODO: link to switch to the dedicated Tx signing page" ]
+                ]
+
+        ( Done _, Validating _ { vkeyWitnesses } ) ->
+            div []
+                [ Html.h3 [] [ text "Tx Signing" ]
+                , if List.isEmpty vkeyWitnesses then
+                    Html.p [] [ text "Signing Tx ..." ]
+
+                  else
+                    Html.p [] [ text "Submitting Tx ..." ]
+                ]
+
+        ( Done _, Done { txId } ) ->
+            div []
+                [ Html.h3 [] [ text "Tx Signed" ]
+                , Html.p []
+                    [ text <| "Tx ID: "
+                    , cardanoScanTxLink txId [ text <| Bytes.toHex txId ]
+                    ]
+                , Html.p [] [ text "The link to the explorer should show the Tx as soon as it picks it up onchain. It might take a minute." ]
+                ]
+
+        _ ->
+            div []
+                [ Html.h3 [] [ text "Tx Signing" ]
+                , Html.p [] [ text "Please complete the Tx building step first." ]
                 ]

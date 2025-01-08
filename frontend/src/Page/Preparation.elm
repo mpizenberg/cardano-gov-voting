@@ -7,7 +7,8 @@ import Cardano.Address as Address exposing (Address(..), Credential(..), Credent
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
 import Cardano.Gov as Gov exposing (ActionId, Anchor, CostModels, Vote)
-import Cardano.Transaction exposing (Transaction)
+import Cardano.Transaction as Transaction exposing (Transaction)
+import Cardano.TxExamples exposing (prettyTx)
 import Cardano.Uplc as Uplc
 import Cardano.Utxo as Utxo exposing (Output)
 import Cbor.Encode
@@ -389,6 +390,7 @@ type Msg
     | ChangeFeeProviderButtonClicked
       -- Build Tx Step
     | BuildTxButtonClicked Vote
+    | ChangeVoteButtonClicked
 
 
 type alias UpdateContext msg =
@@ -480,6 +482,13 @@ update ctx msg model =
                                     ( SpoVoter, StakeKeyVoter (Bytes.toHex credHash) )
                     in
                     ( { model | voterStep = Preparing { voterType = voterType, voterCred = voterCredForm, error = Nothing } }
+                      -- TODO: also reset all dependents steps
+                      -- |> resetProposal
+                      -- |> resetRationaleCreation
+                      -- |> resetRationaleSignature
+                      -- |> resetStorage
+                      -- |> resetFeeProvider
+                      -- |> resetTxBuilding
                     , Cmd.none
                     )
 
@@ -811,6 +820,11 @@ update ctx msg model =
                             ( { model | buildTxStep = Done tx }
                             , Cmd.none
                             )
+
+        ChangeVoteButtonClicked ->
+            ( { model | buildTxStep = Preparing { error = Nothing } }
+            , Cmd.none
+            )
 
 
 
@@ -1666,6 +1680,7 @@ viewVoterIdentificationStep ctx step =
             div []
                 [ Html.h3 [] [ text "Voter Identified" ]
                 , Html.map ctx.wrapMsg <| viewIdentifiedVoter voter
+                , Html.p [] [ text "TODO: display voting power" ]
                 ]
 
 
@@ -1690,7 +1705,7 @@ viewVoterForm walletChangeAddress { voterType, voterCred } =
                         [ div []
                             [ viewCredTypeOption (StakeKeyVoter "") "Stake Key Voter" True
                             , textField " -- Stake key hash (or stake address)" key (\s -> VoterCredentialUpdated (StakeKeyVoter s))
-                            , case Maybe.andThen Address.extractPubKeyHash walletChangeAddress of
+                            , case Maybe.andThen Address.extractStakeKeyHash walletChangeAddress of
                                 Just cred ->
                                     button [ onClick <| VoterCredentialUpdated (StakeKeyVoter <| Bytes.toHex cred) ] [ text "<- use wallet stake key" ]
 
@@ -2698,8 +2713,33 @@ viewBuildTxStep ctx model =
                 , Html.p [] [ text "validating information ..." ]
                 ]
 
-        ( Ok _, Done _ ) ->
+        ( Ok _, Done tx ) ->
+            let
+                txWithoutSignatures =
+                    Transaction.updateSignatures (always Nothing) tx
+
+                -- The placeholder vkey witnesses (to compute fees) should start with the 28 bytes
+                -- of the expected public key hashes.
+                -- Except in the very unlikely case where the hash looks like ascii (char < 128)
+                -- which is a 1/2^28 probability.
+                expectedSignatures =
+                    Maybe.withDefault [] tx.witnessSet.vkeywitness
+                        |> List.map (\{ vkey } -> Bytes.toHex vkey |> String.slice 0 (2 * 28))
+            in
             div []
                 [ Html.h3 [] [ text "Tx Building" ]
-                , Html.p [] [ text "TODO: display tx and instructions" ]
+                , Html.p [] [ text "The generated Tx (₳ displayed as lovelaces) :" ]
+                , Html.p [] [ Html.pre [] [ text <| prettyTx txWithoutSignatures ] ]
+                , Html.p [] [ button [ onClick <| ctx.wrapMsg <| ChangeVoteButtonClicked ] [ text "Change vote" ] ]
+                , Html.p [] [ text "Expecting signatures for the following public key hashes:" ]
+                , Html.ul [] (List.map (\hash -> Html.li [] [ text hash ]) expectedSignatures)
+                , if ctx.walletChangeAddress == Nothing then
+                    text ""
+
+                  else
+                    Html.p []
+                        [ text "If these keys are all maintained by the connected wallet,"
+                        , text " you can try signing and submitting here directly."
+                        , text "TODO: add a TxSigning step which either sign here or redirect to a dedicated page."
+                        ]
                 ]

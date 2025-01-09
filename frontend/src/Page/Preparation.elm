@@ -1464,15 +1464,15 @@ validateIpfsForm form =
 
         -- Check that headers look valid
         -- There are many rules, but will just check they aren’t empty
-        nonEmptyHeadersResult =
-            if List.any (\( f, _ ) -> String.isEmpty f) form.headers then
+        nonEmptyHeadersResult headers =
+            if List.any (\( f, _ ) -> String.isEmpty f) headers then
                 Err "Empty header fields are forbidden."
 
             else
                 Ok ()
     in
     ipfsServerUrlSeemsLegit
-        |> Result.andThen (\_ -> nonEmptyHeadersResult)
+        |> Result.andThen (\_ -> nonEmptyHeadersResult form.headers)
 
 
 sendPinRequest : StorageForm -> RationaleSignature -> Cmd Msg

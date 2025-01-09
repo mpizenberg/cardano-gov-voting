@@ -24,6 +24,7 @@ import RemoteData exposing (WebData)
 import Url
 
 
+main : Program { url : String, jsonLdContexts : JsonLdContexts } Model Msg
 main =
     -- The main entry point of our app
     -- More info about that in the Browser package docs:
@@ -40,12 +41,6 @@ port toWallet : Value -> Cmd msg
 
 
 port fromWallet : (Value -> msg) -> Sub msg
-
-
-port toExternalApp : Value -> Cmd msg
-
-
-port fromExternalApp : (Value -> msg) -> Sub msg
 
 
 port onUrlChange : (String -> msg) -> Sub msg
@@ -539,7 +534,7 @@ viewContent : Model -> Html Msg
 viewContent model =
     case model.page of
         LandingPage ->
-            viewLandingPage model.walletsDiscovered
+            viewLandingPage
 
         PreparationPage prepModel ->
             Page.Preparation.view
@@ -562,8 +557,8 @@ viewContent model =
                 signingModel
 
 
-viewLandingPage : List WalletDescriptor -> Html Msg
-viewLandingPage wallets =
+viewLandingPage : Html Msg
+viewLandingPage =
     div []
         [ Html.h2 [] [ text "Welcome to the Voting App" ]
         , div [] [ link RoutePreparation [] [ text "Start Vote Preparation" ] ]

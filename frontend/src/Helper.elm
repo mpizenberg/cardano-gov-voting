@@ -1,6 +1,6 @@
-module Helper exposing (prettyAddr, shortenedBytes, shortenedHex)
+module Helper exposing (prettyAddr, shortenedHex)
 
-import Bytes.Comparable as Bytes exposing (Bytes)
+import Bytes.Comparable as Bytes
 import Cardano.Address as Address exposing (Address)
 
 
@@ -13,11 +13,6 @@ prettyAddr address =
     String.slice 0 8 addrHex
         ++ "..."
         ++ String.slice -8 (String.length addrHex) addrHex
-
-
-shortenedBytes : Int -> Bytes a -> String
-shortenedBytes width bytes =
-    shortenedHex width <| Bytes.toHex bytes
 
 
 shortenedHex : Int -> String -> String

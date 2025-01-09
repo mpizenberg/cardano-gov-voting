@@ -1,12 +1,12 @@
-module Page.Signing exposing (..)
+module Page.Signing exposing (LoadedTxModel, Model(..), Msg(..), UpdateContext, ViewContext, initialModel, update, view)
 
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (dummyBytes)
-import Cardano.Address exposing (Address, CredentialHash)
+import Cardano.Address exposing (CredentialHash)
 import Cardano.Cip30 as Cip30
-import Cardano.Transaction as Transaction exposing (Transaction, VKeyWitness)
+import Cardano.Transaction exposing (Transaction, VKeyWitness)
 import Cardano.TxExamples exposing (prettyTx)
-import Cardano.Utxo as Utxo exposing (Output, TransactionId)
+import Cardano.Utxo exposing (TransactionId)
 import Dict exposing (Dict)
 import Helper exposing (shortenedHex)
 import Html exposing (Html, div, text)

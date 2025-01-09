@@ -22,6 +22,7 @@
             "elm-toulouse/cbor": "4.0.1",
             "jxxcarlson/hex": "4.0.0",
             "krisajenkins/remotedata": "6.0.1",
+            "lydell/elm-app-url": "1.0.4",
             "turboMaCk/any-dict": "2.6.0"
         },
         "indirect": {

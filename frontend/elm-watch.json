@@ -2,7 +2,7 @@
   "postprocess": ["elm-cardano", "postprocess"],
   "targets": {
     "main": {
-      "inputs": ["src/Main.elm", "src/External.elm"],
+      "inputs": ["src/Main.elm"],
       "output": "./static/main.js"
     }
   }

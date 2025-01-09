@@ -1,5 +1,6 @@
 port module Main exposing (main)
 
+import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Address exposing (Address)
@@ -11,7 +12,7 @@ import Dict exposing (Dict)
 import Helper exposing (prettyAddr)
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA exposing (height, src)
-import Html.Events exposing (onClick)
+import Html.Events exposing (onClick, preventDefaultOn)
 import Http
 import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
@@ -19,6 +20,7 @@ import Natural exposing (Natural)
 import Page.Preparation exposing (ActiveProposal, JsonLdContexts)
 import Platform.Cmd as Cmd
 import RemoteData exposing (WebData)
+import Url
 
 
 main =
@@ -28,7 +30,7 @@ main =
     Browser.element
         { init = init
         , update = update
-        , subscriptions = \_ -> fromWallet WalletMsg
+        , subscriptions = \_ -> Sub.batch [ fromWallet WalletMsg, onUrlChange (locationHrefToRoute >> UrlChanged) ]
         , view = view
         }
 
@@ -45,28 +47,16 @@ port toExternalApp : Value -> Cmd msg
 port fromExternalApp : (Value -> msg) -> Sub msg
 
 
+port onUrlChange : (String -> msg) -> Sub msg
+
+
+port pushUrl : String -> Cmd msg
+
+
 
 -- #########################################################
 -- MODEL
 -- #########################################################
--- SigningModel
-
-
-type SigningModel
-    = SigningLandingPage { errors : String }
-    | SigningTx Transaction
-    | TxSigned Transaction
-
-
-
--- SubmissionModel
-
-
-type SubmissionModel
-    = SubmissionLandingPage
-    | TxToSubmitLoaded Transaction (List VKeyWitness)
-    | SubmittingTx Transaction
-    | VoteTxSubmitted { txId : Bytes TransactionId }
 
 
 type alias Model =
@@ -86,7 +76,12 @@ type Page
     = LandingPage
     | PreparationPage Page.Preparation.Model
     | SigningPage SigningModel
-    | SubmissionPage SubmissionModel
+
+
+type SigningModel
+    = SigningLandingPage { errors : String }
+    | SigningTx Transaction
+    | TxSigned Transaction
 
 
 type alias ProtocolParams =
@@ -169,7 +164,8 @@ proposalsDecoder =
 
 
 type Msg
-    = WalletMsg Value
+    = UrlChanged Route
+    | WalletMsg Value
     | ConnectButtonClicked { id : String }
     | DisconnectWalletButtonClicked
     | GotProtocolParams (Result Http.Error ProtocolParams)
@@ -179,9 +175,61 @@ type Msg
     | PreparationPageMsg Page.Preparation.Msg
 
 
+type Route
+    = RouteLanding
+    | RoutePreparation
+    | RouteSigning
+    | Route404
+
+
+link : msg -> List (Html.Attribute msg) -> List (Html msg) -> Html msg
+link href attrs children =
+    Html.a (preventDefaultOn "click" (JD.succeed ( href, True )) :: attrs) children
+
+
+locationHrefToRoute : String -> Route
+locationHrefToRoute locationHref =
+    case Url.fromString (Debug.log "loc" locationHref) |> Maybe.map AppUrl.fromUrl of
+        Nothing ->
+            Route404
+
+        Just { path, queryParameters, fragment } ->
+            case path of
+                [] ->
+                    RouteLanding
+
+                [ "page", "preparation" ] ->
+                    RoutePreparation
+
+                [ "page", "signing" ] ->
+                    RouteSigning
+
+                _ ->
+                    Route404
+
+
+routeToAppUrl : Route -> AppUrl
+routeToAppUrl route =
+    case route of
+        Route404 ->
+            AppUrl.fromPath [ "404" ]
+
+        RouteLanding ->
+            AppUrl.fromPath []
+
+        RoutePreparation ->
+            AppUrl.fromPath [ "page", "preparation" ]
+
+        RouteSigning ->
+            AppUrl.fromPath [ "page", "signing" ]
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
+        ( UrlChanged route, _ ) ->
+            handleUrlChange route model
+
         ( GotProtocolParams result, _ ) ->
             case result of
                 Ok params ->
@@ -209,20 +257,18 @@ update msg model =
                     )
 
         ( StartPreparation, { protocolParams } ) ->
-            case protocolParams of
-                Just _ ->
-                    ( { model
-                        | errors = []
-                        , page = PreparationPage Page.Preparation.init
-                        , proposals = RemoteData.Loading
-                      }
-                    , loadGovernanceProposals
-                    )
-
-                Nothing ->
-                    ( { model | errors = "Protocol parameters not loaded yet" :: model.errors }
-                    , Cmd.none
-                    )
+            ( { model
+                | errors = []
+                , page = PreparationPage Page.Preparation.init
+                , proposals = RemoteData.Loading
+              }
+            , Cmd.batch
+                [ loadGovernanceProposals
+                , routeToAppUrl RoutePreparation
+                    |> AppUrl.toString
+                    |> pushUrl
+                ]
+            )
 
         ( PreparationPageMsg pageMsg, { page } ) ->
             case page of
@@ -278,6 +324,38 @@ update msg model =
                       -- TODO: load proposals metadata
                     , Cmd.none
                     )
+
+
+handleUrlChange : Route -> Model -> ( Model, Cmd Msg )
+handleUrlChange route model =
+    case route of
+        Route404 ->
+            Debug.todo "Handle 404 page"
+
+        RouteLanding ->
+            ( { model
+                | errors = []
+                , page = LandingPage
+              }
+            , Cmd.none
+            )
+
+        RoutePreparation ->
+            ( { model
+                | errors = []
+                , page = PreparationPage Page.Preparation.init
+                , proposals = RemoteData.Loading
+              }
+            , loadGovernanceProposals
+            )
+
+        RouteSigning ->
+            ( { model
+                | errors = []
+                , page = SigningPage <| SigningLandingPage { errors = "" }
+              }
+            , Cmd.none
+            )
 
 
 handleWalletResponse : Cip30.Response -> Model -> ( Model, Cmd Msg )
@@ -454,9 +532,6 @@ viewContent model =
         SigningPage signingModel ->
             viewSigningPage signingModel
 
-        SubmissionPage submissionModel ->
-            viewSubmissionPage submissionModel
-
 
 viewLandingPage : List WalletDescriptor -> Html Msg
 viewLandingPage wallets =
@@ -477,15 +552,6 @@ viewLandingPage wallets =
 viewSigningPage : SigningModel -> Html Msg
 viewSigningPage signingModel =
     Debug.todo "viewSigningPage"
-
-
-
--- Submission Page
-
-
-viewSubmissionPage : SubmissionModel -> Html Msg
-viewSubmissionPage submissionModel =
-    Debug.todo "viewSubmissionPage"
 
 
 

@@ -90,23 +90,28 @@ type alias ProtocolParams =
     }
 
 
-init : { jsonLdContexts : JsonLdContexts } -> ( Model, Cmd Msg )
-init { jsonLdContexts } =
-    ( { page = LandingPage
-      , walletsDiscovered = []
-      , wallet = Nothing
-      , walletUtxos = Nothing
-      , walletChangeAddress = Nothing
-      , protocolParams = Nothing
-      , proposals = RemoteData.NotAsked
-      , jsonLdContexts = jsonLdContexts
-      , errors = []
-      }
-    , Cmd.batch
-        [ toWallet (Cip30.encodeRequest Cip30.discoverWallets)
-        , loadProtocolParams
-        ]
-    )
+init : { url : String, jsonLdContexts : JsonLdContexts } -> ( Model, Cmd Msg )
+init { url, jsonLdContexts } =
+    handleUrlChange (locationHrefToRoute url)
+        { page = LandingPage
+        , walletsDiscovered = []
+        , wallet = Nothing
+        , walletUtxos = Nothing
+        , walletChangeAddress = Nothing
+        , protocolParams = Nothing
+        , proposals = RemoteData.NotAsked
+        , jsonLdContexts = jsonLdContexts
+        , errors = []
+        }
+        |> (\( model, cmd ) ->
+                ( model
+                , Cmd.batch
+                    [ cmd
+                    , toWallet (Cip30.encodeRequest Cip30.discoverWallets)
+                    , loadProtocolParams
+                    ]
+                )
+           )
 
 
 loadProtocolParams : Cmd Msg
@@ -182,9 +187,14 @@ type Route
     | Route404
 
 
-link : msg -> List (Html.Attribute msg) -> List (Html msg) -> Html msg
-link href attrs children =
-    Html.a (preventDefaultOn "click" (JD.succeed ( href, True )) :: attrs) children
+link : Route -> List (Html.Attribute Msg) -> List (Html Msg) -> Html Msg
+link route attrs children =
+    Html.a
+        (preventDefaultOn "click" (JD.succeed ( UrlChanged route, True ))
+            :: HA.href (AppUrl.toString <| routeToAppUrl <| route)
+            :: attrs
+        )
+        children
 
 
 locationHrefToRoute : String -> Route
@@ -337,7 +347,7 @@ handleUrlChange route model =
                 | errors = []
                 , page = LandingPage
               }
-            , Cmd.none
+            , pushUrl <| AppUrl.toString <| routeToAppUrl route
             )
 
         RoutePreparation ->
@@ -346,7 +356,10 @@ handleUrlChange route model =
                 , page = PreparationPage Page.Preparation.init
                 , proposals = RemoteData.Loading
               }
-            , loadGovernanceProposals
+            , Cmd.batch
+                [ pushUrl <| AppUrl.toString <| routeToAppUrl route
+                , loadGovernanceProposals
+                ]
             )
 
         RouteSigning ->
@@ -354,7 +367,7 @@ handleUrlChange route model =
                 | errors = []
                 , page = SigningPage <| SigningLandingPage { errors = "" }
               }
-            , Cmd.none
+            , pushUrl <| AppUrl.toString <| routeToAppUrl route
             )
 
 
@@ -537,11 +550,7 @@ viewLandingPage : List WalletDescriptor -> Html Msg
 viewLandingPage wallets =
     div []
         [ Html.h2 [] [ text "Welcome to the Voting App" ]
-        , div []
-            [ button
-                [ onClick StartPreparation ]
-                [ text "Start Vote Preparation" ]
-            ]
+        , div [] [ link RoutePreparation [] [ text "Start Vote Preparation" ] ]
         ]
 
 

@@ -7,16 +7,18 @@
     <body>
         <div id="main-app"></div>
         <script type="module">
-            import * as ElmCardano from "./elm-cardano.js";
-            import { jsonLdContexts } from "./json-ld-contexts.js";
+            import * as ElmCardano from "/elm-cardano.js";
+            import { jsonLdContexts } from "/json-ld-contexts.js";
 
-            // Load both the Main.elm and External.elm files compiled into the main.js bundle
-            await ElmCardano.loadMain("./main.js");
+            // Load the Main.elm file compiled into the main.js bundle
+            await ElmCardano.loadMain("/main.js");
 
             // Initialize the main Elm app
+            const loc = window.location;
+            const url = loc.pathname + loc.search + loc.hash;
             var mainApp = Elm.Main.init({
                 node: document.getElementById("main-app"),
-                flags: { jsonLdContexts },
+                flags: { url: window.location.href, jsonLdContexts },
             });
             ElmCardano.init({
                 portFromElmToWallet: mainApp.ports.toWallet,

@@ -39,6 +39,10 @@ static_dir = Path("../frontend/static")
 async def read_root():
     return FileResponse(static_dir / "index.html")
 
+@app.get("/page/{full_path:path}", response_class=HTMLResponse)
+async def get_page(full_path: str):
+    return FileResponse(static_dir / "index.html")
+
 
 @app.post("/pretty-gov-pdf")
 async def create_pretty_pdf(data: dict = Body(...)):

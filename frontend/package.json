@@ -7,7 +7,8 @@
     "make": "elm-cardano make src/Main.elm --output static/main.js",
     "watch": "elm-watch hot",
     "lint": "elm-review --fix",
-    "docs": "npx elm-doc-preview --port 8911"
+    "format": "elm-format src/",
+    "docs": "elm-doc-preview --port 8911"
   },
   "keywords": [
     "Cardano"

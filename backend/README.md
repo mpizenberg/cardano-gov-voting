@@ -5,7 +5,7 @@ Minimalist server for Cardano governance uses
 First create and modify the `.env` file containing the IPFS node access config.
 
 ```
-IPFS_RPC_URL=ipfs-rpc.mycompany.org
+IPFS_RPC_URL=https://ipfs-rpc.mycompany.org/api/v0
 IPFS_RPC_USER=user
 IPFS_RPC_PASSWORD=password
 ```

@@ -13,6 +13,7 @@ Any elm enthousiast there will happily answer them.
 
 ```sh
 - elm-cardano/      # elm-cardano git submodule
+- review/           # elm-review linter configuration
 - src/              # source code for the elm app
 - static/index.html # entry page of the elm app
 - elm.json          # project config for the elm app
@@ -54,4 +55,27 @@ To access locally the documentation of all the elm code in this project, as well
 npx elm-doc-preview --port 8911
 # (DO THIS) Start documentation server with the "docs" npm script
 npm run docs
+```
+
+## Contributions
+
+All shapes of contributions are very welcome!
+Usually the best approach is to start by looking at or opening an issue on the GitHub repo.
+
+The Elm code is formatted using `elm-format`.
+
+```sh
+# (DON’T DO THIS) Format the src/ directory with elm-format
+npx elm-format src/
+# (DO THIS) Format the code with the "format" npm script
+npm run format
+```
+
+All the code is also statically analyzed ("linted") using `elm-review`.
+
+```sh
+# (DON’T DO THIS) Lint the code with elm-review
+npx elm-review --fix
+# (DO THIS) Use directly the "lint" npm script
+npm run lint
 ```

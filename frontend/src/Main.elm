@@ -2,12 +2,12 @@ port module Main exposing (main)
 
 import AppUrl exposing (AppUrl)
 import Browser
-import Bytes.Comparable as Bytes exposing (Bytes)
+import Bytes.Comparable as Bytes
 import Cardano.Address exposing (Address)
 import Cardano.Cip30 as Cip30 exposing (WalletDescriptor)
 import Cardano.Gov as Gov exposing (CostModels)
-import Cardano.Transaction exposing (Transaction, VKeyWitness)
-import Cardano.Utxo as Utxo exposing (Output, TransactionId)
+import Cardano.Transaction exposing (Transaction)
+import Cardano.Utxo as Utxo exposing (Output)
 import Dict exposing (Dict)
 import Helper exposing (prettyAddr)
 import Html exposing (Html, button, div, text)
@@ -175,7 +175,6 @@ type Msg
     | DisconnectWalletButtonClicked
     | GotProtocolParams (Result Http.Error ProtocolParams)
     | GotProposals (Result Http.Error (List Page.Preparation.ActiveProposal))
-    | StartPreparation
       -- Preparation page
     | PreparationPageMsg Page.Preparation.Msg
 
@@ -199,11 +198,11 @@ link route attrs children =
 
 locationHrefToRoute : String -> Route
 locationHrefToRoute locationHref =
-    case Url.fromString (Debug.log "loc" locationHref) |> Maybe.map AppUrl.fromUrl of
+    case Url.fromString locationHref |> Maybe.map AppUrl.fromUrl of
         Nothing ->
             Route404
 
-        Just { path, queryParameters, fragment } ->
+        Just { path } ->
             case path of
                 [] ->
                     RouteLanding
@@ -265,20 +264,6 @@ update msg model =
                     ( { model | errors = JD.errorToString decodingError :: model.errors }
                     , Cmd.none
                     )
-
-        ( StartPreparation, { protocolParams } ) ->
-            ( { model
-                | errors = []
-                , page = PreparationPage Page.Preparation.init
-                , proposals = RemoteData.Loading
-              }
-            , Cmd.batch
-                [ loadGovernanceProposals
-                , routeToAppUrl RoutePreparation
-                    |> AppUrl.toString
-                    |> pushUrl
-                ]
-            )
 
         ( PreparationPageMsg pageMsg, { page } ) ->
             case page of

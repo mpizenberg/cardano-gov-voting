@@ -1,28 +1,18 @@
 port module Main exposing (main)
 
-import Blake2b exposing (blake2b224)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano exposing (CertificateIntent(..), CredentialWitness(..), Fee(..), ScriptWitness(..), SpendSource(..), TxIntent(..), VoterWitness(..), WitnessSource(..), dummyBytes)
-import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash, NetworkId(..), StakeCredential(..))
+import Cardano.Address exposing (Address)
 import Cardano.Cip30 as Cip30 exposing (WalletDescriptor)
-import Cardano.CoinSelection as CoinSelection
-import Cardano.Data as Data
-import Cardano.Gov as Gov exposing (ActionId, CostModels, Drep(..), Vote(..), Voter)
-import Cardano.Script as Script exposing (NativeScript(..), PlutusVersion(..), ScriptCbor)
-import Cardano.Transaction as Transaction exposing (Transaction, VKeyWitness)
-import Cardano.Uplc as Uplc
-import Cardano.Utxo as Utxo exposing (DatumOption(..), Output, OutputReference, TransactionId)
-import Cardano.Value
-import Cbor.Encode
+import Cardano.Gov as Gov exposing (CostModels)
+import Cardano.Transaction exposing (Transaction, VKeyWitness)
+import Cardano.Utxo as Utxo exposing (Output, TransactionId)
 import Dict exposing (Dict)
 import Helper exposing (prettyAddr)
-import Hex.Convert
-import Html exposing (Html, button, div, text, wbr)
+import Html exposing (Html, button, div, text)
 import Html.Attributes as HA exposing (height, src)
 import Html.Events exposing (onClick)
 import Http
-import Integer
 import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
 import Natural exposing (Natural)
@@ -38,7 +28,7 @@ main =
     Browser.element
         { init = init
         , update = update
-        , subscriptions = \_ -> Sub.batch [ fromWallet WalletMsg ]
+        , subscriptions = \_ -> fromWallet WalletMsg
         , view = view
         }
 
@@ -170,17 +160,6 @@ proposalsDecoder =
                 )
                 (JD.at [ "action", "type" ] JD.string)
                 (JD.succeed RemoteData.Loading)
-
-
-
--- Helper
-
-
-encodeCborHex : Cbor.Encode.Encoder -> Value
-encodeCborHex cborEncoder =
-    Cbor.Encode.encode cborEncoder
-        |> Hex.Convert.toString
-        |> JE.string
 
 
 
@@ -407,33 +386,6 @@ protocolParamsDecoder =
         (JD.at [ "result", "plutusCostModels", "plutus:v2" ] <| JD.list JD.int)
         (JD.at [ "result", "plutusCostModels", "plutus:v3" ] <| JD.list JD.int)
         (JD.at [ "result", "delegateRepresentativeDeposit", "ada", "lovelace" ] <| JD.map Natural.fromSafeInt JD.int)
-
-
-stringToVote : String -> Vote
-stringToVote str =
-    -- Helper function to convert String to Vote
-    case str of
-        "yes" ->
-            VoteYes
-
-        "no" ->
-            VoteNo
-
-        _ ->
-            VoteAbstain
-
-
-voteToString : Vote -> String
-voteToString vote =
-    case vote of
-        VoteYes ->
-            "yes"
-
-        VoteNo ->
-            "no"
-
-        VoteAbstain ->
-            "abstain"
 
 
 

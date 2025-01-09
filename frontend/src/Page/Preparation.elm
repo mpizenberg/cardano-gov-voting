@@ -1,9 +1,9 @@
-module Page.Preparation exposing (ActiveProposal, JsonLdContexts, Model, Msg, addTxSignatures, init, recordSubmittedTx, update, view)
+module Page.Preparation exposing (ActiveProposal, AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, ProposalMetadata, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterCredForm, VoterPreparationForm, VoterType, addTxSignatures, init, recordSubmittedTx, update, view)
 
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano exposing (CredentialWitness(..), ScriptWitness(..), TxIntent(..), VoterWitness(..))
-import Cardano.Address as Address exposing (Address(..), Credential(..), CredentialHash)
+import Cardano exposing (CredentialWitness(..), ScriptWitness(..), VoterWitness(..))
+import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash)
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
 import Cardano.Gov as Gov exposing (ActionId, Anchor, CostModels, Vote)
@@ -24,7 +24,6 @@ import Http
 import Json.Decode as JD
 import Json.Encode as JE
 import List.Extra
-import Markdown.Block as Md
 import Markdown.Parser as Md
 import Markdown.Renderer as Md
 import RemoteData exposing (WebData)
@@ -1359,7 +1358,7 @@ validateAuthorsForm authors =
 
         -- Check that witnessAlgorithm are authorized by the CIP
         authorizedAlgorithms =
-            Set.fromList [ "ed25519" ]
+            Set.singleton "ed25519"
 
         checkWitnessAlgo algo =
             if Set.member algo authorizedAlgorithms then
@@ -2808,9 +2807,6 @@ viewSignTxStep ctx buildTxStep signTxStep =
     case ( buildTxStep, signTxStep ) of
         ( Done tx, Preparing _ ) ->
             let
-                txWithoutSignatures =
-                    Transaction.updateSignatures (always Nothing) tx
-
                 -- The placeholder vkey witnesses (to compute fees) should start with the 28 bytes
                 -- of the expected public key hashes.
                 -- Except in the very unlikely case where the hash looks like ascii (char < 128)
@@ -2827,6 +2823,10 @@ viewSignTxStep ctx buildTxStep signTxStep =
                     text ""
 
                   else
+                    let
+                        txWithoutSignatures =
+                            Transaction.updateSignatures (always Nothing) tx
+                    in
                     Html.div []
                         [ Html.p []
                             [ text "If these keys are all maintained by the connected wallet,"

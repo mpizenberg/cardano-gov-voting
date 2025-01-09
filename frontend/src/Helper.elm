@@ -1,4 +1,4 @@
-module Helper exposing (..)
+module Helper exposing (prettyAddr)
 
 import Bytes.Comparable as Bytes
 import Cardano.Address as Address exposing (Address)

@@ -66,7 +66,7 @@ type alias UpdateContext msg =
 
 
 update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg )
-update msg model =
+update _ _ =
     Debug.todo ""
 
 
@@ -83,7 +83,7 @@ type alias ViewContext msg =
 
 
 view : ViewContext msg -> Model -> Html msg
-view ctx model =
+view _ model =
     div []
         [ Html.h2 [] [ text "Signing the vote Tx" ]
         , Html.p []
@@ -94,20 +94,27 @@ view ctx model =
             MissingTx ->
                 Html.p [] [ text "TODO: button to load the Tx from a file" ]
 
-            LoadedTx { tx, txId, expectedSigners, vkeyWitnesses } ->
-                let
-                    _ =
-                        tx.body.votingProcedures
-
-                    -- ( proposal, vote ) =
-                    --     Debug.todo "extract proposal and vote from Tx"
-                in
+            LoadedTx { tx, expectedSigners, vkeyWitnesses } ->
+                -- let
+                --     ( proposal, vote ) =
+                --         Debug.todo "extract proposal and vote from Tx"
+                -- in
                 div []
-                    [ Html.p [] [ text <| "Tx ID: TODO compute Tx ID from Tx" ]
+                    [ Html.p [] [ text <| "Tx ID: TODO" ]
                     , Html.p [] [ Html.pre [] [ text <| prettyTx tx ] ]
                     , Html.h3 [] [ text <| "Expected Signatures" ]
                     , Html.div [] (viewExpectedSignatures expectedSigners vkeyWitnesses)
+                    , Html.p []
+                        [ text <| "Remark that at least one of these is to pay the Tx fees."
+                        , text <| " If you are paying the fees, or signing the vote with your wallet,"
+                        , text <| " make sure it’s connected and use the button below to sign."
+                        ]
                     , Html.p [] [ text <| "TODO: button to sign with connected wallet" ]
+                    , Html.p []
+                        [ text <| "If additional signatures are required, please ask the relevant parties"
+                        , text <| " to partially sign the transaction,"
+                        , text <| " and use the button below to load their signatures in the app."
+                        ]
                     , Html.p [] [ text <| "TODO: button to load the signed Tx from disk" ]
                     ]
         ]
@@ -121,7 +128,7 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
                 Just witness ->
                     Html.pre []
                         [ text <|
-                            "✅ "
+                            "✅ vkey hash: "
                                 ++ shortenedHex 8 hash
                                 ++ " { vkey: "
                                 ++ shortenedHex 8 (Bytes.toHex witness.vkey)
@@ -131,7 +138,7 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
                         ]
 
                 Nothing ->
-                    Html.pre [] [ text <| "[_] " ++ shortenedHex 8 hash ]
+                    Html.pre [] [ text <| "[_] vkey hash: " ++ shortenedHex 8 hash ]
     in
     Dict.keys expectedSigners
         |> List.map viewExpectedSigner

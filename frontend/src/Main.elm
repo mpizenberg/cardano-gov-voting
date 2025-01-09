@@ -6,7 +6,7 @@ import Bytes.Comparable as Bytes
 import Cardano.Address exposing (Address)
 import Cardano.Cip30 as Cip30 exposing (WalletDescriptor)
 import Cardano.Gov as Gov exposing (CostModels)
-import Cardano.Transaction exposing (Transaction)
+import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.Utxo as Utxo exposing (Output)
 import Dict exposing (Dict)
 import Helper exposing (prettyAddr)
@@ -18,6 +18,7 @@ import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
 import Natural exposing (Natural)
 import Page.Preparation exposing (ActiveProposal, JsonLdContexts)
+import Page.Signing
 import Platform.Cmd as Cmd
 import RemoteData exposing (WebData)
 import Url
@@ -75,13 +76,7 @@ type alias Model =
 type Page
     = LandingPage
     | PreparationPage Page.Preparation.Model
-    | SigningPage SigningModel
-
-
-type SigningModel
-    = SigningLandingPage { errors : String }
-    | SigningTx Transaction
-    | TxSigned Transaction
+    | SigningPage Page.Signing.Model
 
 
 type alias ProtocolParams =
@@ -177,12 +172,14 @@ type Msg
     | GotProposals (Result Http.Error (List Page.Preparation.ActiveProposal))
       -- Preparation page
     | PreparationPageMsg Page.Preparation.Msg
+      -- Signing page
+    | SigningPageMsg Page.Signing.Msg
 
 
 type Route
     = RouteLanding
     | RoutePreparation
-    | RouteSigning
+    | RouteSigning { expectedSigners : List String, tx : Maybe Transaction }
     | Route404
 
 
@@ -202,7 +199,7 @@ locationHrefToRoute locationHref =
         Nothing ->
             Route404
 
-        Just { path } ->
+        Just { path, queryParameters, fragment } ->
             case path of
                 [] ->
                     RouteLanding
@@ -212,6 +209,13 @@ locationHrefToRoute locationHref =
 
                 [ "page", "signing" ] ->
                     RouteSigning
+                        { expectedSigners =
+                            Dict.get "signer" queryParameters
+                                |> Maybe.withDefault []
+                        , tx =
+                            Maybe.andThen Bytes.fromHex fragment
+                                |> Maybe.andThen Transaction.deserialize
+                        }
 
                 _ ->
                     Route404
@@ -229,8 +233,11 @@ routeToAppUrl route =
         RoutePreparation ->
             AppUrl.fromPath [ "page", "preparation" ]
 
-        RouteSigning ->
-            AppUrl.fromPath [ "page", "signing" ]
+        RouteSigning { expectedSigners, tx } ->
+            { path = [ "page", "signing" ]
+            , queryParameters = Dict.singleton "signer" expectedSigners
+            , fragment = Maybe.map (Bytes.toHex << Transaction.serialize) tx
+            }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -300,6 +307,21 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        ( SigningPageMsg pageMsg, { page } ) ->
+            case page of
+                SigningPage pageModel ->
+                    let
+                        ctx =
+                            { wrapMsg = SigningPageMsg
+                            , wallet = model.wallet
+                            }
+                    in
+                    Page.Signing.update ctx pageMsg pageModel
+                        |> Tuple.mapFirst (\newPageModel -> { model | page = SigningPage newPageModel })
+
+                _ ->
+                    ( model, Cmd.none )
+
         -- Result Http.Error (List Page.Preparation.ActiveProposal)
         ( GotProposals result, _ ) ->
             case result of
@@ -347,10 +369,10 @@ handleUrlChange route model =
                 ]
             )
 
-        RouteSigning ->
+        RouteSigning { expectedSigners, tx } ->
             ( { model
                 | errors = []
-                , page = SigningPage <| SigningLandingPage { errors = "" }
+                , page = SigningPage <| Page.Signing.initialModel expectedSigners tx
               }
             , pushUrl <| AppUrl.toString <| routeToAppUrl route
             )
@@ -476,6 +498,8 @@ view model =
         [ viewHeader model
         , viewContent model
         , viewErrors model.errors
+        , Html.hr [] []
+        , Html.p [] [ text "Built with <3 by the CF, using elm-cardano" ]
         ]
 
 
@@ -524,11 +548,18 @@ viewContent model =
                 , proposals = model.proposals
                 , jsonLdContexts = model.jsonLdContexts
                 , costModels = Maybe.map .costModels model.protocolParams
+                , signingLink =
+                    \tx expectedSigners ->
+                        link (RouteSigning { tx = Just tx, expectedSigners = expectedSigners }) []
                 }
                 prepModel
 
         SigningPage signingModel ->
-            viewSigningPage signingModel
+            Page.Signing.view
+                { wrapMsg = SigningPageMsg
+                , wallet = model.wallet
+                }
+                signingModel
 
 
 viewLandingPage : List WalletDescriptor -> Html Msg
@@ -537,15 +568,6 @@ viewLandingPage wallets =
         [ Html.h2 [] [ text "Welcome to the Voting App" ]
         , div [] [ link RoutePreparation [] [ text "Start Vote Preparation" ] ]
         ]
-
-
-
--- Signing Page
-
-
-viewSigningPage : SigningModel -> Html Msg
-viewSigningPage signingModel =
-    Debug.todo "viewSigningPage"
 
 
 

@@ -1681,6 +1681,7 @@ type alias ViewContext msg =
     , proposals : WebData (Dict String ActiveProposal)
     , jsonLdContexts : JsonLdContexts
     , costModels : Maybe CostModels
+    , signingLink : Transaction -> List String -> List (Html msg) -> Html msg
     }
 
 
@@ -1703,8 +1704,6 @@ view ctx model =
         , viewBuildTxStep ctx model
         , Html.hr [] []
         , viewSignTxStep ctx model.buildTxStep model.signTxStep
-        , Html.hr [] []
-        , Html.p [] [ text "Built with <3 by the CF, using elm-cardano" ]
         ]
 
 
@@ -2807,6 +2806,9 @@ viewSignTxStep ctx buildTxStep signTxStep =
     case ( buildTxStep, signTxStep ) of
         ( Done tx, Preparing _ ) ->
             let
+                txWithoutSignatures =
+                    Transaction.updateSignatures (always Nothing) tx
+
                 -- The placeholder vkey witnesses (to compute fees) should start with the 28 bytes
                 -- of the expected public key hashes.
                 -- Except in the very unlikely case where the hash looks like ascii (char < 128)
@@ -2823,10 +2825,6 @@ viewSignTxStep ctx buildTxStep signTxStep =
                     text ""
 
                   else
-                    let
-                        txWithoutSignatures =
-                            Transaction.updateSignatures (always Nothing) tx
-                    in
                     Html.div []
                         [ Html.p []
                             [ text "If these keys are all maintained by the connected wallet,"
@@ -2834,7 +2832,10 @@ viewSignTxStep ctx buildTxStep signTxStep =
                             ]
                         , Html.p [] [ button [ onClick <| ctx.wrapMsg <| SignTxButtonClicked txWithoutSignatures ] [ text "Sign Tx" ] ]
                         ]
-                , Html.p [] [ text "TODO: link to switch to the dedicated Tx signing page" ]
+                , Html.p []
+                    [ text "Finalize your voting transaction by signing and submitting it via the dedicated siging page: "
+                    , ctx.signingLink txWithoutSignatures expectedSignatures [ text "signing page" ]
+                    ]
                 ]
 
         ( Done _, Validating _ { vkeyWitnesses } ) ->

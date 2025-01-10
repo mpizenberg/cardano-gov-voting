@@ -2427,7 +2427,7 @@ viewRationaleSignatureForm jsonLdContexts ({ authors } as form) =
             (rationaleSignatureFromForm jsonLdContexts { form | authors = [] }).signedJson
     in
     div []
-        [ Html.p [] [ text "Here is the JSON-LD file generated from your rationale inputs." ]
+        [ Html.p [] [ text "Here is the JSON-LD rationale file generated from your rationale inputs." ]
         , Html.p []
             [ Html.a
                 [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode jsonRationale
@@ -2830,7 +2830,7 @@ viewSignTxStep ctx buildTxStep signTxStep =
                             [ text "If these keys are all maintained by the connected wallet,"
                             , text " you can try signing and submitting here directly."
                             ]
-                        , Html.p [] [ button [ onClick <| ctx.wrapMsg <| SignTxButtonClicked txWithoutSignatures ] [ text "Sign Tx" ] ]
+                        , Html.p [] [ button [ onClick <| ctx.wrapMsg <| SignTxButtonClicked txWithoutSignatures ] [ text "Sign and submit Tx" ] ]
                         ]
                 , Html.p []
                     [ text "Finalize your voting transaction by signing and submitting it via the dedicated siging page: "

@@ -26,3 +26,7 @@ Then simply open the app at http://localhost:8000
 Contributions are very welcomed, in many shapes, code or not code!
 Please follow contribution guidelines for each part (backend/frontend) that you are interested in contributing to.
 Usually, the best approach is to open an issue to start the discussion.
+
+There is also a "TODO" issue summarizing some of the things still to do,
+so go check it to see if something appeals to you:
+https://github.com/mpizenberg/cardano-gov-voting/issues/2

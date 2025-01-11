@@ -10,8 +10,6 @@ The signing stage is sufficiently independant that it should be possible to perf
 This way, we can easily envision a scenario where the vote Tx is prepared as a group.
 But then each individual party can sign the prepared vote with their own setup.
 
-In the following stage details, steps with a working POC are checked already.
-
 ## Preparing a vote Tx with rationale
 
 This stage requires the following steps:

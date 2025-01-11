@@ -1,6 +1,6 @@
 # Cardano Governance Voting Tool
 
-The goal of this project is to make Cardano Governance voting easy, both for SPOs, DReps and CC members.
+The goal of this project is to make Cardano Governance voting easy for SPOs, DReps and CC members.
 
 It should support both VKey and script voters, using any wallet (light, hard, cold, ...).
 It should help generating a vote rationale, in the correct JSON metadata format.

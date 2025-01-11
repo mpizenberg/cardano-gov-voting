@@ -77,5 +77,5 @@ All the code is also statically analyzed ("linted") using `elm-review`.
 # (DON’T DO THIS) Lint the code with elm-review
 npx elm-review --fix
 # (DO THIS) Use directly the "lint" npm script
-npm run lint
+npm run lint:fix
 ```

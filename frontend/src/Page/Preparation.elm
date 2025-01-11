@@ -2157,23 +2157,10 @@ viewInternalVoteForm { constitutional, unconstitutional, abstain, didNotVote } =
     div []
         [ Html.h4 [] [ text "Internal Vote" ]
         , Html.p [] [ text "If you vote as a group, you can report the group internal votes." ]
-        , viewNumberInput "Constitutional: " constitutional InternalConstitutionalVoteChange
-        , viewNumberInput "Unconstitutional: " unconstitutional InternalUnconstitutionalVoteChange
-        , viewNumberInput "Abstain: " abstain InternalAbstainVoteChange
-        , viewNumberInput "Did not vote: " didNotVote InternalDidNotVoteChange
-        ]
-
-
-viewNumberInput : String -> Int -> (String -> Msg) -> Html Msg
-viewNumberInput label n msgOnInput =
-    div []
-        [ text label
-        , Html.input
-            [ HA.type_ "number"
-            , HA.value (String.fromInt n)
-            , Html.Events.onInput msgOnInput
-            ]
-            []
+        , Helper.viewNumberInput "Constitutional: " constitutional InternalConstitutionalVoteChange
+        , Helper.viewNumberInput "Unconstitutional: " unconstitutional InternalUnconstitutionalVoteChange
+        , Helper.viewNumberInput "Abstain: " abstain InternalAbstainVoteChange
+        , Helper.viewNumberInput "Did not vote: " didNotVote InternalDidNotVoteChange
         ]
 
 

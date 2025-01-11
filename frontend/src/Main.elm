@@ -17,6 +17,7 @@ import Http
 import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
 import Natural exposing (Natural)
+import Page.MultisigRegistration
 import Page.Preparation exposing (ActiveProposal, JsonLdContexts)
 import Page.Signing
 import Platform.Cmd as Cmd
@@ -72,6 +73,7 @@ type Page
     = LandingPage
     | PreparationPage Page.Preparation.Model
     | SigningPage Page.Signing.Model
+    | MultisigRegistrationPage Page.MultisigRegistration.Model
 
 
 type alias ProtocolParams =
@@ -169,12 +171,15 @@ type Msg
     | PreparationPageMsg Page.Preparation.Msg
       -- Signing page
     | SigningPageMsg Page.Signing.Msg
+      -- Multisig DRep registration page
+    | MultisigPageMsg Page.MultisigRegistration.Msg
 
 
 type Route
     = RouteLanding
     | RoutePreparation
     | RouteSigning { expectedSigners : List String, tx : Maybe Transaction }
+    | RouteMultisigRegistration
     | Route404
 
 
@@ -212,6 +217,9 @@ locationHrefToRoute locationHref =
                                 |> Maybe.andThen Transaction.deserialize
                         }
 
+                [ "page", "registration" ] ->
+                    RouteMultisigRegistration
+
                 _ ->
                     Route404
 
@@ -233,6 +241,9 @@ routeToAppUrl route =
             , queryParameters = Dict.singleton "signer" expectedSigners
             , fragment = Maybe.map (Bytes.toHex << Transaction.serialize) tx
             }
+
+        RouteMultisigRegistration ->
+            AppUrl.fromPath [ "page", "registration" ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -317,6 +328,28 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        ( MultisigPageMsg pageMsg, { page } ) ->
+            case page of
+                MultisigRegistrationPage pageModel ->
+                    let
+                        ctx =
+                            { wrapMsg = MultisigPageMsg
+                            , wallet =
+                                case ( model.wallet, model.walletChangeAddress, model.walletUtxos ) of
+                                    ( Just wallet, Just address, Just utxos ) ->
+                                        Just { wallet = wallet, changeAddress = address, utxos = utxos }
+
+                                    _ ->
+                                        Nothing
+                            , costModels = Maybe.map .costModels model.protocolParams
+                            }
+                    in
+                    Page.MultisigRegistration.update ctx pageMsg pageModel
+                        |> Tuple.mapFirst (\newPageModel -> { model | page = MultisigRegistrationPage newPageModel })
+
+                _ ->
+                    ( model, Cmd.none )
+
         -- Result Http.Error (List Page.Preparation.ActiveProposal)
         ( GotProposals result, _ ) ->
             case result of
@@ -368,6 +401,14 @@ handleUrlChange route model =
             ( { model
                 | errors = []
                 , page = SigningPage <| Page.Signing.initialModel expectedSigners tx
+              }
+            , pushUrl <| AppUrl.toString <| routeToAppUrl route
+            )
+
+        RouteMultisigRegistration ->
+            ( { model
+                | errors = []
+                , page = MultisigRegistrationPage Page.MultisigRegistration.initialModel
               }
             , pushUrl <| AppUrl.toString <| routeToAppUrl route
             )
@@ -556,12 +597,24 @@ viewContent model =
                 }
                 signingModel
 
+        MultisigRegistrationPage pageModel ->
+            Page.MultisigRegistration.view
+                { wrapMsg = MultisigPageMsg
+                , wallet = model.wallet
+                , signingLink =
+                    \tx expectedSigners ->
+                        link (RouteSigning { tx = Just tx, expectedSigners = expectedSigners }) []
+                }
+                pageModel
+
 
 viewLandingPage : Html Msg
 viewLandingPage =
     div []
         [ Html.h2 [] [ text "Welcome to the Voting App" ]
-        , div [] [ link RoutePreparation [] [ text "Start Vote Preparation" ] ]
+        , Html.p [] [ link RoutePreparation [] [ text "Start vote preparation" ] ]
+        , Html.p [] [ link (RouteSigning { expectedSigners = [], tx = Nothing }) [] [ text "Sign an already prepared Tx" ] ]
+        , Html.p [] [ link RouteMultisigRegistration [] [ text "Register as a Multisig DRep" ] ]
         ]
 
 

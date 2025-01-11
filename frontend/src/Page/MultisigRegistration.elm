@@ -1,19 +1,18 @@
-module Page.MultisigRegistration exposing (Model, Msg(..), UpdateContext, ViewContext, initialModel, update, view)
+module Page.MultisigRegistration exposing (LoadedWallet, Model, Msg(..), MultisigSummary, UpdateContext, ViewContext, initialModel, update, view)
 
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano exposing (CertificateIntent(..), CredentialWitness(..), ScriptWitness(..), SpendSource(..), TxIntent(..), WitnessSource(..), dummyBytes)
-import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash, NetworkId(..))
+import Cardano exposing (CertificateIntent(..), CredentialWitness(..), ScriptWitness(..), SpendSource(..), TxIntent(..), WitnessSource(..))
+import Cardano.Address as Address exposing (Address, CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
-import Cardano.Gov as Gov exposing (CostModels)
+import Cardano.Gov exposing (CostModels)
 import Cardano.Script as Script
-import Cardano.Transaction as Transaction exposing (Transaction, VKeyWitness)
+import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.TxExamples exposing (prettyTx)
 import Cardano.Uplc as Uplc
-import Cardano.Utxo as Utxo exposing (Output, OutputReference, TransactionId)
+import Cardano.Utxo as Utxo exposing (Output, OutputReference)
 import Cardano.Value
-import Dict exposing (Dict)
-import Helper exposing (shortenedHex)
+import Helper
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onCheck, onClick)
@@ -63,8 +62,7 @@ initialModel =
 
 
 type Msg
-    = NoMsg
-    | MinCountChange String
+    = MinCountChange String
     | AddKeyButtonClicked
     | DeleteKeyButtonClicked Int
     | KeyHashChange Int String
@@ -90,9 +88,6 @@ type alias LoadedWallet =
 update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg )
 update ctx msg model =
     case msg of
-        NoMsg ->
-            ( model, Cmd.none )
-
         MinCountChange countAsString ->
             case String.toInt countAsString of
                 Just count ->
@@ -313,10 +308,6 @@ buildMultisigTx w costModels creds model =
 
 locateScriptRef : Bytes CredentialHash -> Transaction -> OutputReference
 locateScriptRef scriptHash tx =
-    let
-        outputs =
-            tx.body.outputs
-    in
     Debug.todo "compute TxId, find output index"
 
 
@@ -354,7 +345,7 @@ view ctx model =
             ( Nothing, _ ) ->
                 Html.p [] [ text "Tx to sign: waiting for you to build it first" ]
 
-            ( Just tx, Nothing ) ->
+            ( Just _, Nothing ) ->
                 Html.p [] [ text "Something went wrong. The Tx and its summary should both be something or nothing!" ]
 
             ( Just tx, Just summary ) ->

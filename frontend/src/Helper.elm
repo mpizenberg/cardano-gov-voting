@@ -2,7 +2,7 @@ module Helper exposing (prettyAddr, shortenedHex, viewNumberInput)
 
 import Bytes.Comparable as Bytes
 import Cardano.Address as Address exposing (Address)
-import Html exposing (Html, div, text)
+import Html exposing (Html, text)
 import Html.Attributes as HA
 import Html.Events
 

@@ -6,8 +6,10 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "make": "elm-cardano make src/Main.elm --output static/main.js",
     "watch": "elm-watch hot",
-    "lint": "elm-review --fix",
+    "lint": "elm-review",
+    "lint:fix": "elm-review --fix",
     "format": "elm-format src/",
+    "format:validate": "elm-format --validate src/",
     "docs": "elm-doc-preview --port 8911"
   },
   "keywords": [

@@ -26,13 +26,17 @@ jobs:
           key: elm-${{ hashFiles('frontend/elm.json') }}
 
       - name: Install dependencies
+        working-directory: frontend
         run: npm ci
 
       - name: Build project
+        working-directory: frontend
         run: npm run make
 
       - name: Check code formatting
+        working-directory: frontend
         run: npm run format:validate
 
       - name: List check
+        working-directory: frontend
         run: npm run lint

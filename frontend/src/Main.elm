@@ -161,7 +161,8 @@ proposalsDecoder =
 
 
 type Msg
-    = UrlChanged Route
+    = NoMsg
+    | UrlChanged Route
     | WalletMsg Value
     | ConnectButtonClicked { id : String }
     | DisconnectWalletButtonClicked
@@ -186,11 +187,29 @@ type Route
 link : Route -> List (Html.Attribute Msg) -> List (Html Msg) -> Html Msg
 link route attrs children =
     Html.a
-        (preventDefaultOn "click" (JD.succeed ( UrlChanged route, True ))
+        (preventDefaultOn "click" (linkClickDecoder route)
             :: HA.href (AppUrl.toString <| routeToAppUrl <| route)
             :: attrs
         )
         children
+
+
+linkClickDecoder : Route -> Decoder ( Msg, Bool )
+linkClickDecoder route =
+    -- Custom decoder on link clicks to not overwrite expected behaviors for click with modifiers.
+    -- For example, Ctrl+Click should open in a new tab, and Shift+Click in a new window.
+    JD.map4
+        (\ctrl meta shift wheel ->
+            if ctrl || meta || shift || wheel /= 0 then
+                ( NoMsg, False )
+
+            else
+                ( UrlChanged route, True )
+        )
+        (JD.field "ctrlKey" JD.bool)
+        (JD.field "metaKey" JD.bool)
+        (JD.field "shiftKey" JD.bool)
+        (JD.field "button" JD.int)
 
 
 locationHrefToRoute : String -> Route
@@ -249,6 +268,9 @@ routeToAppUrl route =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
+        ( NoMsg, _ ) ->
+            ( model, Cmd.none )
+
         ( UrlChanged route, _ ) ->
             handleUrlChange route model
 

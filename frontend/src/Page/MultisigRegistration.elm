@@ -1,17 +1,18 @@
-module Page.MultisigRegistration exposing (LoadedWallet, Model, Msg(..), MultisigSummary, UpdateContext, ViewContext, initialModel, update, view)
+module Page.MultisigRegistration exposing (LoadedWallet, Model, Msg(..), RegisterTxSummary, UnregisterTxSummary, UpdateContext, ViewContext, initialModel, update, view)
 
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CertificateIntent(..), CredentialWitness(..), ScriptWitness(..), SpendSource(..), TxIntent(..), WitnessSource(..))
-import Cardano.Address as Address exposing (Address, CredentialHash, NetworkId(..))
+import Cardano.Address as Address exposing (Address, Credential, CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
 import Cardano.Gov exposing (CostModels)
-import Cardano.Script as Script
+import Cardano.Script as Script exposing (NativeScript)
 import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.TxExamples exposing (prettyTx)
 import Cardano.Uplc as Uplc
 import Cardano.Utxo as Utxo exposing (Output, OutputReference)
 import Cardano.Value
+import Cbor.Encode
 import Helper
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
@@ -31,15 +32,23 @@ type alias Model =
     , hashes : List String
     , register : Bool
     , createOutputRef : Bool
-    , txWithFakeWitnesses : Maybe Transaction
-    , summary : Maybe MultisigSummary
+    , registerTxSummary : Maybe RegisterTxSummary
+    , unregisterTxSummary : Maybe UnregisterTxSummary
     , error : Maybe String
     }
 
 
-type alias MultisigSummary =
-    { scriptHash : Bytes CredentialHash
+type alias RegisterTxSummary =
+    { txWithFakeWitnesses : Transaction
+    , nativeScript : NativeScript
+    , scriptHash : Bytes CredentialHash
     , scriptRefInput : Maybe OutputReference
+    }
+
+
+type alias UnregisterTxSummary =
+    { txWithFakeWitnesses : Transaction
+    , scriptHash : Bytes CredentialHash
     }
 
 
@@ -49,8 +58,8 @@ initialModel =
     , hashes = []
     , register = True
     , createOutputRef = True
-    , txWithFakeWitnesses = Nothing
-    , summary = Nothing
+    , registerTxSummary = Nothing
+    , unregisterTxSummary = Nothing
     , error = Nothing
     }
 
@@ -68,7 +77,8 @@ type Msg
     | KeyHashChange Int String
     | ToggleRegister Bool
     | ToggleCreateOutputRef Bool
-    | BuildTxButtonClicked
+    | BuildRegistrationTxButtonClicked
+    | BuildUnregistrationTxButtonClicked
 
 
 type alias UpdateContext msg =
@@ -123,12 +133,15 @@ update ctx msg model =
             , Cmd.none
             )
 
-        BuildTxButtonClicked ->
-            validateFormAndBuildAndSubmitTx ctx model
+        BuildRegistrationTxButtonClicked ->
+            validateFormAndBuildRegister ctx model
+
+        BuildUnregistrationTxButtonClicked ->
+            validateFormAndBuildUnregister ctx model
 
 
-validateFormAndBuildAndSubmitTx : UpdateContext msg -> Model -> ( Model, Cmd msg )
-validateFormAndBuildAndSubmitTx ctx model =
+validateFormAndBuildRegister : UpdateContext msg -> Model -> ( Model, Cmd msg )
+validateFormAndBuildRegister ctx model =
     let
         keyCount =
             List.length model.hashes
@@ -142,25 +155,71 @@ validateFormAndBuildAndSubmitTx ctx model =
     else
         case ( validateKeyHashes model.hashes [], ctx.wallet, ctx.costModels ) of
             ( Ok credHashes, Just w, Just costModels ) ->
-                case buildMultisigTx w costModels credHashes model of
+                case buildRegisterTx w costModels credHashes model of
                     Err err ->
                         ( { model
-                            | txWithFakeWitnesses = Nothing
-                            , summary = Nothing
+                            | registerTxSummary = Nothing
                             , error = Just err
                           }
                         , Cmd.none
                         )
 
-                    Ok ( tx, scriptHash ) ->
+                    Ok ( tx, script, scriptHash ) ->
                         ( { model
-                            | txWithFakeWitnesses = Just tx
-                            , summary =
+                            | registerTxSummary =
                                 Just
-                                    { scriptHash = scriptHash
+                                    { txWithFakeWitnesses = tx
+                                    , nativeScript = script
+                                    , scriptHash = scriptHash
 
                                     -- , scriptRefInput = locateScriptRef scriptHash tx.body.outputs
                                     , scriptRefInput = Nothing
+                                    }
+                            , error = Nothing
+                          }
+                        , Cmd.none
+                        )
+
+            ( Err err, _, _ ) ->
+                ( { model | error = Just err }, Cmd.none )
+
+            ( Ok _, Nothing, _ ) ->
+                ( { model | error = Just "You need to connect a wallet to pay for the fees" }, Cmd.none )
+
+            ( Ok _, _, Nothing ) ->
+                ( { model | error = Just "Cost models are missing, something went wrong sorry" }, Cmd.none )
+
+
+validateFormAndBuildUnregister : UpdateContext msg -> Model -> ( Model, Cmd msg )
+validateFormAndBuildUnregister ctx model =
+    let
+        keyCount =
+            List.length model.hashes
+    in
+    if model.minCount < 0 then
+        ( { model | error = Just "The minimum number of required signatures must be >= 0" }, Cmd.none )
+
+    else if model.minCount > keyCount then
+        ( { model | error = Just <| "The minimum number of required signatures must be <= to the number of keys in the multisig: " ++ String.fromInt keyCount }, Cmd.none )
+
+    else
+        case ( validateKeyHashes model.hashes [], ctx.wallet, ctx.costModels ) of
+            ( Ok credHashes, Just w, Just costModels ) ->
+                case buildUnregisterTx w costModels credHashes model of
+                    Err err ->
+                        ( { model
+                            | unregisterTxSummary = Nothing
+                            , error = Just err
+                          }
+                        , Cmd.none
+                        )
+
+                    Ok ( tx, _, scriptHash ) ->
+                        ( { model
+                            | unregisterTxSummary =
+                                Just
+                                    { txWithFakeWitnesses = tx
+                                    , scriptHash = scriptHash
                                     }
                             , error = Nothing
                           }
@@ -197,9 +256,22 @@ validateKeyHashes hashes accum =
                 Err <| "A key hash must have 56 hex characters (28 bytes) and this one has " ++ String.fromInt (String.length str)
 
 
-buildMultisigTx : LoadedWallet -> CostModels -> List (Bytes CredentialHash) -> Model -> Result String ( Transaction, Bytes CredentialHash )
-buildMultisigTx w costModels creds model =
+type alias MultisigConfig =
+    { sortedCredentials : List (Bytes CredentialHash)
+    , minCount : Int
+    , nativeScript : NativeScript
+    , scriptHash : Bytes CredentialHash
+    , drepCred : Credential
+    }
+
+
+nativeMultisig : List (Bytes CredentialHash) -> Model -> MultisigConfig
+nativeMultisig unsortedCreds model =
     let
+        -- Sort the credentials to be deterministic, regardless of the keys orders
+        creds =
+            List.sortBy Bytes.toHex unsortedCreds
+
         credCount =
             List.length creds
 
@@ -221,6 +293,20 @@ buildMultisigTx w costModels creds model =
         -- Create DRep credential from the script hash
         drepCred =
             Address.ScriptHash scriptHash
+    in
+    { sortedCredentials = creds
+    , minCount = model.minCount
+    , nativeScript = multisigNativeScript
+    , scriptHash = scriptHash
+    , drepCred = drepCred
+    }
+
+
+buildRegisterTx : LoadedWallet -> CostModels -> List (Bytes CredentialHash) -> Model -> Result String ( Transaction, NativeScript, Bytes CredentialHash )
+buildRegisterTx w costModels unsortedCreds model =
+    let
+        { sortedCredentials, nativeScript, scriptHash, drepCred } =
+            nativeMultisig unsortedCreds model
 
         -- DRep deposit amount
         -- TODO: parameterize
@@ -234,8 +320,8 @@ buildMultisigTx w costModels creds model =
                     { drep =
                         WithScript scriptHash
                             (NativeWitness
-                                { script = WitnessValue multisigNativeScript
-                                , expectedSigners = creds
+                                { script = WitnessValue nativeScript
+                                , expectedSigners = sortedCredentials
                                 }
                             )
                     , deposit = depositAmount
@@ -256,7 +342,7 @@ buildMultisigTx w costModels creds model =
             -- Temporary 2 Ada output, but we optimize it right after
             , amount = Cardano.Value.onlyLovelace <| Natural.fromSafeInt 2000000
             , datumOption = Nothing
-            , referenceScript = Just (Script.Native multisigNativeScript)
+            , referenceScript = Just (Script.Native nativeScript)
             }
 
         -- Output with the multisig native script, with the minimum amount of Ada
@@ -303,7 +389,46 @@ buildMultisigTx w costModels creds model =
                 []
                 >> Result.mapError Debug.toString
             )
-        |> Result.map (\tx -> ( tx, scriptHash ))
+        |> Result.map (\tx -> ( tx, nativeScript, scriptHash ))
+
+
+buildUnregisterTx : LoadedWallet -> CostModels -> List (Bytes CredentialHash) -> Model -> Result String ( Transaction, NativeScript, Bytes CredentialHash )
+buildUnregisterTx w costModels unsortedCreds model =
+    let
+        { sortedCredentials, nativeScript, scriptHash } =
+            nativeMultisig unsortedCreds model
+
+        -- DRep deposit amount
+        -- TODO: parameterize
+        refundAmount =
+            Natural.fromSafeInt 500000000
+
+        -- Tx intent to unregister as a DRep
+        unregistrationIntent =
+            IssueCertificate <|
+                UnregisterDrep
+                    { drep =
+                        WithScript scriptHash
+                            (NativeWitness
+                                { script = WitnessValue nativeScript
+                                , expectedSigners = sortedCredentials
+                                }
+                            )
+                    , refund = refundAmount
+                    }
+    in
+    [ unregistrationIntent, SendTo w.changeAddress <| Cardano.Value.onlyLovelace refundAmount ]
+        |> Cardano.finalizeAdvanced
+            { govState = Cardano.emptyGovernanceState
+            , localStateUtxos = w.utxos
+            , coinSelectionAlgo = CoinSelection.largestFirst
+            , evalScriptsCosts = Uplc.evalScriptsCosts Uplc.defaultVmConfig
+            , costModels = costModels
+            }
+            (Cardano.AutoFee { paymentSource = w.changeAddress })
+            []
+        |> Result.mapError Debug.toString
+        |> Result.map (\tx -> ( tx, nativeScript, scriptHash ))
 
 
 locateScriptRef : Bytes CredentialHash -> Transaction -> OutputReference
@@ -337,28 +462,29 @@ view ctx model =
         , Html.p []
             [ text "Saving the multisig in a reference output serves two purposes,"
             , text " (1) paying less fees on subsequent transactions,"
-            , text " and (2) avoid possible multiple representations of the same multisig due to different CBOR encodings."
+            , text " and (2) avoid possible misrepresentations of the same multisig due to different CBOR encodings."
             ]
-        , Html.map ctx.wrapMsg <| viewMultisigForm model
         , Html.hr [] []
-        , case ( model.txWithFakeWitnesses, model.summary ) of
-            ( Nothing, _ ) ->
-                Html.p [] [ text "Tx to sign: waiting for you to build it first" ]
+        , Html.h3 [] [ text "Multisig Configuration" ]
+        , Html.map ctx.wrapMsg <| viewMultisigConfigForm model
+        , Html.hr [] []
+        , Html.h3 [] [ text "DRep Registration" ]
+        , Html.map ctx.wrapMsg <| viewRegisterForm model
+        , case model.registerTxSummary of
+            Nothing ->
+                text ""
 
-            ( Just _, Nothing ) ->
-                Html.p [] [ text "Something went wrong. The Tx and its summary should both be something or nothing!" ]
-
-            ( Just tx, Just summary ) ->
+            Just summary ->
                 let
                     txWithoutSignatures =
-                        Transaction.updateSignatures (always Nothing) tx
+                        Transaction.updateSignatures (always Nothing) summary.txWithFakeWitnesses
 
                     -- The placeholder vkey witnesses (to compute fees) should start with the 28 bytes
                     -- of the expected public key hashes.
                     -- Except in the very unlikely case where the hash looks like ascii (char < 128)
                     -- which is a 1/2^28 probability.
                     expectedSignatures =
-                        Maybe.withDefault [] tx.witnessSet.vkeywitness
+                        Maybe.withDefault [] summary.txWithFakeWitnesses.witnessSet.vkeywitness
                             |> List.map (\{ vkey } -> Bytes.toHex vkey |> String.slice 0 (2 * 28))
                 in
                 div []
@@ -367,6 +493,34 @@ view ctx model =
                     , viewImportantSummaryTx summary
                     , ctx.signingLink txWithoutSignatures expectedSignatures [ text "Sign & submit the Tx on the signing page" ]
                     ]
+        , Html.hr [] []
+        , Html.h3 [] [ text "DRep Unregistration" ]
+        , Html.map ctx.wrapMsg <|
+            Html.p [] [ button [ onClick BuildUnregistrationTxButtonClicked ] [ text "Build Unegistration Tx" ] ]
+        , case model.unregisterTxSummary of
+            Nothing ->
+                text ""
+
+            Just summary ->
+                let
+                    txWithoutSignatures =
+                        Transaction.updateSignatures (always Nothing) summary.txWithFakeWitnesses
+
+                    -- The placeholder vkey witnesses (to compute fees) should start with the 28 bytes
+                    -- of the expected public key hashes.
+                    -- Except in the very unlikely case where the hash looks like ascii (char < 128)
+                    -- which is a 1/2^28 probability.
+                    expectedSignatures =
+                        Maybe.withDefault [] summary.txWithFakeWitnesses.witnessSet.vkeywitness
+                            |> List.map (\{ vkey } -> Bytes.toHex vkey |> String.slice 0 (2 * 28))
+                in
+                div []
+                    [ Html.p [] [ text "Tx to sign:" ]
+                    , Html.pre [] [ text <| prettyTx txWithoutSignatures ]
+                    , ctx.signingLink txWithoutSignatures expectedSignatures [ text "Sign & submit the Tx on the signing page" ]
+                    ]
+        , Html.hr [] []
+        , Html.h3 [] [ text "Summary" ]
         , case model.error of
             Nothing ->
                 text ""
@@ -379,8 +533,8 @@ view ctx model =
         ]
 
 
-viewMultisigForm : Model -> Html Msg
-viewMultisigForm { minCount, hashes, register, createOutputRef } =
+viewMultisigConfigForm : Model -> Html Msg
+viewMultisigConfigForm { minCount, hashes } =
     Html.div []
         [ Helper.viewNumberInput "Minimum number of required signatures: " minCount MinCountChange
         , Html.p []
@@ -388,7 +542,13 @@ viewMultisigForm { minCount, hashes, register, createOutputRef } =
             , button [ onClick AddKeyButtonClicked ] [ text "Add a key" ]
             ]
         , div [] (List.indexedMap viewOneKeyForm hashes)
-        , Html.p []
+        ]
+
+
+viewRegisterForm : Model -> Html Msg
+viewRegisterForm { register, createOutputRef } =
+    Html.div []
+        [ Html.p []
             [ Html.input
                 [ HA.type_ "checkbox"
                 , HA.id "register"
@@ -410,7 +570,7 @@ viewMultisigForm { minCount, hashes, register, createOutputRef } =
                 []
             , Html.label [ HA.for "refOutput" ] [ text " Create an output reference" ]
             ]
-        , Html.p [] [ button [ onClick BuildTxButtonClicked ] [ text "Build Tx" ] ]
+        , Html.p [] [ button [ onClick BuildRegistrationTxButtonClicked ] [ text "Build Registration Tx" ] ]
         ]
 
 
@@ -428,12 +588,16 @@ viewOneKeyForm n hash =
         ]
 
 
-viewImportantSummaryTx : MultisigSummary -> Html msg
-viewImportantSummaryTx { scriptHash, scriptRefInput } =
+viewImportantSummaryTx : RegisterTxSummary -> Html msg
+viewImportantSummaryTx { nativeScript, scriptHash, scriptRefInput } =
     -- Display:
     --  * the script hash
     --  * TODO: the reference input for the script, this needs compute the Tx ID
     let
+        scriptBytes =
+            Cbor.Encode.encode (Script.encodeNativeScript nativeScript)
+                |> Bytes.fromBytes
+
         scriptRef =
             case scriptRefInput of
                 Nothing ->
@@ -443,8 +607,9 @@ viewImportantSummaryTx { scriptHash, scriptRefInput } =
                     Bytes.toHex transactionId ++ "#" ++ String.fromInt outputIndex
     in
     div []
-        [ Html.h4 [] [ text "Multisig Summary" ]
-        , Html.p [] [ text "This is the important info to note as it will be useful to reuse the multisig!" ]
+        [ Html.p [] [ text "This is the important info to note as it will be useful to reuse the multisig!" ]
+        , Html.p [] [ text <| "DRep ID: TODO" ]
         , Html.p [] [ text <| "Script hash: " ++ Bytes.toHex scriptHash ]
+        , Html.p [] [ text <| "Script bytes: " ++ Bytes.toHex scriptBytes ]
         , Html.p [] [ text <| "Script reference input: " ++ scriptRef ]
         ]

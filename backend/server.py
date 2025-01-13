@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import shutil
+import base64
 import subprocess
 import tempfile
 from pathlib import Path
@@ -142,9 +143,11 @@ async def pin_to_ipfs_common(
     try:
         # Use default IPFS settings if not provided
         server_url = ipfs_server or os.getenv("IPFS_RPC_URL") or ""
-        headers = {
-            "Authorization": f"Basic {os.getenv('IPFS_RPC_USER')}:{os.getenv('IPFS_RPC_PASSWORD')}"
-        }
+        username = os.getenv("IPFS_RPC_USER", "")
+        password = os.getenv("IPFS_RPC_PASSWORD", "")
+        auth_string = f"{username}:{password}"
+        token = base64.b64encode(auth_string.encode("utf-8")).decode("ascii")
+        headers = {"Authorization": f"Basic {token}"}
         if ipfs_server:
             headers = dict(custom_headers or [])
 

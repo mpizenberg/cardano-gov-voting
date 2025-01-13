@@ -4,21 +4,25 @@ Minimalist server for Cardano governance uses
 
 First create and modify the `.env` file containing the IPFS node access config.
 
+> Remark: This is required for direct usage of this server endpoints.
+> However, if you use the frontend web app to communicate with this server,
+> you can fill this `.env` file with the default (incorrect) values below,
+> since IPFS RPC config is done directly in the frontend.
+
 ```
 IPFS_RPC_URL=https://ipfs-rpc.mycompany.org/api/v0
 IPFS_RPC_USER=user
 IPFS_RPC_PASSWORD=password
 ```
 
-Then create a `static/` folder and you can run the python server.
+Then you can start the python server.
 I suggest you use [`uv`](https://docs.astral.sh/uv/) for that, which takes care of all the dependency stuff.
 
 ```sh
-mkdir static
 uv run server.py
 ```
 
-The `pretty-gov-pdf` endpoint converts governance JSON metadata into pretty PDFs, easier to read.
+The `/pretty-gov-pdf` endpoint converts governance JSON metadata into pretty PDFs, easier to read.
 This conversion is based on the [Typst](https://typst.app/docs/) markup language and compiler.
 So you need Typst installed for the server to correctly perform the PDF conversion at this endpoint.
 To trigger the `pretty-gov-pdf` endpoint, you can use a request like this:
@@ -26,14 +30,14 @@ To trigger the `pretty-gov-pdf` endpoint, you can use a request like this:
 ```sh
 curl -X POST "http://localhost:8000/pretty-gov-pdf" \
       -H "Content-Type: application/json" \
-      -d @cf-ikigai-modified.json \
+      -d "@cf-ikigai-modified.json" \
       --output metadata.pdf
 ```
 
-To trigger the `ipfs-pin` endpoint, you can use a request like this:
+To trigger the `/ipfs-pin/file` endpoint, you can use a request like this:
 
 ```sh
-curl -X POST "http://localhost:8000/ipfs-pin" \
+curl -X POST "http://localhost:8000/ipfs-pin/file" \
      -H "Content-Type: multipart/form-data" \
      -F "file=@some-file.pdf"
 ```

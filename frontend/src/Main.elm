@@ -339,9 +339,23 @@ update msg model =
             case page of
                 SigningPage pageModel ->
                     let
+                        ( walletSignTx, walletSubmitTx ) =
+                            case model.wallet of
+                                Nothing ->
+                                    ( \_ -> Cmd.none
+                                    , \_ -> Cmd.none
+                                    )
+
+                                Just wallet ->
+                                    ( \tx -> toWallet (Cip30.encodeRequest (Cip30.signTx wallet { partialSign = True } tx))
+                                    , \tx -> toWallet (Cip30.encodeRequest (Cip30.submitTx wallet tx))
+                                    )
+
                         ctx =
                             { wrapMsg = SigningPageMsg
                             , wallet = model.wallet
+                            , walletSignTx = walletSignTx
+                            , walletSubmitTx = walletSubmitTx
                             }
                     in
                     Page.Signing.update ctx pageMsg pageModel
@@ -493,6 +507,11 @@ handleWalletResponse response model =
                             , Cmd.none
                             )
 
+                SigningPage pageModel ->
+                    ( { model | page = SigningPage <| Page.Signing.addWalletSignatures vkeyWitnesses pageModel }
+                    , Cmd.none
+                    )
+
                 -- TODO
                 _ ->
                     Debug.todo "Handle signed Tx in other pages"
@@ -504,6 +523,11 @@ handleWalletResponse response model =
                 -- it means we are trying to sign and submit directly.
                 PreparationPage prepModel ->
                     ( { model | page = PreparationPage <| Page.Preparation.recordSubmittedTx txId prepModel }
+                    , Cmd.none
+                    )
+
+                SigningPage pageModel ->
+                    ( { model | page = SigningPage <| Page.Signing.recordSubmittedTx txId pageModel }
                     , Cmd.none
                     )
 

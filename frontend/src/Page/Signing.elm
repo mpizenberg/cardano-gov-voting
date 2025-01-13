@@ -1,15 +1,17 @@
-module Page.Signing exposing (LoadedTxModel, Model(..), Msg(..), UpdateContext, ViewContext, initialModel, update, view)
+module Page.Signing exposing (LoadedTxModel, Model(..), Msg(..), UpdateContext, ViewContext, addWalletSignatures, initialModel, recordSubmittedTx, update, view)
 
+import Blake2b exposing (blake2b224)
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (dummyBytes)
 import Cardano.Address exposing (CredentialHash)
 import Cardano.Cip30 as Cip30
-import Cardano.Transaction exposing (Transaction, VKeyWitness)
+import Cardano.Transaction as Transaction exposing (Transaction, VKeyWitness)
 import Cardano.TxExamples exposing (prettyTx)
 import Cardano.Utxo exposing (TransactionId)
 import Dict exposing (Dict)
 import Helper exposing (shortenedHex)
 import Html exposing (Html, div, text)
+import Html.Events exposing (onClick)
 
 
 
@@ -28,6 +30,7 @@ type alias LoadedTxModel =
     , txId : Bytes TransactionId
     , expectedSigners : Dict String { keyHash : Bytes CredentialHash }
     , vkeyWitnesses : Dict String VKeyWitness
+    , txSubmitted : Maybe (Bytes TransactionId)
     }
 
 
@@ -43,6 +46,7 @@ initialModel expectedSigners maybeTx =
                         |> List.map (\hash -> ( Bytes.toHex hash, { keyHash = hash } ))
                         |> Dict.fromList
                 , vkeyWitnesses = Dict.empty
+                , txSubmitted = Nothing
                 }
 
         Nothing ->
@@ -57,17 +61,75 @@ initialModel expectedSigners maybeTx =
 
 type Msg
     = NoMsg
+    | SignTxButtonClicked
+    | SubmitTxButtonClicked
 
 
 type alias UpdateContext msg =
     { wrapMsg : Msg -> msg
     , wallet : Maybe Cip30.Wallet
+    , walletSignTx : Transaction -> Cmd msg
+    , walletSubmitTx : Transaction -> Cmd msg
     }
 
 
 update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg )
-update _ _ =
-    Debug.todo ""
+update ctx msg model =
+    case ( msg, model ) of
+        ( SignTxButtonClicked, LoadedTx loadedTxModel ) ->
+            ( model
+            , ctx.walletSignTx loadedTxModel.tx
+            )
+
+        ( SignTxButtonClicked, _ ) ->
+            ( model, Cmd.none )
+
+        ( SubmitTxButtonClicked, LoadedTx { tx, vkeyWitnesses } ) ->
+            let
+                signedTx =
+                    Transaction.updateSignatures (\_ -> Just <| Dict.values vkeyWitnesses) tx
+            in
+            ( model
+            , ctx.walletSubmitTx signedTx
+            )
+
+        ( SubmitTxButtonClicked, _ ) ->
+            ( model, Cmd.none )
+
+        ( NoMsg, _ ) ->
+            ( model, Cmd.none )
+
+
+addWalletSignatures : List VKeyWitness -> Model -> Model
+addWalletSignatures newVkeyWitnesses model =
+    case model of
+        LoadedTx loadedTxModel ->
+            let
+                keyHashHex vkey =
+                    Bytes.toU8 vkey
+                        |> blake2b224 Nothing
+                        |> Bytes.fromU8
+                        |> Bytes.toHex
+
+                updatedWitnesses =
+                    List.foldl (\w acc -> Dict.insert (keyHashHex w.vkey) w acc)
+                        loadedTxModel.vkeyWitnesses
+                        newVkeyWitnesses
+            in
+            LoadedTx { loadedTxModel | vkeyWitnesses = updatedWitnesses }
+
+        _ ->
+            model
+
+
+recordSubmittedTx : Bytes TransactionId -> Model -> Model
+recordSubmittedTx txId model =
+    case model of
+        LoadedTx loadedTxModel ->
+            LoadedTx { loadedTxModel | txSubmitted = Just txId }
+
+        _ ->
+            model
 
 
 
@@ -83,9 +145,9 @@ type alias ViewContext msg =
 
 
 view : ViewContext msg -> Model -> Html msg
-view _ model =
+view ctx model =
     div []
-        [ Html.h2 [] [ text "Signing the vote Tx" ]
+        [ Html.h2 [] [ text "Signing the Tx" ]
         , Html.p []
             [ text "This page aims to facilitate complex signatures, "
             , text "such as Native or Plutus scripts multi-sig."
@@ -94,11 +156,7 @@ view _ model =
             MissingTx ->
                 Html.p [] [ text "TODO: button to load the Tx from a file" ]
 
-            LoadedTx { tx, expectedSigners, vkeyWitnesses } ->
-                -- let
-                --     ( proposal, vote ) =
-                --         Debug.todo "extract proposal and vote from Tx"
-                -- in
+            LoadedTx { tx, expectedSigners, vkeyWitnesses, txSubmitted } ->
                 div []
                     [ Html.p [] [ text <| "Tx ID: TODO" ]
                     , Html.p [] [ Html.pre [] [ text <| prettyTx tx ] ]
@@ -109,13 +167,34 @@ view _ model =
                         , text <| " If you are paying the fees, or signing the vote with your wallet,"
                         , text <| " make sure it’s connected and use the button below to sign."
                         ]
-                    , Html.p [] [ text <| "TODO: button to sign with connected wallet" ]
+                    , Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SignTxButtonClicked ] [ text "Sign Tx with connected wallet" ] ]
                     , Html.p []
                         [ text <| "If additional signatures are required, please ask the relevant parties"
                         , text <| " to partially sign the transaction,"
                         , text <| " and use the button below to load their signatures in the app."
                         ]
-                    , Html.p [] [ text <| "TODO: button to load the signed Tx from disk" ]
+                    , Html.p [] [ text <| "TODO: button to download unsigned Tx and another to upload the signed Tx from disk" ]
+                    , Html.h3 [] [ text "Tx Submission" ]
+                    , if Dict.isEmpty expectedSigners then
+                        div []
+                            [ Html.p [] [ text "Expected signers are unknown so whenever you think it’s ready for submission, go for it!" ]
+                            , Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SubmitTxButtonClicked ] [ text "Submit Tx anyway!" ] ]
+                            ]
+
+                      else if Dict.isEmpty (Dict.diff expectedSigners vkeyWitnesses) then
+                        Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SubmitTxButtonClicked ] [ text "Submit Tx" ] ]
+
+                      else
+                        div []
+                            [ Html.p [] [ text "Not all expected signatures are gathered yet, but if you still think it’s ready, go for it!" ]
+                            , Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SubmitTxButtonClicked ] [ text "Submit Tx anyway!" ] ]
+                            ]
+                    , case txSubmitted of
+                        Nothing ->
+                            text ""
+
+                        Just txId ->
+                            Html.p [] [ text <| "Tx submitted! Tx ID: " ++ Bytes.toHex txId ]
                     ]
         ]
 

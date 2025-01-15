@@ -1,11 +1,12 @@
 port module Main exposing (main)
 
+import Api exposing (ActiveProposal, ProtocolParams)
 import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes
 import Cardano.Address exposing (Address)
 import Cardano.Cip30 as Cip30 exposing (WalletDescriptor)
-import Cardano.Gov as Gov exposing (CostModels)
+import Cardano.Gov as Gov
 import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.Utxo as Utxo exposing (Output)
 import Dict exposing (Dict)
@@ -15,10 +16,8 @@ import Html.Attributes as HA exposing (height, src)
 import Html.Events exposing (onClick, preventDefaultOn)
 import Http
 import Json.Decode as JD exposing (Decoder, Value)
-import Json.Encode as JE
-import Natural exposing (Natural)
 import Page.MultisigRegistration
-import Page.Preparation exposing (ActiveProposal, JsonLdContexts)
+import Page.Preparation exposing (JsonLdContexts)
 import Page.Signing
 import Platform.Cmd as Cmd
 import RemoteData exposing (WebData)
@@ -76,12 +75,6 @@ type Page
     | MultisigRegistrationPage Page.MultisigRegistration.Model
 
 
-type alias ProtocolParams =
-    { costModels : CostModels
-    , drepDeposit : Natural
-    }
-
-
 init : { url : String, jsonLdContexts : JsonLdContexts } -> ( Model, Cmd Msg )
 init { url, jsonLdContexts } =
     handleUrlChange (locationHrefToRoute url)
@@ -100,58 +93,10 @@ init { url, jsonLdContexts } =
                 , Cmd.batch
                     [ cmd
                     , toWallet (Cip30.encodeRequest Cip30.discoverWallets)
-                    , loadProtocolParams
+                    , Api.defaultApiProvider.loadProtocolParams GotProtocolParams
                     ]
                 )
            )
-
-
-loadProtocolParams : Cmd Msg
-loadProtocolParams =
-    Http.post
-        { url = "https://preview.koios.rest/api/v1/ogmios"
-        , body =
-            Http.jsonBody
-                (JE.object
-                    [ ( "jsonrpc", JE.string "2.0" )
-                    , ( "method", JE.string "queryLedgerState/protocolParameters" )
-                    ]
-                )
-        , expect = Http.expectJson GotProtocolParams protocolParamsDecoder
-        }
-
-
-loadGovernanceProposals : Cmd Msg
-loadGovernanceProposals =
-    Http.post
-        { url = "https://preview.koios.rest/api/v1/ogmios"
-        , body =
-            Http.jsonBody
-                (JE.object
-                    [ ( "jsonrpc", JE.string "2.0" )
-                    , ( "method", JE.string "queryLedgerState/governanceProposals" )
-                    ]
-                )
-        , expect = Http.expectJson GotProposals proposalsDecoder
-        }
-
-
-proposalsDecoder : Decoder (List ActiveProposal)
-proposalsDecoder =
-    JD.field "result" <|
-        JD.list <|
-            JD.map3 ActiveProposal
-                (JD.map2
-                    (\id index ->
-                        { transactionId = Bytes.fromHexUnchecked id
-                        , govActionIndex = index
-                        }
-                    )
-                    (JD.at [ "proposal", "transaction", "id" ] JD.string)
-                    (JD.at [ "proposal", "index" ] JD.int)
-                )
-                (JD.at [ "action", "type" ] JD.string)
-                (JD.succeed RemoteData.Loading)
 
 
 
@@ -167,7 +112,7 @@ type Msg
     | ConnectButtonClicked { id : String }
     | DisconnectWalletButtonClicked
     | GotProtocolParams (Result Http.Error ProtocolParams)
-    | GotProposals (Result Http.Error (List Page.Preparation.ActiveProposal))
+    | GotProposals (Result Http.Error (List ActiveProposal))
       -- Preparation page
     | PreparationPageMsg Page.Preparation.Msg
       -- Signing page
@@ -422,16 +367,23 @@ handleUrlChange route model =
             )
 
         RoutePreparation ->
-            ( { model
-                | errors = []
-                , page = PreparationPage Page.Preparation.init
-                , proposals = RemoteData.Loading
-              }
-            , Cmd.batch
-                [ pushUrl <| AppUrl.toString <| routeToAppUrl route
-                , loadGovernanceProposals
-                ]
-            )
+            let
+                newModel =
+                    { model | errors = [], page = PreparationPage Page.Preparation.init }
+
+                updateUrlCmd =
+                    pushUrl <| AppUrl.toString <| routeToAppUrl route
+            in
+            if RemoteData.isSuccess model.proposals then
+                ( newModel, updateUrlCmd )
+
+            else
+                ( { newModel | proposals = RemoteData.Loading }
+                , Cmd.batch
+                    [ updateUrlCmd
+                    , Api.defaultApiProvider.loadGovProposals GotProposals
+                    ]
+                )
 
         RouteSigning { expectedSigners, tx } ->
             ( { model
@@ -552,20 +504,6 @@ handleWalletResponse response model =
             ( { model | errors = error :: model.errors }
             , Cmd.none
             )
-
-
-protocolParamsDecoder : Decoder ProtocolParams
-protocolParamsDecoder =
-    JD.map4
-        (\v1 v2 v3 drepDeposit ->
-            { costModels = CostModels (Just v1) (Just v2) (Just v3)
-            , drepDeposit = drepDeposit
-            }
-        )
-        (JD.at [ "result", "plutusCostModels", "plutus:v1" ] <| JD.list JD.int)
-        (JD.at [ "result", "plutusCostModels", "plutus:v2" ] <| JD.list JD.int)
-        (JD.at [ "result", "plutusCostModels", "plutus:v3" ] <| JD.list JD.int)
-        (JD.at [ "result", "delegateRepresentativeDeposit", "ada", "lovelace" ] <| JD.map Natural.fromSafeInt JD.int)
 
 
 

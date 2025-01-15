@@ -1,5 +1,6 @@
-module Page.Preparation exposing (ActiveProposal, AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, ProposalMetadata, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterCredForm, VoterPreparationForm, VoterType, addTxSignatures, init, recordSubmittedTx, update, view)
+module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterCredForm, VoterPreparationForm, VoterType, addTxSignatures, init, recordSubmittedTx, update, view)
 
+import Api exposing (ActiveProposal)
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..), VoterWitness(..), WitnessSource(..))
@@ -106,24 +107,6 @@ initVoterForm =
     { voterType = DrepVoter
     , voterCred = StakeKeyVoter ""
     , error = Nothing
-    }
-
-
-
--- Pick Proposal Step
-
-
-type alias ActiveProposal =
-    { id : ActionId
-    , actionType : String
-    , metadata : WebData ProposalMetadata
-    }
-
-
-type alias ProposalMetadata =
-    { title : String
-    , abstract : String
-    , rawJson : String
     }
 
 
@@ -565,7 +548,7 @@ update ctx msg model =
                                                 }
                                             )
 
-                                WithCommitteeHotCred (WithScript scriptHash (PlutusWitness _)) ->
+                                WithCommitteeHotCred (WithScript _ (PlutusWitness _)) ->
                                     Debug.todo "Handle Plutus Witness"
 
                                 WithDrepCred (WithKey credHash) ->
@@ -593,7 +576,7 @@ update ctx msg model =
                                                 }
                                             )
 
-                                WithDrepCred (WithScript scriptHash (PlutusWitness _)) ->
+                                WithDrepCred (WithScript _ (PlutusWitness _)) ->
                                     Debug.todo "Handle Plutus Witness"
 
                                 WithPoolCred credHash ->
@@ -1882,6 +1865,7 @@ viewVoterIdentificationStep ctx step =
                 [ Html.h3 [] [ text "Voter Identified" ]
                 , Html.map ctx.wrapMsg <| viewIdentifiedVoter voter
                 , Html.p [] [ text "TODO: display voting power" ]
+                , Html.p [] [ text "TODO: fetch the reference UTxO for the native script" ]
                 ]
 
 
@@ -2042,7 +2026,7 @@ viewIdentifiedVoter voter =
             WithKey cred ->
                 Html.p [] [ text <| "Using key for credential hash: " ++ Bytes.toHex cred ]
 
-            WithScript hash (NativeWitness { script, expectedSigners }) ->
+            WithScript hash (NativeWitness { expectedSigners }) ->
                 div []
                     [ Html.p []
                         [ text <| "Using a native script (hash: " ++ Bytes.toHex hash ++ ")"

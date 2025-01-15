@@ -1,7 +1,10 @@
 module Api exposing (ActiveProposal, ApiProvider, ProposalMetadata, ProtocolParams, defaultApiProvider)
 
-import Bytes.Comparable as Bytes
+import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Gov exposing (ActionId, CostModels)
+import Cardano.Transaction as Transaction exposing (Transaction)
+import Cardano.Utxo exposing (TransactionId)
+import Dict exposing (Dict)
 import Http
 import Json.Decode as JD exposing (Decoder)
 import Json.Encode as JE
@@ -12,6 +15,7 @@ import RemoteData exposing (WebData)
 type alias ApiProvider msg =
     { loadProtocolParams : (Result Http.Error ProtocolParams -> msg) -> Cmd msg
     , loadGovProposals : (Result Http.Error (List ActiveProposal) -> msg) -> Cmd msg
+    , retrieveTxs : List (Bytes TransactionId) -> (Result Http.Error (Dict String Transaction) -> msg) -> Cmd msg
     }
 
 
@@ -76,6 +80,32 @@ proposalsDecoder =
 
 
 
+-- Retrieve Txs
+
+
+koiosTxCborDecoder : Decoder (Dict String Transaction)
+koiosTxCborDecoder =
+    let
+        singleTxDecoder : Decoder ( String, Transaction )
+        singleTxDecoder =
+            JD.map2 Tuple.pair
+                (JD.field "tx_hash" JD.string)
+                (JD.field "cbor" JD.string)
+                |> JD.andThen
+                    (\( hashHex, cborHex ) ->
+                        case Bytes.fromHex cborHex |> Maybe.andThen Transaction.deserialize of
+                            Just tx ->
+                                JD.succeed ( hashHex, tx )
+
+                            Nothing ->
+                                JD.fail <| "Failed to deserialize Tx: " ++ cborHex
+                    )
+    in
+    JD.list singleTxDecoder
+        |> JD.map Dict.fromList
+
+
+
 -- Default API Provider
 
 
@@ -95,6 +125,8 @@ defaultApiProvider =
                         )
                 , expect = Http.expectJson toMsg protocolParamsDecoder
                 }
+
+    -- Get governance proposals via Koios
     , loadGovProposals =
         \toMsg ->
             Http.post
@@ -107,5 +139,21 @@ defaultApiProvider =
                             ]
                         )
                 , expect = Http.expectJson toMsg proposalsDecoder
+                }
+
+    -- Retrieve transactions via Koios by proxying with the server (to avoid CORS errors)
+    , retrieveTxs =
+        \txIds toMsg ->
+            Http.post
+                { url = "/proxy/json"
+                , body =
+                    Http.jsonBody
+                        (JE.object
+                            [ ( "url", JE.string "https://preview.koios.rest/api/v1/tx_cbor" )
+                            , ( "method", JE.string "POST" )
+                            , ( "body", JE.object [ ( "_tx_hashes", JE.list (JE.string << Bytes.toHex) txIds ) ] )
+                            ]
+                        )
+                , expect = Http.expectJson toMsg koiosTxCborDecoder
                 }
     }

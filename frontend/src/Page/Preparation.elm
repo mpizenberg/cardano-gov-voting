@@ -29,6 +29,7 @@ import Json.Encode as JE
 import List.Extra
 import Markdown.Parser as Md
 import Markdown.Renderer as Md
+import Platform.Cmd as Cmd
 import RemoteData exposing (WebData)
 import Set exposing (Set)
 import Task
@@ -42,7 +43,8 @@ import Url
 
 
 type alias Model =
-    { voterStep : Step VoterPreparationForm {} VoterWitness
+    { someRefUtxos : Utxo.RefDict Output
+    , voterStep : Step VoterPreparationForm VoterWitness VoterWitness
     , pickProposalStep : Step {} {} ActiveProposal
     , rationaleCreationStep : Step RationaleForm {} Rationale
     , rationaleSignatureStep : Step RationaleSignatureForm {} RationaleSignature
@@ -61,7 +63,8 @@ type Step prep validating done
 
 init : Model
 init =
-    { voterStep = Preparing initVoterForm
+    { someRefUtxos = Utxo.emptyRefDict
+    , voterStep = Preparing initVoterForm
     , pickProposalStep = Preparing {}
     , rationaleCreationStep = Preparing initRationaleForm
     , rationaleSignatureStep = Preparing initRationaleSignatureForm
@@ -355,6 +358,7 @@ type Msg
     | VoterNativeScriptBytes NativeScriptConfig
     | ToggleExpectedSigner NativeScriptConfig String Bool
     | ValidateVoterFormButtonClicked
+    | GotRefUtxoTx OutputReference (Result Http.Error (Dict String Transaction))
     | ChangeVoterButtonClicked
       -- Pick Proposal Step
     | PickProposalButtonClicked String
@@ -512,7 +516,59 @@ update ctx msg model =
         ValidateVoterFormButtonClicked ->
             case model.voterStep of
                 Preparing form ->
-                    ( { model | voterStep = confirmVoter form }, Cmd.none )
+                    let
+                        ( newVoterStep, cmds ) =
+                            confirmVoter form model.someRefUtxos
+                    in
+                    ( { model | voterStep = newVoterStep }
+                    , Cmd.map ctx.wrapMsg cmds
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        GotRefUtxoTx outputRef txsResult ->
+            case ( model.voterStep, txsResult ) of
+                ( Validating form voterWitness, Ok txs ) ->
+                    case Dict.get (Bytes.toHex outputRef.transactionId) txs of
+                        Nothing ->
+                            let
+                                errorMsg =
+                                    "The Tx ID of the output ref ("
+                                        ++ Bytes.toHex outputRef.transactionId
+                                        ++ ") doesn’t seem to be present in the response we got: "
+                                        ++ String.join ", " (Dict.keys txs)
+                            in
+                            ( { model | voterStep = Preparing { form | error = Just errorMsg } }
+                            , Cmd.none
+                            )
+
+                        Just tx ->
+                            case List.Extra.get outputRef.outputIndex tx.body.outputs of
+                                Nothing ->
+                                    let
+                                        errorMsg =
+                                            "The Tx retrieved (id: "
+                                                ++ Bytes.toHex outputRef.transactionId
+                                                ++ ") doesn’t seem to have an output at position "
+                                                ++ String.fromInt outputRef.outputIndex
+                                    in
+                                    ( { model | voterStep = Preparing { form | error = Just errorMsg } }
+                                    , Cmd.none
+                                    )
+
+                                Just output ->
+                                    ( { model
+                                        | voterStep = Done voterWitness
+                                        , someRefUtxos = Dict.Any.insert outputRef output model.someRefUtxos
+                                      }
+                                    , Cmd.none
+                                    )
+
+                ( Validating form _, Err httpError ) ->
+                    ( { model | voterStep = Preparing { form | error = Just (Debug.toString httpError) } }
+                    , Cmd.none
+                    )
 
                 _ ->
                     ( model, Cmd.none )
@@ -948,31 +1004,39 @@ updateVoterForm f ({ voterStep } as model) =
             model
 
 
-confirmVoter : VoterPreparationForm -> Step VoterPreparationForm {} VoterWitness
-confirmVoter form =
-    case ( form.voterType, validateVoterCredForm form.voterCred ) of
-        ( CcVoter, Ok voterCred ) ->
-            Done <| WithCommitteeHotCred voterCred
+confirmVoter : VoterPreparationForm -> Utxo.RefDict Output -> ( Step VoterPreparationForm VoterWitness VoterWitness, Cmd Msg )
+confirmVoter form someRefUtxos =
+    case ( form.voterType, validateVoterCredForm form.voterCred someRefUtxos ) of
+        ( CcVoter, Ok ( voterCred, Nothing ) ) ->
+            ( Done <| WithCommitteeHotCred voterCred, Cmd.none )
 
-        ( DrepVoter, Ok voterCred ) ->
-            Done <| WithDrepCred voterCred
+        ( CcVoter, Ok ( voterCred, Just cmd ) ) ->
+            ( Validating form <| WithCommitteeHotCred voterCred, cmd )
 
-        ( SpoVoter, Ok (WithKey hash) ) ->
-            Done <| WithPoolCred hash
+        ( DrepVoter, Ok ( voterCred, Nothing ) ) ->
+            ( Done <| WithDrepCred voterCred, Cmd.none )
 
-        ( SpoVoter, Ok (WithScript _ _) ) ->
-            Preparing { form | error = Just "SPO cannot use script credentials" }
+        ( DrepVoter, Ok ( voterCred, Just cmd ) ) ->
+            ( Validating form <| WithDrepCred voterCred, cmd )
+
+        ( SpoVoter, Ok ( WithKey hash, _ ) ) ->
+            ( Done <| WithPoolCred hash, Cmd.none )
+
+        ( SpoVoter, Ok ( WithScript _ _, _ ) ) ->
+            ( Preparing { form | error = Just "SPO cannot use script credentials" }
+            , Cmd.none
+            )
 
         ( _, Err error ) ->
-            Preparing { form | error = Just error }
+            ( Preparing { form | error = Just error }, Cmd.none )
 
 
-validateVoterCredForm : VoterCredForm -> Result String CredentialWitness
-validateVoterCredForm voterCredForm =
+validateVoterCredForm : VoterCredForm -> Utxo.RefDict Output -> Result String ( CredentialWitness, Maybe (Cmd Msg) )
+validateVoterCredForm voterCredForm someRefUtxos =
     case voterCredForm of
         StakeKeyVoter str ->
             stakeKeyHashFromStr str
-                |> Result.map WithKey
+                |> Result.map (\key -> ( WithKey key, Nothing ))
 
         NativeScriptVoter { scriptHash, utxoRef, expectedSigners } ->
             if String.length scriptHash == 56 then
@@ -985,13 +1049,19 @@ validateVoterCredForm voterCredForm =
 
                     ( Just hash, Ok ref ) ->
                         Ok
-                            (WithScript hash <|
+                            ( WithScript hash <|
                                 NativeWitness
                                     { script = WitnessReference ref
                                     , expectedSigners =
                                         Dict.values expectedSigners
                                             |> List.map .key
                                     }
+                            , if Dict.Any.member ref someRefUtxos then
+                                Nothing
+
+                              else
+                                Just <|
+                                    Api.defaultApiProvider.retrieveTxs [ ref.transactionId ] (GotRefUtxoTx ref)
                             )
 
             else
@@ -1750,7 +1820,7 @@ allPrepSteps maybeCostModels m =
                             |> blake2b256 Nothing
                             |> Bytes.fromU8
                     }
-                , localStateUtxos = f.utxos
+                , localStateUtxos = Dict.Any.union m.someRefUtxos f.utxos
                 , feeProviderAddress = f.address
                 , costModels = costModels
                 }
@@ -1838,7 +1908,7 @@ view ctx model =
 --
 
 
-viewVoterIdentificationStep : ViewContext msg -> Step VoterPreparationForm {} VoterWitness -> Html msg
+viewVoterIdentificationStep : ViewContext msg -> Step VoterPreparationForm VoterWitness VoterWitness -> Html msg
 viewVoterIdentificationStep ctx step =
     case step of
         Preparing form ->
@@ -1865,7 +1935,6 @@ viewVoterIdentificationStep ctx step =
                 [ Html.h3 [] [ text "Voter Identified" ]
                 , Html.map ctx.wrapMsg <| viewIdentifiedVoter voter
                 , Html.p [] [ text "TODO: display voting power" ]
-                , Html.p [] [ text "TODO: fetch the reference UTxO for the native script" ]
                 ]
 
 

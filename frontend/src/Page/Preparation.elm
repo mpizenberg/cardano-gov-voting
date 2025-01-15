@@ -1,16 +1,19 @@
-module Page.Preparation exposing (ActiveProposal, AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, ProposalMetadata, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterCredForm, VoterPreparationForm, VoterType, addTxSignatures, init, recordSubmittedTx, update, view)
+module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterCredForm, VoterPreparationForm, VoterType, addTxSignatures, init, recordSubmittedTx, update, view)
 
+import Api exposing (ActiveProposal)
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano exposing (CredentialWitness(..), ScriptWitness(..), VoterWitness(..))
+import Cardano exposing (CredentialWitness(..), ScriptWitness(..), VoterWitness(..), WitnessSource(..))
 import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash)
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
 import Cardano.Gov as Gov exposing (ActionId, Anchor, CostModels, Vote)
+import Cardano.Script as Script
 import Cardano.Transaction as Transaction exposing (Transaction, VKeyWitness)
 import Cardano.TxExamples exposing (prettyTx)
 import Cardano.Uplc as Uplc
-import Cardano.Utxo as Utxo exposing (Output, TransactionId)
+import Cardano.Utxo as Utxo exposing (Output, OutputReference, TransactionId)
+import Cbor.Decode
 import Cbor.Encode
 import Dict exposing (Dict)
 import Dict.Any
@@ -19,13 +22,14 @@ import File.Select
 import Helper exposing (prettyAddr)
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
-import Html.Events exposing (onClick)
+import Html.Events exposing (onCheck, onClick)
 import Http
 import Json.Decode as JD
 import Json.Encode as JE
 import List.Extra
 import Markdown.Parser as Md
 import Markdown.Renderer as Md
+import Platform.Cmd as Cmd
 import RemoteData exposing (WebData)
 import Set exposing (Set)
 import Task
@@ -39,7 +43,8 @@ import Url
 
 
 type alias Model =
-    { voterStep : Step VoterPreparationForm {} VoterWitness
+    { someRefUtxos : Utxo.RefDict Output
+    , voterStep : Step VoterPreparationForm VoterWitness VoterWitness
     , pickProposalStep : Step {} {} ActiveProposal
     , rationaleCreationStep : Step RationaleForm {} Rationale
     , rationaleSignatureStep : Step RationaleSignatureForm {} RationaleSignature
@@ -58,7 +63,8 @@ type Step prep validating done
 
 init : Model
 init =
-    { voterStep = Preparing initVoterForm
+    { someRefUtxos = Utxo.emptyRefDict
+    , voterStep = Preparing initVoterForm
     , pickProposalStep = Preparing {}
     , rationaleCreationStep = Preparing initRationaleForm
     , rationaleSignatureStep = Preparing initRationaleSignatureForm
@@ -88,7 +94,15 @@ type VoterType
 
 type VoterCredForm
     = StakeKeyVoter String
-    | ScriptVoter { scriptHash : String, utxoRef : String }
+    | NativeScriptVoter NativeScriptConfig
+
+
+type alias NativeScriptConfig =
+    { scriptHash : String
+    , scriptBytes : String
+    , utxoRef : String
+    , expectedSigners : Dict String { expected : Bool, key : Bytes CredentialHash }
+    }
 
 
 initVoterForm : VoterPreparationForm
@@ -96,24 +110,6 @@ initVoterForm =
     { voterType = DrepVoter
     , voterCred = StakeKeyVoter ""
     , error = Nothing
-    }
-
-
-
--- Pick Proposal Step
-
-
-type alias ActiveProposal =
-    { id : ActionId
-    , actionType : String
-    , metadata : WebData ProposalMetadata
-    }
-
-
-type alias ProposalMetadata =
-    { title : String
-    , abstract : String
-    , rawJson : String
     }
 
 
@@ -359,7 +355,10 @@ type Msg
       -- Voter Step
     | VoterTypeSelected VoterType
     | VoterCredentialUpdated VoterCredForm
+    | VoterNativeScriptBytes NativeScriptConfig
+    | ToggleExpectedSigner NativeScriptConfig String Bool
     | ValidateVoterFormButtonClicked
+    | GotRefUtxoTx OutputReference (Result Http.Error (Dict String Transaction))
     | ChangeVoterButtonClicked
       -- Pick Proposal Step
     | PickProposalButtonClicked String
@@ -456,7 +455,7 @@ update ctx msg model =
                         | voterType = voterType
                         , voterCred =
                             case ( voterType, form.voterCred ) of
-                                ( SpoVoter, ScriptVoter _ ) ->
+                                ( SpoVoter, NativeScriptVoter _ ) ->
                                     StakeKeyVoter ""
 
                                 _ ->
@@ -472,10 +471,104 @@ update ctx msg model =
             , Cmd.none
             )
 
+        VoterNativeScriptBytes nativeScriptConfig ->
+            let
+                maybeScript =
+                    Bytes.fromHex nativeScriptConfig.scriptBytes
+                        |> Maybe.map Bytes.toBytes
+                        |> Maybe.andThen (Cbor.Decode.decode Script.decodeNativeScript)
+            in
+            ( case maybeScript of
+                Nothing ->
+                    updateVoterForm (\form -> { form | error = Just ("Invalid native script bytes: " ++ nativeScriptConfig.scriptBytes) }) model
+
+                Just nativeScript ->
+                    let
+                        expectedSigners =
+                            Script.extractSigners nativeScript
+                                |> Dict.map (\_ key -> { expected = True, key = key })
+                    in
+                    updateVoterForm
+                        (\form ->
+                            { form
+                                | error = Nothing
+                                , voterCred = NativeScriptVoter { nativeScriptConfig | expectedSigners = expectedSigners }
+                            }
+                        )
+                        model
+            , Cmd.none
+            )
+
+        ToggleExpectedSigner nativeConfig keyHex expected ->
+            let
+                updatedExpectedSigners =
+                    Dict.update keyHex
+                        (Maybe.map (\entry -> { entry | expected = expected }))
+                        nativeConfig.expectedSigners
+
+                updatedConfig =
+                    { nativeConfig | expectedSigners = updatedExpectedSigners }
+            in
+            ( updateVoterForm (\form -> { form | voterCred = NativeScriptVoter updatedConfig }) model
+            , Cmd.none
+            )
+
         ValidateVoterFormButtonClicked ->
             case model.voterStep of
                 Preparing form ->
-                    ( { model | voterStep = confirmVoter form }, Cmd.none )
+                    let
+                        ( newVoterStep, cmds ) =
+                            confirmVoter form model.someRefUtxos
+                    in
+                    ( { model | voterStep = newVoterStep }
+                    , Cmd.map ctx.wrapMsg cmds
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        GotRefUtxoTx outputRef txsResult ->
+            case ( model.voterStep, txsResult ) of
+                ( Validating form voterWitness, Ok txs ) ->
+                    case Dict.get (Bytes.toHex outputRef.transactionId) txs of
+                        Nothing ->
+                            let
+                                errorMsg =
+                                    "The Tx ID of the output ref ("
+                                        ++ Bytes.toHex outputRef.transactionId
+                                        ++ ") doesn’t seem to be present in the response we got: "
+                                        ++ String.join ", " (Dict.keys txs)
+                            in
+                            ( { model | voterStep = Preparing { form | error = Just errorMsg } }
+                            , Cmd.none
+                            )
+
+                        Just tx ->
+                            case List.Extra.get outputRef.outputIndex tx.body.outputs of
+                                Nothing ->
+                                    let
+                                        errorMsg =
+                                            "The Tx retrieved (id: "
+                                                ++ Bytes.toHex outputRef.transactionId
+                                                ++ ") doesn’t seem to have an output at position "
+                                                ++ String.fromInt outputRef.outputIndex
+                                    in
+                                    ( { model | voterStep = Preparing { form | error = Just errorMsg } }
+                                    , Cmd.none
+                                    )
+
+                                Just output ->
+                                    ( { model
+                                        | voterStep = Done voterWitness
+                                        , someRefUtxos = Dict.Any.insert outputRef output model.someRefUtxos
+                                      }
+                                    , Cmd.none
+                                    )
+
+                ( Validating form _, Err httpError ) ->
+                    ( { model | voterStep = Preparing { form | error = Just (Debug.toString httpError) } }
+                    , Cmd.none
+                    )
 
                 _ ->
                     ( model, Cmd.none )
@@ -489,14 +582,58 @@ update ctx msg model =
                                 WithCommitteeHotCred (WithKey credHash) ->
                                     ( CcVoter, StakeKeyVoter (Bytes.toHex credHash) )
 
-                                WithCommitteeHotCred (WithScript scriptHash _) ->
-                                    ( CcVoter, ScriptVoter { scriptHash = Bytes.toHex scriptHash, utxoRef = "TODO" } )
+                                WithCommitteeHotCred (WithScript scriptHash (NativeWitness { script, expectedSigners })) ->
+                                    case script of
+                                        WitnessValue nativeScript ->
+                                            ( CcVoter
+                                            , NativeScriptVoter
+                                                { scriptHash = Bytes.toHex scriptHash
+                                                , scriptBytes = Cbor.Encode.encode (Script.encodeNativeScript nativeScript) |> Bytes.fromBytes |> Bytes.toHex
+                                                , utxoRef = ""
+                                                , expectedSigners = selectSigners expectedSigners (Script.extractSigners nativeScript)
+                                                }
+                                            )
+
+                                        WitnessReference ref ->
+                                            ( CcVoter
+                                            , NativeScriptVoter
+                                                { scriptHash = Bytes.toHex scriptHash
+                                                , scriptBytes = ""
+                                                , utxoRef = Bytes.toHex ref.transactionId ++ "#" ++ String.fromInt ref.outputIndex
+                                                , expectedSigners = Dict.empty
+                                                }
+                                            )
+
+                                WithCommitteeHotCred (WithScript _ (PlutusWitness _)) ->
+                                    Debug.todo "Handle Plutus Witness"
 
                                 WithDrepCred (WithKey credHash) ->
                                     ( DrepVoter, StakeKeyVoter (Bytes.toHex credHash) )
 
-                                WithDrepCred (WithScript scriptHash _) ->
-                                    ( DrepVoter, ScriptVoter { scriptHash = Bytes.toHex scriptHash, utxoRef = "TODO" } )
+                                WithDrepCred (WithScript scriptHash (NativeWitness { script, expectedSigners })) ->
+                                    case script of
+                                        WitnessValue nativeScript ->
+                                            ( DrepVoter
+                                            , NativeScriptVoter
+                                                { scriptHash = Bytes.toHex scriptHash
+                                                , scriptBytes = Cbor.Encode.encode (Script.encodeNativeScript nativeScript) |> Bytes.fromBytes |> Bytes.toHex
+                                                , utxoRef = ""
+                                                , expectedSigners = selectSigners expectedSigners (Script.extractSigners nativeScript)
+                                                }
+                                            )
+
+                                        WitnessReference ref ->
+                                            ( DrepVoter
+                                            , NativeScriptVoter
+                                                { scriptHash = Bytes.toHex scriptHash
+                                                , scriptBytes = ""
+                                                , utxoRef = Bytes.toHex ref.transactionId ++ "#" ++ String.fromInt ref.outputIndex
+                                                , expectedSigners = Dict.empty
+                                                }
+                                            )
+
+                                WithDrepCred (WithScript _ (PlutusWitness _)) ->
+                                    Debug.todo "Handle Plutus Witness"
 
                                 WithPoolCred credHash ->
                                     ( SpoVoter, StakeKeyVoter (Bytes.toHex credHash) )
@@ -867,37 +1004,90 @@ updateVoterForm f ({ voterStep } as model) =
             model
 
 
-confirmVoter : VoterPreparationForm -> Step VoterPreparationForm {} VoterWitness
-confirmVoter form =
-    case ( form.voterType, validateVoterCredForm form.voterCred ) of
-        ( CcVoter, Ok voterCred ) ->
-            Done <| WithCommitteeHotCred voterCred
+confirmVoter : VoterPreparationForm -> Utxo.RefDict Output -> ( Step VoterPreparationForm VoterWitness VoterWitness, Cmd Msg )
+confirmVoter form someRefUtxos =
+    case ( form.voterType, validateVoterCredForm form.voterCred someRefUtxos ) of
+        ( CcVoter, Ok ( voterCred, Nothing ) ) ->
+            ( Done <| WithCommitteeHotCred voterCred, Cmd.none )
 
-        ( DrepVoter, Ok voterCred ) ->
-            Done <| WithDrepCred voterCred
+        ( CcVoter, Ok ( voterCred, Just cmd ) ) ->
+            ( Validating form <| WithCommitteeHotCred voterCred, cmd )
 
-        ( SpoVoter, Ok (WithKey hash) ) ->
-            Done <| WithPoolCred hash
+        ( DrepVoter, Ok ( voterCred, Nothing ) ) ->
+            ( Done <| WithDrepCred voterCred, Cmd.none )
 
-        ( SpoVoter, Ok (WithScript _ _) ) ->
-            Preparing { form | error = Just "SPO cannot use script credentials" }
+        ( DrepVoter, Ok ( voterCred, Just cmd ) ) ->
+            ( Validating form <| WithDrepCred voterCred, cmd )
+
+        ( SpoVoter, Ok ( WithKey hash, _ ) ) ->
+            ( Done <| WithPoolCred hash, Cmd.none )
+
+        ( SpoVoter, Ok ( WithScript _ _, _ ) ) ->
+            ( Preparing { form | error = Just "SPO cannot use script credentials" }
+            , Cmd.none
+            )
 
         ( _, Err error ) ->
-            Preparing { form | error = Just error }
+            ( Preparing { form | error = Just error }, Cmd.none )
 
 
-validateVoterCredForm : VoterCredForm -> Result String CredentialWitness
-validateVoterCredForm voterCredForm =
+validateVoterCredForm : VoterCredForm -> Utxo.RefDict Output -> Result String ( CredentialWitness, Maybe (Cmd Msg) )
+validateVoterCredForm voterCredForm someRefUtxos =
     case voterCredForm of
         StakeKeyVoter str ->
             stakeKeyHashFromStr str
-                |> Result.map WithKey
+                |> Result.map (\key -> ( WithKey key, Nothing ))
 
-        ScriptVoter _ ->
-            -- Result.map2 (\hash utxo -> WithScript hash <| )
-            -- (scriptHashFromStr scriptHash)
-            -- (utxoRefFromStr utxoRef)
-            Debug.todo "validateVoterCredForm"
+        NativeScriptVoter { scriptHash, utxoRef, expectedSigners } ->
+            if String.length scriptHash == 56 then
+                case ( Bytes.fromHex scriptHash, utxoRefFromStr utxoRef ) of
+                    ( Nothing, _ ) ->
+                        Err <| "Invalid Hex for the script hash: " ++ scriptHash
+
+                    ( _, Err err ) ->
+                        Err err
+
+                    ( Just hash, Ok ref ) ->
+                        Ok
+                            ( WithScript hash <|
+                                NativeWitness
+                                    { script = WitnessReference ref
+                                    , expectedSigners =
+                                        Dict.values expectedSigners
+                                            |> List.map .key
+                                    }
+                            , if Dict.Any.member ref someRefUtxos then
+                                Nothing
+
+                              else
+                                Just <|
+                                    Api.defaultApiProvider.retrieveTxs [ ref.transactionId ] (GotRefUtxoTx ref)
+                            )
+
+            else
+                Err "The script hash should be 28 bytes long."
+
+
+utxoRefFromStr : String -> Result String OutputReference
+utxoRefFromStr str =
+    case String.split "#" str of
+        [ txIdHex, indexStr ] ->
+            if String.length txIdHex == 64 then
+                case ( Bytes.fromHex txIdHex, String.toInt indexStr ) of
+                    ( Just txId, Just index ) ->
+                        Ok { transactionId = txId, outputIndex = index }
+
+                    ( Nothing, _ ) ->
+                        Err <| "The Tx ID doesn’t look like valid hex: " ++ txIdHex
+
+                    ( _, Nothing ) ->
+                        Err <| "The output index doesn’t look like a valid integer: " ++ indexStr
+
+            else
+                Err "The Tx ID should be the hex of a 32 bytes identifier"
+
+        _ ->
+            Err "An output reference must have the shape: {txid}#0, for example: 10e7c91aca541c47c2a03debf6ebfc894ce553d0d0d3c01d053ebfca4e2893cb#0"
 
 
 stakeKeyHashFromStr : String -> Result String (Bytes CredentialHash)
@@ -929,6 +1119,18 @@ stakeKeyHashFromStr str =
                         _ ->
                             Err "This is a full address, please use a stake (reward) address instead"
                 )
+
+
+selectSigners : List (Bytes CredentialHash) -> Dict String (Bytes CredentialHash) -> Dict String { expected : Bool, key : Bytes CredentialHash }
+selectSigners expectedSigners allPotentialSigners =
+    let
+        noneAreExpected =
+            Dict.map (\_ key -> { expected = False, key = key }) allPotentialSigners
+
+        toggleKey key signers =
+            Dict.update (Bytes.toHex key) (Maybe.map (\entry -> { entry | expected = True })) signers
+    in
+    List.foldl toggleKey noneAreExpected expectedSigners
 
 
 
@@ -1625,7 +1827,7 @@ allPrepSteps maybeCostModels m =
                             |> blake2b256 Nothing
                             |> Bytes.fromU8
                     }
-                , localStateUtxos = f.utxos
+                , localStateUtxos = Dict.Any.union m.someRefUtxos f.utxos
                 , feeProviderAddress = f.address
                 , costModels = costModels
                 }
@@ -1713,7 +1915,7 @@ view ctx model =
 --
 
 
-viewVoterIdentificationStep : ViewContext msg -> Step VoterPreparationForm {} VoterWitness -> Html msg
+viewVoterIdentificationStep : ViewContext msg -> Step VoterPreparationForm VoterWitness VoterWitness -> Html msg
 viewVoterIdentificationStep ctx step =
     case step of
         Preparing form ->
@@ -1771,33 +1973,71 @@ viewVoterForm walletChangeAddress { voterType, voterCred } =
                                 Nothing ->
                                     text ""
                             ]
-                        , div [] [ viewCredTypeOption (ScriptVoter { scriptHash = "", utxoRef = "" }) "(WIP) Script Voter" False ]
+                        , div [] [ viewCredTypeOption (NativeScriptVoter { scriptHash = "", scriptBytes = "", utxoRef = "", expectedSigners = Dict.empty }) "Native Script Voter" False ]
                         ]
 
-                ( _, ScriptVoter { scriptHash, utxoRef } ) ->
+                ( _, NativeScriptVoter ({ scriptHash, scriptBytes, utxoRef, expectedSigners } as nativeConfig) ) ->
                     div []
                         [ div [] [ viewCredTypeOption (StakeKeyVoter "") "Stake Key Voter" False ]
-                        , div [] [ viewCredTypeOption (ScriptVoter { scriptHash = "", utxoRef = "" }) "(WIP) Script Voter" True ]
+                        , div [] [ viewCredTypeOption (NativeScriptVoter { scriptHash = "", scriptBytes = "", utxoRef = "", expectedSigners = Dict.empty }) "Native Script Voter" True ]
                         , Html.p []
-                            [ Html.label [] [ text "Script Hash" ]
+                            [ text "Native scripts are often used to handle multisig accounts natively on Cardano."
+                            , text " To vote with a multisig, we need the script hash and the script bytes."
+                            , text " Unfortunately, this app currently cannot use the bytes directly (skill issue) so we also need you to provide a reference UTxO holding the script."
+                            , text " Finally, if the multisig can be signed without all of its recorded signers, we ask you who are the expected signers, to minimize the Tx fees."
+                            ]
+                        , Html.p []
+                            [ Html.label [] [ text "Script hash (hex): " ]
                             , Html.input
                                 [ HA.type_ "text"
                                 , HA.value scriptHash
                                 , Html.Events.onInput
-                                    (\s -> VoterCredentialUpdated (ScriptVoter { scriptHash = s, utxoRef = utxoRef }))
+                                    (\s -> VoterCredentialUpdated (NativeScriptVoter { nativeConfig | scriptHash = s }))
                                 ]
                                 []
-                            , Html.label [] [ text "UTxO Reference" ]
+                            ]
+                        , Html.p []
+                            [ Html.label [] [ text "Reference UTxO: " ]
                             , Html.input
                                 [ HA.type_ "text"
                                 , HA.value utxoRef
                                 , Html.Events.onInput
-                                    (\s -> VoterCredentialUpdated (ScriptVoter { scriptHash = scriptHash, utxoRef = s }))
+                                    (\s -> VoterCredentialUpdated (NativeScriptVoter { nativeConfig | utxoRef = s }))
                                 ]
                                 []
                             ]
+                        , Html.p []
+                            [ Html.label [] [ text "Native script bytes: " ]
+                            , Html.input
+                                [ HA.type_ "text"
+                                , HA.value scriptBytes
+                                , Html.Events.onInput (\s -> VoterNativeScriptBytes { nativeConfig | scriptBytes = s })
+                                ]
+                                []
+                            ]
+                        , Html.p [] [ text "Expected signers:" ]
+                        , div [] (List.map (viewExpectedSignerCheckbox nativeConfig) <| Dict.values expectedSigners)
                         ]
             ]
+        ]
+
+
+viewExpectedSignerCheckbox : NativeScriptConfig -> { expected : Bool, key : Bytes CredentialHash } -> Html Msg
+viewExpectedSignerCheckbox nativeConfig { expected, key } =
+    let
+        keyHex =
+            Bytes.toHex key
+    in
+    Html.p []
+        [ Html.input
+            [ HA.type_ "checkbox"
+            , HA.id keyHex
+            , HA.name keyHex
+            , HA.checked expected
+            , onCheck (ToggleExpectedSigner nativeConfig keyHex)
+            ]
+            []
+        , Html.label [ HA.for keyHex ] [ text <| " key: " ++ keyHex ]
         ]
 
 
@@ -1862,8 +2102,14 @@ viewIdentifiedVoter voter =
             WithKey cred ->
                 Html.p [] [ text <| "Using key for credential hash: " ++ Bytes.toHex cred ]
 
-            WithScript _ (NativeWitness _) ->
-                Html.p [] [ text "TODO: display native script witness" ]
+            WithScript hash (NativeWitness { expectedSigners }) ->
+                div []
+                    [ Html.p []
+                        [ text <| "Using a native script (hash: " ++ Bytes.toHex hash ++ ")"
+                        , text " and expecting the following signers:"
+                        ]
+                    , Html.ul [] (List.map (\s -> Html.li [] [ text <| Bytes.toHex s ]) expectedSigners)
+                    ]
 
             WithScript _ (PlutusWitness _) ->
                 Html.p [] [ text "TODO: display Plutus script witness" ]

@@ -210,6 +210,57 @@ async def pin_json_to_ipfs(request: IPFSPinJSONRequest):
         )
 
 
+class ProxyRequest(BaseModel):
+    url: str
+    method: str = "GET"
+    headers: dict = {}
+    body: Optional[dict] = None
+
+
+@app.post("/proxy/json")
+async def proxy_request(request: ProxyRequest):
+    """
+    Proxy an HTTP request to the specified URL and return the response.
+    Default "accept" and "content-type" headers for JSON are automatically added.
+    """
+    try:
+        # Default headers for JSON
+        default_headers = {
+            "accept": "application/json",
+            "content-type": "application/json",
+        }
+
+        # Merge default headers with custom headers
+        headers = {**default_headers, **request.headers}
+
+        # Prepare the request kwargs
+        request_kwargs = {
+            "method": request.method,
+            "url": request.url,
+            "headers": headers,
+        }
+
+        # Add body if present
+        if request.body is not None:
+            request_kwargs["json"] = request.body
+
+        # Make the request
+        response = requests.request(**request_kwargs)
+
+        return Response(
+            content=response.content,
+            status_code=response.status_code,
+            media_type=response.headers.get("content-type"),
+        )
+
+    except requests.RequestException as e:
+        logger.error(f"Proxy request failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Proxy request failed: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
+
+
 # Mount static files from static directory
 app.mount("/", StaticFiles(directory=static_dir), name="static")
 

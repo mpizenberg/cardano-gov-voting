@@ -1122,8 +1122,15 @@ stakeKeyHashFromStr str =
 
 
 selectSigners : List (Bytes CredentialHash) -> Dict String (Bytes CredentialHash) -> Dict String { expected : Bool, key : Bytes CredentialHash }
-selectSigners expectedSigners potentialSigners =
-    Debug.todo ""
+selectSigners expectedSigners allPotentialSigners =
+    let
+        noneAreExpected =
+            Dict.map (\_ key -> { expected = False, key = key }) allPotentialSigners
+
+        toggleKey key signers =
+            Dict.update (Bytes.toHex key) (Maybe.map (\entry -> { entry | expected = True })) signers
+    in
+    List.foldl toggleKey noneAreExpected expectedSigners
 
 
 

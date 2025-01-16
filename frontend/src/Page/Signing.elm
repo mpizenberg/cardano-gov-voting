@@ -2,7 +2,6 @@ module Page.Signing exposing (LoadedTxModel, Model(..), Msg(..), UpdateContext, 
 
 import Blake2b exposing (blake2b224)
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano exposing (dummyBytes)
 import Cardano.Address exposing (CredentialHash)
 import Cardano.Cip30 as Cip30
 import Cardano.Transaction as Transaction exposing (Transaction, VKeyWitness)

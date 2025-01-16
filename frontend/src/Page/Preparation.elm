@@ -1856,7 +1856,7 @@ addTxSignatures vkeyWitnesses model =
             )
 
         _ ->
-            -- TODO: better handle these cases
+            -- We only expect to sign a Tx while being in the Validating state
             ( Nothing, model )
 
 
@@ -1867,7 +1867,7 @@ recordSubmittedTx txId model =
             { model | signTxStep = Done { signedTx = tx, txId = txId } }
 
         _ ->
-            -- TODO: better handle these cases
+            -- We only expect to submit a Tx while being in the Validating state
             model
 
 

@@ -6,7 +6,7 @@ import Cardano.Address as Address exposing (Address, Credential, CredentialHash,
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
 import Cardano.Gov exposing (CostModels)
-import Cardano.Script as Script exposing (NativeScript)
+import Cardano.Script as Script exposing (NativeScript, Script)
 import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.TxExamples exposing (prettyTx)
 import Cardano.Uplc as Uplc
@@ -171,9 +171,9 @@ validateFormAndBuildRegister ctx model =
                                     { txWithFakeWitnesses = tx
                                     , nativeScript = script
                                     , scriptHash = scriptHash
-
-                                    -- , scriptRefInput = locateScriptRef scriptHash tx.body.outputs
-                                    , scriptRefInput = Nothing
+                                    , scriptRefInput =
+                                        Transaction.locateScriptWithHash scriptHash tx.body.outputs
+                                            |> Maybe.map (\( index, _ ) -> OutputReference (Transaction.computeTxId tx) index)
                                     }
                             , error = Nothing
                           }
@@ -431,11 +431,6 @@ buildUnregisterTx w costModels unsortedCreds model =
         |> Result.map (\tx -> ( tx, nativeScript, scriptHash ))
 
 
-locateScriptRef : Bytes CredentialHash -> Transaction -> OutputReference
-locateScriptRef scriptHash tx =
-    Debug.todo "compute TxId, find output index"
-
-
 
 -- ###################################################################
 -- VIEW
@@ -611,5 +606,5 @@ viewImportantSummaryTx { nativeScript, scriptHash, scriptRefInput } =
         , Html.p [] [ text <| "DRep ID: TODO" ]
         , Html.p [] [ text <| "Script hash: " ++ Bytes.toHex scriptHash ]
         , Html.p [] [ text <| "Script bytes: " ++ Bytes.toHex scriptBytes ]
-        , Html.p [] [ text <| "Script reference input: " ++ scriptRef ]
+        , Html.p [] [ text <| "Script reference UTxO: " ++ scriptRef ]
         ]

@@ -2,7 +2,6 @@ module Page.Signing exposing (LoadedTxModel, Model(..), Msg(..), UpdateContext, 
 
 import Blake2b exposing (blake2b224)
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano exposing (dummyBytes)
 import Cardano.Address exposing (CredentialHash)
 import Cardano.Cip30 as Cip30
 import Cardano.Transaction as Transaction exposing (Transaction, VKeyWitness)
@@ -40,7 +39,7 @@ initialModel expectedSigners maybeTx =
         Just tx ->
             LoadedTx
                 { tx = tx
-                , txId = dummyBytes 32 "TODO: Tx ID from Tx"
+                , txId = Transaction.computeTxId tx
                 , expectedSigners =
                     List.filterMap Bytes.fromHex expectedSigners
                         |> List.map (\hash -> ( Bytes.toHex hash, { keyHash = hash } ))
@@ -156,9 +155,9 @@ view ctx model =
             MissingTx ->
                 Html.p [] [ text "TODO: button to load the Tx from a file" ]
 
-            LoadedTx { tx, expectedSigners, vkeyWitnesses, txSubmitted } ->
+            LoadedTx { tx, txId, expectedSigners, vkeyWitnesses, txSubmitted } ->
                 div []
-                    [ Html.p [] [ text <| "Tx ID: TODO" ]
+                    [ Html.p [] [ text <| Bytes.toHex txId ]
                     , Html.p [] [ Html.pre [] [ text <| prettyTx tx ] ]
                     , Html.h3 [] [ text <| "Expected Signatures" ]
                     , Html.div [] (viewExpectedSignatures expectedSigners vkeyWitnesses)
@@ -193,7 +192,7 @@ view ctx model =
                         Nothing ->
                             text ""
 
-                        Just txId ->
+                        Just _ ->
                             Html.p [] [ text <| "Tx submitted! Tx ID: " ++ Bytes.toHex txId ]
                     ]
         ]

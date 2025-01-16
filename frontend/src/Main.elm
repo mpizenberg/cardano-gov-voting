@@ -464,9 +464,9 @@ handleWalletResponse response model =
                     , Cmd.none
                     )
 
-                -- TODO
+                -- No other page expects to receive a Tx signature
                 _ ->
-                    Debug.todo "Handle signed Tx in other pages"
+                    ( model, Cmd.none )
 
         -- The wallet just submitted a Tx
         Cip30.ApiResponse _ (Cip30.SubmittedTx txId) ->
@@ -483,11 +483,10 @@ handleWalletResponse response model =
                     , Cmd.none
                     )
 
-                -- TODO
+                -- No other page expects to submit a Tx
                 _ ->
-                    Debug.todo "Handle submitted Tx in other pages"
+                    ( model, Cmd.none )
 
-        -- TODO
         Cip30.ApiResponse _ _ ->
             ( { model | errors = "TODO: unhandled CIP30 response yet" :: model.errors }
             , Cmd.none

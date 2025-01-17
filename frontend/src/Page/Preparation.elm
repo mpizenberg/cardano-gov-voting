@@ -544,7 +544,7 @@ update ctx msg model =
                             )
 
                         Just tx ->
-                            case List.Extra.get outputRef.outputIndex tx.body.outputs of
+                            case List.Extra.getAt outputRef.outputIndex tx.body.outputs of
                                 Nothing ->
                                     let
                                         errorMsg =

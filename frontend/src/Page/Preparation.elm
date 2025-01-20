@@ -1,6 +1,6 @@
 module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterCredForm, VoterPreparationForm, VoterType, addTxSignatures, init, pinRationaleFile, recordSubmittedTx, update, view)
 
-import Api exposing (ActiveProposal)
+import Api exposing (ActiveProposal, IpfsAnswer(..))
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..), VoterWitness(..), WitnessSource(..))
@@ -432,11 +432,6 @@ type alias LoadedWallet =
     , changeAddress : Address
     , utxos : Utxo.RefDict Output
     }
-
-
-type IpfsAnswer
-    = IpfsError String
-    | IpfsAddSuccessful IpfsFile
 
 
 update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg )
@@ -1690,74 +1685,18 @@ pinRationaleFile fileAsValue model =
             )
 
         ( Ok file, Validating storageForm _ ) ->
-            let
-                responseToIpfsAnswer : Http.Response String -> Result String IpfsAnswer
-                responseToIpfsAnswer response =
-                    case response of
-                        Http.GoodStatus_ _ body ->
-                            JD.decodeString ipfsAnswerDecoder body
-                                |> Result.mapError JD.errorToString
-
-                        Http.BadStatus_ meta body ->
-                            case JD.decodeString ipfsAnswerDecoder body of
-                                Ok answer ->
-                                    Ok answer
-
-                                Err _ ->
-                                    Err <| "Bad status (" ++ String.fromInt meta.statusCode ++ "): " ++ meta.statusText
-
-                        Http.NetworkError_ ->
-                            Err "Network error. Maybe you lost your connection, or some other network error occured."
-
-                        Http.Timeout_ ->
-                            Err "The Pin request timed out."
-
-                        Http.BadUrl_ str ->
-                            Err <| "Incorrect URL: " ++ str
-
-                request =
-                    Http.request
-                        { method = "POST"
-                        , headers = List.map (\( k, v ) -> Http.header k v) storageForm.headers
-                        , url = storageForm.ipfsServer ++ "/add"
-                        , body = Http.multipartBody [ Http.filePart "file" file ]
-                        , expect = Http.expectStringResponse GotIpfsAnswer responseToIpfsAnswer
-                        , timeout = Nothing
-                        , tracker = Nothing
-                        }
-            in
-            ( model, request )
+            ( model
+            , Api.defaultApiProvider.ipfsAdd
+                { rpc = storageForm.ipfsServer
+                , headers = storageForm.headers
+                , file = file
+                }
+                GotIpfsAnswer
+            )
 
         -- Ignore if we aren’t validating the permanent storage step
         _ ->
             ( model, Cmd.none )
-
-
-ipfsAnswerDecoder : JD.Decoder IpfsAnswer
-ipfsAnswerDecoder =
-    JD.oneOf
-        -- Error
-        [ JD.map3 (\err msg code -> IpfsError <| String.fromInt code ++ " (" ++ err ++ "): " ++ msg)
-            (JD.field "error" JD.string)
-            (JD.field "message" JD.string)
-            (JD.field "status_code" JD.int)
-        , JD.map IpfsError
-            (JD.field "detail" JD.string)
-        , JD.map (\json -> IpfsError <| JE.encode 2 json)
-            (JD.field "detail" JD.value)
-
-        -- Blockfrost format
-        , JD.map3 (\name hash size -> IpfsAddSuccessful <| IpfsFile name hash size)
-            (JD.field "name" JD.string)
-            (JD.field "ipfs_hash" JD.string)
-            (JD.field "size" JD.string)
-
-        -- CF format
-        , JD.map3 (\name hash size -> IpfsAddSuccessful <| IpfsFile name hash size)
-            (JD.field "Name" JD.string)
-            (JD.field "Hash" JD.string)
-            (JD.field "Size" JD.string)
-        ]
 
 
 handleIpfsAnswer : Model -> StorageForm -> IpfsAnswer -> ( Model, Cmd msg )

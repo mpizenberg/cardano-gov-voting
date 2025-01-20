@@ -342,7 +342,7 @@ buildRegisterTx w costModels unsortedCreds model =
             -- Temporary 2 Ada output, but we optimize it right after
             , amount = Cardano.Value.onlyLovelace <| Natural.fromSafeInt 2000000
             , datumOption = Nothing
-            , referenceScript = Just (Script.Native nativeScript)
+            , referenceScript = Just (Script.refFromScript <| Script.Native nativeScript)
             }
 
         -- Output with the multisig native script, with the minimum amount of Ada

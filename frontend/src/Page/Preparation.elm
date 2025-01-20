@@ -1,4 +1,4 @@
-module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterCredForm, VoterPreparationForm, VoterType, addTxSignatures, init, recordSubmittedTx, update, view)
+module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterCredForm, VoterPreparationForm, VoterType, addTxSignatures, init, pinRationaleFile, recordSubmittedTx, update, view)
 
 import Api exposing (ActiveProposal)
 import Blake2b exposing (blake2b256)
@@ -417,6 +417,7 @@ type alias UpdateContext msg =
     , loadedWallet : Maybe LoadedWallet
     , feeProviderAskUtxosCmd : Cmd msg
     , jsonLdContexts : JsonLdContexts
+    , jsonRationaleToFile : { fileContent : String, fileName : String } -> Cmd msg
     , costModels : Maybe CostModels
     , walletSignTx : Transaction -> Cmd msg
     }
@@ -1638,7 +1639,10 @@ validateIpfsFormAndSendPinRequest ctx form model =
     case ( model.rationaleSignatureStep, validateIpfsForm form ) of
         ( Done ratSig, Ok _ ) ->
             ( { model | permanentStorageStep = Validating form {} }
-            , Cmd.map ctx.wrapMsg <| sendPinRequest form ratSig
+            , ctx.jsonRationaleToFile
+                { fileContent = ratSig.signedJson
+                , fileName = "rationale-signed.json"
+                }
             )
 
         ( Done _, Err error ) ->
@@ -1677,50 +1681,56 @@ validateIpfsForm form =
         |> Result.andThen (\_ -> nonEmptyHeadersResult form.headers)
 
 
-sendPinRequest : StorageForm -> RationaleSignature -> Cmd Msg
-sendPinRequest storageForm ratSig =
-    let
-        encodedBody =
-            JE.object
-                [ ( "ipfsServer", JE.string storageForm.ipfsServer )
-                , ( "headers", JE.list (\( f, v ) -> JE.list JE.string [ f, v ]) storageForm.headers )
-                , ( "fileName", JE.string "rationale-signed.json" )
-                , ( "jsonContent", JE.string ratSig.signedJson )
-                ]
+pinRationaleFile : JD.Value -> Model -> ( Model, Cmd Msg )
+pinRationaleFile fileAsValue model =
+    case ( JD.decodeValue File.decoder fileAsValue, model.permanentStorageStep ) of
+        ( Err error, Validating form _ ) ->
+            ( { model | permanentStorageStep = Preparing { form | error = Just <| JD.errorToString error } }
+            , Cmd.none
+            )
 
-        responseToIpfsAnswer : Http.Response String -> Result String IpfsAnswer
-        responseToIpfsAnswer response =
-            case response of
-                Http.GoodStatus_ _ body ->
-                    JD.decodeString ipfsAnswerDecoder body
-                        |> Result.mapError JD.errorToString
+        ( Ok file, Validating storageForm _ ) ->
+            let
+                responseToIpfsAnswer : Http.Response String -> Result String IpfsAnswer
+                responseToIpfsAnswer response =
+                    case response of
+                        Http.GoodStatus_ _ body ->
+                            JD.decodeString ipfsAnswerDecoder body
+                                |> Result.mapError JD.errorToString
 
-                Http.BadStatus_ meta body ->
-                    case JD.decodeString ipfsAnswerDecoder body of
-                        Ok answer ->
-                            Ok answer
+                        Http.BadStatus_ meta body ->
+                            case JD.decodeString ipfsAnswerDecoder body of
+                                Ok answer ->
+                                    Ok answer
 
-                        Err _ ->
-                            Err <| "Bad status (" ++ String.fromInt meta.statusCode ++ "): " ++ meta.statusText
+                                Err _ ->
+                                    Err <| "Bad status (" ++ String.fromInt meta.statusCode ++ "): " ++ meta.statusText
 
-                Http.NetworkError_ ->
-                    Err "Network error. Maybe you lost your connection, or some other network error occured."
+                        Http.NetworkError_ ->
+                            Err "Network error. Maybe you lost your connection, or some other network error occured."
 
-                Http.Timeout_ ->
-                    Err "The Pin request timed out."
+                        Http.Timeout_ ->
+                            Err "The Pin request timed out."
 
-                Http.BadUrl_ str ->
-                    Err <| "Incorrect URL: " ++ str
-    in
-    Http.request
-        { method = "POST"
-        , headers = [ Http.header "accept" "application/json" ]
-        , url = "/ipfs-pin/json"
-        , body = Http.jsonBody encodedBody
-        , expect = Http.expectStringResponse GotIpfsAnswer responseToIpfsAnswer
-        , timeout = Nothing
-        , tracker = Nothing
-        }
+                        Http.BadUrl_ str ->
+                            Err <| "Incorrect URL: " ++ str
+
+                request =
+                    Http.request
+                        { method = "POST"
+                        , headers = List.map (\( k, v ) -> Http.header k v) storageForm.headers
+                        , url = storageForm.ipfsServer ++ "/add"
+                        , body = Http.multipartBody [ Http.filePart "file" file ]
+                        , expect = Http.expectStringResponse GotIpfsAnswer responseToIpfsAnswer
+                        , timeout = Nothing
+                        , tracker = Nothing
+                        }
+            in
+            ( model, request )
+
+        -- Ignore if we aren’t validating the permanent storage step
+        _ ->
+            ( model, Cmd.none )
 
 
 ipfsAnswerDecoder : JD.Decoder IpfsAnswer

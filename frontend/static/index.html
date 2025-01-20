@@ -38,6 +38,14 @@
                 history.pushState({}, "", url);
                 // mainApp.ports.onUrlChange.send(location.href);
             });
+
+            // JSON rationale conversion from String to File
+            mainApp.ports.jsonRationaleToFile.subscribe(async function (data) {
+                const file = new File([data.fileContent], data.fileName, {
+                    type: "text/plain",
+                });
+                mainApp.ports.gotRationaleAsFile.send(file);
+            });
         </script>
     </body>
 </html>

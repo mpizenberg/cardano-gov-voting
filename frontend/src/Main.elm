@@ -32,7 +32,13 @@ main =
     Browser.element
         { init = init
         , update = update
-        , subscriptions = \_ -> Sub.batch [ fromWallet WalletMsg, onUrlChange (locationHrefToRoute >> UrlChanged) ]
+        , subscriptions =
+            \_ ->
+                Sub.batch
+                    [ fromWallet WalletMsg
+                    , onUrlChange (locationHrefToRoute >> UrlChanged)
+                    , gotRationaleAsFile GotRationaleAsFile
+                    ]
         , view = view
         }
 
@@ -47,6 +53,12 @@ port onUrlChange : (String -> msg) -> Sub msg
 
 
 port pushUrl : String -> Cmd msg
+
+
+port jsonRationaleToFile : { fileContent : String, fileName : String } -> Cmd msg
+
+
+port gotRationaleAsFile : (Value -> msg) -> Sub msg
 
 
 
@@ -115,6 +127,7 @@ type Msg
     | GotProposals (Result Http.Error (List ActiveProposal))
       -- Preparation page
     | PreparationPageMsg Page.Preparation.Msg
+    | GotRationaleAsFile Value
       -- Signing page
     | SigningPageMsg Page.Signing.Msg
       -- Multisig DRep registration page
@@ -263,6 +276,7 @@ update msg model =
                             , loadedWallet = loadedWallet
                             , feeProviderAskUtxosCmd = Cmd.none -- TODO
                             , jsonLdContexts = model.jsonLdContexts
+                            , jsonRationaleToFile = jsonRationaleToFile
                             , costModels = Maybe.map .costModels model.protocolParams
                             , walletSignTx =
                                 \tx ->
@@ -276,6 +290,16 @@ update msg model =
                     in
                     Page.Preparation.update ctx pageMsg pageModel
                         |> Tuple.mapFirst (\newPageModel -> { model | page = PreparationPage newPageModel })
+
+                _ ->
+                    ( model, Cmd.none )
+
+        ( GotRationaleAsFile file, { page } ) ->
+            case page of
+                PreparationPage pageModel ->
+                    Page.Preparation.pinRationaleFile file pageModel
+                        |> Tuple.mapFirst (\newPageModel -> { model | page = PreparationPage newPageModel })
+                        |> Tuple.mapSecond (Cmd.map PreparationPageMsg)
 
                 _ ->
                     ( model, Cmd.none )

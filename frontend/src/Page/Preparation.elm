@@ -1,6 +1,6 @@
-module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterCredForm, VoterPreparationForm, VoterType, addTxSignatures, init, recordSubmittedTx, update, view)
+module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterCredForm, VoterPreparationForm, VoterType, addTxSignatures, init, pinRationaleFile, recordSubmittedTx, update, view)
 
-import Api exposing (ActiveProposal)
+import Api exposing (ActiveProposal, IpfsAnswer(..))
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..), VoterWitness(..), WitnessSource(..))
@@ -417,6 +417,7 @@ type alias UpdateContext msg =
     , loadedWallet : Maybe LoadedWallet
     , feeProviderAskUtxosCmd : Cmd msg
     , jsonLdContexts : JsonLdContexts
+    , jsonRationaleToFile : { fileContent : String, fileName : String } -> Cmd msg
     , costModels : Maybe CostModels
     , walletSignTx : Transaction -> Cmd msg
     }
@@ -431,11 +432,6 @@ type alias LoadedWallet =
     , changeAddress : Address
     , utxos : Utxo.RefDict Output
     }
-
-
-type IpfsAnswer
-    = IpfsError String
-    | IpfsAddSuccessful IpfsFile
 
 
 update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg )
@@ -1638,7 +1634,10 @@ validateIpfsFormAndSendPinRequest ctx form model =
     case ( model.rationaleSignatureStep, validateIpfsForm form ) of
         ( Done ratSig, Ok _ ) ->
             ( { model | permanentStorageStep = Validating form {} }
-            , Cmd.map ctx.wrapMsg <| sendPinRequest form ratSig
+            , ctx.jsonRationaleToFile
+                { fileContent = ratSig.signedJson
+                , fileName = "rationale-signed.json"
+                }
             )
 
         ( Done _, Err error ) ->
@@ -1677,77 +1676,27 @@ validateIpfsForm form =
         |> Result.andThen (\_ -> nonEmptyHeadersResult form.headers)
 
 
-sendPinRequest : StorageForm -> RationaleSignature -> Cmd Msg
-sendPinRequest storageForm ratSig =
-    let
-        encodedBody =
-            JE.object
-                [ ( "ipfsServer", JE.string storageForm.ipfsServer )
-                , ( "headers", JE.list (\( f, v ) -> JE.list JE.string [ f, v ]) storageForm.headers )
-                , ( "fileName", JE.string "rationale-signed.json" )
-                , ( "jsonContent", JE.string ratSig.signedJson )
-                ]
+pinRationaleFile : JD.Value -> Model -> ( Model, Cmd Msg )
+pinRationaleFile fileAsValue model =
+    case ( JD.decodeValue File.decoder fileAsValue, model.permanentStorageStep ) of
+        ( Err error, Validating form _ ) ->
+            ( { model | permanentStorageStep = Preparing { form | error = Just <| JD.errorToString error } }
+            , Cmd.none
+            )
 
-        responseToIpfsAnswer : Http.Response String -> Result String IpfsAnswer
-        responseToIpfsAnswer response =
-            case response of
-                Http.GoodStatus_ _ body ->
-                    JD.decodeString ipfsAnswerDecoder body
-                        |> Result.mapError JD.errorToString
+        ( Ok file, Validating storageForm _ ) ->
+            ( model
+            , Api.defaultApiProvider.ipfsAdd
+                { rpc = storageForm.ipfsServer
+                , headers = storageForm.headers
+                , file = file
+                }
+                GotIpfsAnswer
+            )
 
-                Http.BadStatus_ meta body ->
-                    case JD.decodeString ipfsAnswerDecoder body of
-                        Ok answer ->
-                            Ok answer
-
-                        Err _ ->
-                            Err <| "Bad status (" ++ String.fromInt meta.statusCode ++ "): " ++ meta.statusText
-
-                Http.NetworkError_ ->
-                    Err "Network error. Maybe you lost your connection, or some other network error occured."
-
-                Http.Timeout_ ->
-                    Err "The Pin request timed out."
-
-                Http.BadUrl_ str ->
-                    Err <| "Incorrect URL: " ++ str
-    in
-    Http.request
-        { method = "POST"
-        , headers = [ Http.header "accept" "application/json" ]
-        , url = "/ipfs-pin/json"
-        , body = Http.jsonBody encodedBody
-        , expect = Http.expectStringResponse GotIpfsAnswer responseToIpfsAnswer
-        , timeout = Nothing
-        , tracker = Nothing
-        }
-
-
-ipfsAnswerDecoder : JD.Decoder IpfsAnswer
-ipfsAnswerDecoder =
-    JD.oneOf
-        -- Error
-        [ JD.map3 (\err msg code -> IpfsError <| String.fromInt code ++ " (" ++ err ++ "): " ++ msg)
-            (JD.field "error" JD.string)
-            (JD.field "message" JD.string)
-            (JD.field "status_code" JD.int)
-        , JD.map IpfsError
-            (JD.field "detail" JD.string)
-        , JD.map (\json -> IpfsError <| JE.encode 2 json)
-            (JD.field "detail" JD.value)
-
-        -- Blockfrost format
-        , JD.map3 (\name hash size -> IpfsAddSuccessful <| IpfsFile name hash size)
-            (JD.field "name" JD.string)
-            (JD.field "ipfs_hash" JD.string)
-            (JD.field "size" JD.string)
-
-        -- CF format
-        , JD.map3 (\name hash size -> IpfsAddSuccessful <| IpfsFile name hash size)
-            (JD.field "Name" JD.string)
-            (JD.field "Hash" JD.string)
-            (JD.field "Size" JD.string)
-        ]
+        -- Ignore if we aren’t validating the permanent storage step
+        _ ->
+            ( model, Cmd.none )
 
 
 handleIpfsAnswer : Model -> StorageForm -> IpfsAnswer -> ( Model, Cmd msg )

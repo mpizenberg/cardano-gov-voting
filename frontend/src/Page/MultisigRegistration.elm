@@ -1,7 +1,7 @@
 module Page.MultisigRegistration exposing (LoadedWallet, Model, Msg(..), RegisterTxSummary, UnregisterTxSummary, UpdateContext, ViewContext, initialModel, update, view)
 
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano exposing (CertificateIntent(..), CredentialWitness(..), ScriptWitness(..), SpendSource(..), TxIntent(..), WitnessSource(..))
+import Cardano exposing (CertificateIntent(..), CredentialWitness(..), ScriptWitness(..), SpendSource(..), TxFinalized, TxIntent(..), WitnessSource(..))
 import Cardano.Address as Address exposing (Address, Credential, CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
@@ -39,7 +39,8 @@ type alias Model =
 
 
 type alias RegisterTxSummary =
-    { txWithFakeWitnesses : Transaction
+    { tx : Transaction
+    , expectedSignatures : List (Bytes CredentialHash)
     , nativeScript : NativeScript
     , scriptHash : Bytes CredentialHash
     , scriptRefInput : Maybe OutputReference
@@ -47,7 +48,8 @@ type alias RegisterTxSummary =
 
 
 type alias UnregisterTxSummary =
-    { txWithFakeWitnesses : Transaction
+    { tx : Transaction
+    , expectedSignatures : List (Bytes CredentialHash)
     , scriptHash : Bytes CredentialHash
     }
 
@@ -164,11 +166,12 @@ validateFormAndBuildRegister ctx model =
                         , Cmd.none
                         )
 
-                    Ok ( tx, script, scriptHash ) ->
+                    Ok ( { tx, expectedSignatures }, script, scriptHash ) ->
                         ( { model
                             | registerTxSummary =
                                 Just
-                                    { txWithFakeWitnesses = tx
+                                    { tx = tx
+                                    , expectedSignatures = expectedSignatures
                                     , nativeScript = script
                                     , scriptHash = scriptHash
                                     , scriptRefInput =
@@ -214,11 +217,12 @@ validateFormAndBuildUnregister ctx model =
                         , Cmd.none
                         )
 
-                    Ok ( tx, _, scriptHash ) ->
+                    Ok ( { tx, expectedSignatures }, _, scriptHash ) ->
                         ( { model
                             | unregisterTxSummary =
                                 Just
-                                    { txWithFakeWitnesses = tx
+                                    { tx = tx
+                                    , expectedSignatures = expectedSignatures
                                     , scriptHash = scriptHash
                                     }
                             , error = Nothing
@@ -302,7 +306,7 @@ nativeMultisig unsortedCreds model =
     }
 
 
-buildRegisterTx : LoadedWallet -> CostModels -> List (Bytes CredentialHash) -> Model -> Result String ( Transaction, NativeScript, Bytes CredentialHash )
+buildRegisterTx : LoadedWallet -> CostModels -> List (Bytes CredentialHash) -> Model -> Result String ( TxFinalized, NativeScript, Bytes CredentialHash )
 buildRegisterTx w costModels unsortedCreds model =
     let
         { sortedCredentials, nativeScript, scriptHash, drepCred } =
@@ -392,7 +396,7 @@ buildRegisterTx w costModels unsortedCreds model =
         |> Result.map (\tx -> ( tx, nativeScript, scriptHash ))
 
 
-buildUnregisterTx : LoadedWallet -> CostModels -> List (Bytes CredentialHash) -> Model -> Result String ( Transaction, NativeScript, Bytes CredentialHash )
+buildUnregisterTx : LoadedWallet -> CostModels -> List (Bytes CredentialHash) -> Model -> Result String ( TxFinalized, NativeScript, Bytes CredentialHash )
 buildUnregisterTx w costModels unsortedCreds model =
     let
         { sortedCredentials, nativeScript, scriptHash } =
@@ -440,7 +444,7 @@ buildUnregisterTx w costModels unsortedCreds model =
 type alias ViewContext msg =
     { wrapMsg : Msg -> msg
     , wallet : Maybe Cip30.Wallet
-    , signingLink : Transaction -> List String -> List (Html msg) -> Html msg
+    , signingLink : Transaction -> List (Bytes CredentialHash) -> List (Html msg) -> Html msg
     }
 
 
@@ -470,23 +474,11 @@ view ctx model =
                 text ""
 
             Just summary ->
-                let
-                    txWithoutSignatures =
-                        Transaction.updateSignatures (always Nothing) summary.txWithFakeWitnesses
-
-                    -- The placeholder vkey witnesses (to compute fees) should start with the 28 bytes
-                    -- of the expected public key hashes.
-                    -- Except in the very unlikely case where the hash looks like ascii (char < 128)
-                    -- which is a 1/2^28 probability.
-                    expectedSignatures =
-                        Maybe.withDefault [] summary.txWithFakeWitnesses.witnessSet.vkeywitness
-                            |> List.map (\{ vkey } -> Bytes.toHex vkey |> String.slice 0 (2 * 28))
-                in
                 div []
                     [ Html.p [] [ text "Tx to sign:" ]
-                    , Html.pre [] [ text <| prettyTx txWithoutSignatures ]
+                    , Html.pre [] [ text <| prettyTx summary.tx ]
                     , viewImportantSummaryTx summary
-                    , ctx.signingLink txWithoutSignatures expectedSignatures [ text "Sign & submit the Tx on the signing page" ]
+                    , ctx.signingLink summary.tx summary.expectedSignatures [ text "Sign & submit the Tx on the signing page" ]
                     ]
         , Html.hr [] []
         , Html.h3 [] [ text "DRep Unregistration" ]
@@ -497,22 +489,10 @@ view ctx model =
                 text ""
 
             Just summary ->
-                let
-                    txWithoutSignatures =
-                        Transaction.updateSignatures (always Nothing) summary.txWithFakeWitnesses
-
-                    -- The placeholder vkey witnesses (to compute fees) should start with the 28 bytes
-                    -- of the expected public key hashes.
-                    -- Except in the very unlikely case where the hash looks like ascii (char < 128)
-                    -- which is a 1/2^28 probability.
-                    expectedSignatures =
-                        Maybe.withDefault [] summary.txWithFakeWitnesses.witnessSet.vkeywitness
-                            |> List.map (\{ vkey } -> Bytes.toHex vkey |> String.slice 0 (2 * 28))
-                in
                 div []
                     [ Html.p [] [ text "Tx to sign:" ]
-                    , Html.pre [] [ text <| prettyTx txWithoutSignatures ]
-                    , ctx.signingLink txWithoutSignatures expectedSignatures [ text "Sign & submit the Tx on the signing page" ]
+                    , Html.pre [] [ text <| prettyTx summary.tx ]
+                    , ctx.signingLink summary.tx summary.expectedSignatures [ text "Sign & submit the Tx on the signing page" ]
                     ]
         , Html.hr [] []
         , Html.h3 [] [ text "Summary" ]

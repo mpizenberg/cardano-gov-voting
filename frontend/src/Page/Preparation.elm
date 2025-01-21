@@ -3,7 +3,7 @@ module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeePr
 import Api exposing (ActiveProposal, IpfsAnswer(..))
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano exposing (CredentialWitness(..), ScriptWitness(..), VoterWitness(..), WitnessSource(..))
+import Cardano exposing (CredentialWitness(..), ScriptWitness(..), TxFinalized, VoterWitness(..), WitnessSource(..))
 import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash)
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
@@ -50,7 +50,7 @@ type alias Model =
     , rationaleSignatureStep : Step RationaleSignatureForm {} RationaleSignature
     , permanentStorageStep : Step StorageForm {} Storage
     , feeProviderStep : Step FeeProviderForm FeeProviderTemp FeeProvider
-    , buildTxStep : Step BuildTxPrep {} Transaction
+    , buildTxStep : Step BuildTxPrep {} TxFinalized
     , signTxStep : Step {} SigningTx SignedTx
     }
 
@@ -1832,7 +1832,7 @@ type alias ViewContext msg =
     , proposals : WebData (Dict String ActiveProposal)
     , jsonLdContexts : JsonLdContexts
     , costModels : Maybe CostModels
-    , signingLink : Transaction -> List String -> List (Html msg) -> Html msg
+    , signingLink : Transaction -> List (Bytes CredentialHash) -> List (Html msg) -> Html msg
     }
 
 
@@ -2964,15 +2964,11 @@ viewBuildTxStep ctx model =
                 , Html.p [] [ text "validating information ..." ]
                 ]
 
-        ( Ok _, Done tx ) ->
-            let
-                txWithoutSignatures =
-                    Transaction.updateSignatures (always Nothing) tx
-            in
+        ( Ok _, Done { tx } ) ->
             div []
                 [ Html.h3 [] [ text "Tx Building" ]
                 , Html.p [] [ text "The generated Tx (₳ displayed as lovelaces) :" ]
-                , Html.p [] [ Html.pre [] [ text <| prettyTx txWithoutSignatures ] ]
+                , Html.p [] [ Html.pre [] [ text <| prettyTx tx ] ]
                 , Html.p [] [ button [ onClick <| ctx.wrapMsg <| ChangeVoteButtonClicked ] [ text "Change vote" ] ]
                 ]
 
@@ -2983,26 +2979,14 @@ viewBuildTxStep ctx model =
 --
 
 
-viewSignTxStep : ViewContext msg -> Step BuildTxPrep {} Transaction -> Step {} SigningTx SignedTx -> Html msg
+viewSignTxStep : ViewContext msg -> Step BuildTxPrep {} TxFinalized -> Step {} SigningTx SignedTx -> Html msg
 viewSignTxStep ctx buildTxStep signTxStep =
     case ( buildTxStep, signTxStep ) of
-        ( Done tx, Preparing _ ) ->
-            let
-                txWithoutSignatures =
-                    Transaction.updateSignatures (always Nothing) tx
-
-                -- The placeholder vkey witnesses (to compute fees) should start with the 28 bytes
-                -- of the expected public key hashes.
-                -- Except in the very unlikely case where the hash looks like ascii (char < 128)
-                -- which is a 1/2^28 probability.
-                expectedSignatures =
-                    Maybe.withDefault [] tx.witnessSet.vkeywitness
-                        |> List.map (\{ vkey } -> Bytes.toHex vkey |> String.slice 0 (2 * 28))
-            in
+        ( Done { tx, expectedSignatures }, Preparing _ ) ->
             div []
                 [ Html.h3 [] [ text "Tx Signing" ]
                 , Html.p [] [ text "Expecting signatures for the following public key hashes:" ]
-                , Html.ul [] (List.map (\hash -> Html.li [] [ Html.pre [] [ text hash ] ]) expectedSignatures)
+                , Html.ul [] (List.map (\hash -> Html.li [] [ Html.pre [] [ text <| Bytes.toHex hash ] ]) expectedSignatures)
                 , if ctx.walletChangeAddress == Nothing then
                     text ""
 
@@ -3012,11 +2996,11 @@ viewSignTxStep ctx buildTxStep signTxStep =
                             [ text "If these keys are all maintained by the connected wallet,"
                             , text " you can try signing and submitting here directly."
                             ]
-                        , Html.p [] [ button [ onClick <| ctx.wrapMsg <| SignTxButtonClicked txWithoutSignatures ] [ text "Sign and submit Tx" ] ]
+                        , Html.p [] [ button [ onClick <| ctx.wrapMsg <| SignTxButtonClicked tx ] [ text "Sign and submit Tx" ] ]
                         ]
                 , Html.p []
                     [ text "Finalize your voting transaction by signing and submitting it via the dedicated siging page: "
-                    , ctx.signingLink txWithoutSignatures expectedSignatures [ text "signing page" ]
+                    , ctx.signingLink tx expectedSignatures [ text "signing page" ]
                     ]
                 ]
 

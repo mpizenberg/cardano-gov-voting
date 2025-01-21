@@ -3,8 +3,8 @@ port module Main exposing (main)
 import Api exposing (ActiveProposal, ProtocolParams)
 import AppUrl exposing (AppUrl)
 import Browser
-import Bytes.Comparable as Bytes
-import Cardano.Address exposing (Address)
+import Bytes.Comparable as Bytes exposing (Bytes)
+import Cardano.Address exposing (Address, CredentialHash)
 import Cardano.Cip30 as Cip30 exposing (WalletDescriptor)
 import Cardano.Gov as Gov
 import Cardano.Transaction as Transaction exposing (Transaction)
@@ -137,7 +137,7 @@ type Msg
 type Route
     = RouteLanding
     | RoutePreparation
-    | RouteSigning { expectedSigners : List String, tx : Maybe Transaction }
+    | RouteSigning { expectedSigners : List (Bytes CredentialHash), tx : Maybe Transaction }
     | RouteMultisigRegistration
     | Route404
 
@@ -189,6 +189,7 @@ locationHrefToRoute locationHref =
                         { expectedSigners =
                             Dict.get "signer" queryParameters
                                 |> Maybe.withDefault []
+                                |> List.filterMap Bytes.fromHex
                         , tx =
                             Maybe.andThen Bytes.fromHex fragment
                                 |> Maybe.andThen Transaction.deserialize
@@ -215,7 +216,7 @@ routeToAppUrl route =
 
         RouteSigning { expectedSigners, tx } ->
             { path = [ "page", "signing" ]
-            , queryParameters = Dict.singleton "signer" expectedSigners
+            , queryParameters = Dict.singleton "signer" <| List.map Bytes.toHex expectedSigners
             , fragment = Maybe.map (Bytes.toHex << Transaction.serialize) tx
             }
 

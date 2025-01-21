@@ -33,7 +33,7 @@ type alias LoadedTxModel =
     }
 
 
-initialModel : List String -> Maybe Transaction -> Model
+initialModel : List (Bytes CredentialHash) -> Maybe Transaction -> Model
 initialModel expectedSigners maybeTx =
     case maybeTx of
         Just tx ->
@@ -41,7 +41,7 @@ initialModel expectedSigners maybeTx =
                 { tx = tx
                 , txId = Transaction.computeTxId tx
                 , expectedSigners =
-                    List.filterMap Bytes.fromHex expectedSigners
+                    expectedSigners
                         |> List.map (\hash -> ( Bytes.toHex hash, { keyHash = hash } ))
                         |> Dict.fromList
                 , vkeyWitnesses = Dict.empty

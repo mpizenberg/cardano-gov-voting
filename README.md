@@ -9,12 +9,21 @@ It should help generating pretty PDFs containing the metadata rationales of vote
 
 ## Run the app in a container
 
-A container config is provided for convenience in the `container/` directory.
-To start the app in a Docker container, you can run the following command.
+You can start an already published container with the following command.
 Then simply open the app at http://localhost:8000
 
 ```sh
-docker compose -f container/compose.yml up --build
+# Use a pre-built container hosted on GitHub Container Registry (GHCR)
+docker run --rm -p 8000:8000 ghcr.io/mpizenberg/cardano-gov-voting:main
+```
+
+Alternatively, you can build the container yourself.
+A container config is provided for convenience in the `container/` directory.
+
+```sh
+# Build the container yourself
+cd container/
+docker compose up --build
 ```
 
 ## Getting Started (code)

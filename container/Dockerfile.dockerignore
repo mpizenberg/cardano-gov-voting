@@ -1,0 +1,56 @@
+# Version control
+**/.git
+**/.gitignore
+**/.gitattributes
+
+# Python backend
+backend/**/__pycache__
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd
+backend/**/.Python
+backend/**/env/
+backend/**/venv/
+backend/**/.env
+backend/**/.venv
+backend/**/pip-log.txt
+backend/**/pip-delete-this-directory.txt
+backend/**/.tox/
+backend/**/.coverage
+backend/**/.coverage.*
+backend/**/.cache
+backend/**/nosetests.xml
+backend/**/coverage.xml
+backend/**/*.cover
+backend/**/*.log
+backend/**/.pytest_cache/
+
+# JavaScript and Elm frontend
+frontend/**/node_modules/
+frontend/**/npm-debug.log*
+frontend/**/yarn-debug.log*
+frontend/**/yarn-error.log*
+frontend/**/.npm
+frontend/**/.yarn
+frontend/**/.pnp.*
+frontend/**/.next/
+frontend/**/build/
+frontend/**/dist/
+frontend/**/coverage/
+frontend/**/elm-stuff/
+
+# Editor directories and files
+**/.idea/
+**/.vscode/
+**/*.swp
+**/*.swo
+**/*~
+
+# OS generated files
+**/.DS_Store
+**/.DS_Store?
+**/._*
+**/.Spotlight-V100
+**/.Trashes
+**/ehthumbs.db
+**/Thumbs.db

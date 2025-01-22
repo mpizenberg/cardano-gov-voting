@@ -7,6 +7,16 @@ It should help generating a vote rationale, in the correct JSON metadata format.
 It should help storing that metadata on permanent storage (IPFS).
 It should help generating pretty PDFs containing the metadata rationales of votes.
 
+## Run the app in a container
+
+A container config is provided for convenience in the `container/` directory.
+To start the app in a Docker container, you can run the following command.
+Then simply open the app at http://localhost:8000
+
+```sh
+docker compose -f container/compose.yml up --build
+```
+
 ## Getting Started (code)
 
 To retrieve the code, clone the repository with `--recursive` (there is a git submodule).

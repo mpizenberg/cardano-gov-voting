@@ -15,19 +15,18 @@ from fastapi import Body, FastAPI, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Load environment variables from .env file
 # Add environment variable validation at startup
 load_dotenv()
 required_vars = ["IPFS_RPC_URL", "IPFS_RPC_USER", "IPFS_RPC_PASSWORD"]
 missing_vars = [var for var in required_vars if not os.getenv(var)]
 if missing_vars:
-    raise ValueError(
-        f"Missing required environment variables: {', '.join(missing_vars)}"
-    )
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+    logger.warn(f"Missing environment variables: {', '.join(missing_vars)}")
+    logger.warn("All IPFS requests will need to provide RPC config or will fail")
 
 # Initialize FastAPI app
 app = FastAPI(title="Custom Processing Server")
@@ -148,6 +147,8 @@ async def pin_to_ipfs_common(
         auth_string = f"{username}:{password}"
         token = base64.b64encode(auth_string.encode("utf-8")).decode("ascii")
         headers = {"Authorization": f"Basic {token}"}
+
+        # Use custom headers if a custom IPFS RPC URL was provided in the request
         if ipfs_server:
             headers = dict(custom_headers or [])
 

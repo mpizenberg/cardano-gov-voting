@@ -1,7 +1,9 @@
-module Api exposing (ActiveProposal, ApiProvider, IpfsAnswer(..), IpfsFile, ProposalMetadata, ProtocolParams, defaultApiProvider)
+module Api exposing (ActiveProposal, ApiProvider, IpfsAnswer(..), IpfsFile, ProposalMetadata, ProtocolParams, ScriptInfo, defaultApiProvider)
 
 import Bytes.Comparable as Bytes exposing (Bytes)
+import Cardano.Address exposing (CredentialHash)
 import Cardano.Gov exposing (ActionId, CostModels)
+import Cardano.Script as Script exposing (NativeScript(..), PlutusVersion(..), Script)
 import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.Utxo exposing (TransactionId)
 import Dict exposing (Dict)
@@ -17,6 +19,7 @@ type alias ApiProvider msg =
     { loadProtocolParams : (Result Http.Error ProtocolParams -> msg) -> Cmd msg
     , loadGovProposals : (Result Http.Error (List ActiveProposal) -> msg) -> Cmd msg
     , retrieveTxs : List (Bytes TransactionId) -> (Result Http.Error (Dict String Transaction) -> msg) -> Cmd msg
+    , getScriptInfo : Bytes CredentialHash -> (Result Http.Error ScriptInfo -> msg) -> Cmd msg
     , ipfsAdd : { rpc : String, headers : List ( String, String ), file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     }
 
@@ -105,6 +108,152 @@ koiosTxCborDecoder =
     in
     JD.list singleTxDecoder
         |> JD.map Dict.fromList
+
+
+
+-- Script Info
+
+
+type alias ScriptInfo =
+    { scriptHash : Bytes CredentialHash
+    , script : Script
+    , nativeCborEncodingMatchesHash : Maybe Bool
+    }
+
+
+koiosFirstScriptInfoDecoder : Decoder ScriptInfo
+koiosFirstScriptInfoDecoder =
+    JD.list koiosScriptInfoDecoder
+        |> JD.andThen
+            (\list ->
+                case list of
+                    [] ->
+                        JD.fail "No script info found"
+
+                    first :: _ ->
+                        JD.succeed first
+            )
+
+
+koiosScriptInfoDecoder : Decoder ScriptInfo
+koiosScriptInfoDecoder =
+    JD.map4
+        (\hashHex scriptType maybeNative maybePlutusBytes ->
+            case Bytes.fromHex hashHex of
+                Nothing ->
+                    Err <| "Unable to decode the script hash: " ++ hashHex
+
+                Just hash ->
+                    if List.member scriptType [ "multisig", "timelock" ] then
+                        case maybeNative of
+                            Nothing ->
+                                Err "Missing native script in Koios response"
+
+                            Just script ->
+                                Ok
+                                    { scriptHash = hash
+                                    , script = Script.Native script
+                                    , nativeCborEncodingMatchesHash = Just <| Script.hash (Script.Native script) == hash
+                                    }
+
+                    else
+                        let
+                            plutusVersion =
+                                case scriptType of
+                                    "plutusV1" ->
+                                        Ok PlutusV1
+
+                                    "plutusV2" ->
+                                        Ok PlutusV2
+
+                                    "plutusV3" ->
+                                        Ok PlutusV3
+
+                                    _ ->
+                                        Err <| "Unknown script type: " ++ scriptType
+                        in
+                        case ( plutusVersion, maybePlutusBytes |> Maybe.andThen Bytes.fromHex ) of
+                            ( Ok version, Just bytes ) ->
+                                Ok
+                                    { scriptHash = hash
+                                    , script = Script.Plutus { version = version, script = bytes }
+                                    , nativeCborEncodingMatchesHash = Nothing
+                                    }
+
+                            ( Err error, _ ) ->
+                                Err error
+
+                            ( _, Nothing ) ->
+                                Err <| "Missing (or invalid) script CBOR bytes: " ++ Debug.toString maybePlutusBytes
+        )
+        (JD.field "script_hash" JD.string)
+        (JD.field "type" JD.string)
+        (JD.field "value" <| JD.maybe koiosNativeScriptJsonDecoder)
+        (JD.field "bytes" <| JD.maybe JD.string)
+        |> JD.andThen
+            (\result ->
+                case result of
+                    Err error ->
+                        JD.fail error
+
+                    Ok info ->
+                        JD.succeed info
+            )
+
+
+koiosNativeScriptJsonDecoder : Decoder NativeScript
+koiosNativeScriptJsonDecoder =
+    let
+        sig =
+            JD.field "keyHash" JD.string
+                |> JD.andThen
+                    (\hashHex ->
+                        case Bytes.fromHex hashHex of
+                            Nothing ->
+                                JD.fail <| "Invalid key hash: " ++ hashHex
+
+                            Just hash ->
+                                JD.succeed <| ScriptPubkey hash
+                    )
+    in
+    JD.field "type" JD.string
+        |> JD.andThen
+            (\nodeType ->
+                case nodeType of
+                    "sig" ->
+                        sig
+
+                    "all" ->
+                        JD.field "scripts" <|
+                            JD.map ScriptAll <|
+                                JD.lazy (\_ -> JD.list koiosNativeScriptJsonDecoder)
+
+                    "any" ->
+                        JD.field "scripts" <|
+                            JD.map ScriptAny <|
+                                JD.list (JD.lazy (\_ -> koiosNativeScriptJsonDecoder))
+
+                    "atLeast" ->
+                        JD.map2 ScriptNofK
+                            (JD.field "required" JD.int)
+                            (JD.field "scripts" <| JD.list (JD.lazy (\_ -> koiosNativeScriptJsonDecoder)))
+
+                    -- TODO: is this actually the reverse of the CBOR???
+                    "after" ->
+                        JD.field "slot" JD.int
+                            -- TODO: can we fix this to also be correct with numbers bigger than 2^53?
+                            -- Unlikely error considering slots are in seconds (not milliseconds)?
+                            |> JD.map (InvalidHereafter << Natural.fromSafeInt)
+
+                    "before" ->
+                        JD.field "slot" JD.int
+                            -- TODO: can we fix this to also be correct with numbers bigger than 2^53?
+                            -- Unlikely error considering slots are in seconds (not milliseconds)?
+                            |> JD.map (InvalidBefore << Natural.fromSafeInt)
+
+                    _ ->
+                        JD.fail <| "Unknown type: " ++ nodeType
+            )
 
 
 
@@ -225,6 +374,23 @@ defaultApiProvider =
                             ]
                         )
                 , expect = Http.expectJson toMsg koiosTxCborDecoder
+                }
+
+    -- Retrieve script info via Koios by proxying with the server (to avoid CORS errors)
+    , getScriptInfo =
+        \scriptHash toMsg ->
+            Http.post
+                { url = "/proxy/json"
+                , body =
+                    Http.jsonBody
+                        (JE.object
+                            -- [ ( "url", JE.string "https://api.koios.rest/api/v1/script_info" )
+                            [ ( "url", JE.string "https://preview.koios.rest/api/v1/script_info" )
+                            , ( "method", JE.string "POST" )
+                            , ( "body", JE.object [ ( "_script_hashes", JE.list (JE.string << Bytes.toHex) [ scriptHash ] ) ] )
+                            ]
+                        )
+                , expect = Http.expectJson toMsg koiosFirstScriptInfoDecoder
                 }
 
     -- Make a request to an IPFS RPC

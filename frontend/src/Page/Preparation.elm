@@ -318,6 +318,7 @@ type alias BuildTxPrep =
 
 type alias SigningTx =
     { tx : Transaction
+    , expectedSignatures : List (Bytes CredentialHash)
     , vkeyWitnesses : List VKeyWitness
     }
 
@@ -392,7 +393,7 @@ type Msg
     | BuildTxButtonClicked Vote
     | ChangeVoteButtonClicked
       -- Sign Tx Step
-    | SignTxButtonClicked Transaction
+    | SignTxButtonClicked Transaction (List (Bytes CredentialHash))
 
 
 type alias UpdateContext msg =
@@ -890,8 +891,8 @@ update ctx msg model =
             , Cmd.none
             )
 
-        SignTxButtonClicked tx ->
-            ( { model | signTxStep = Validating { error = Nothing } { tx = tx, vkeyWitnesses = [] } }
+        SignTxButtonClicked tx expectedSignatures ->
+            ( { model | signTxStep = Validating { error = Nothing } { tx = tx, expectedSignatures = expectedSignatures, vkeyWitnesses = [] } }
             , ctx.walletSignTx tx
             )
 
@@ -1754,13 +1755,23 @@ allPrepSteps maybeCostModels m =
 addTxSignatures : List VKeyWitness -> Model -> ( Maybe Transaction, Model )
 addTxSignatures vkeyWitnesses model =
     case model.signTxStep of
-        Validating _ { tx } ->
+        Validating _ { tx, expectedSignatures } ->
             let
+                -- Filter out unexpected signatures.
+                -- Because sometimes, a wallet will provide more signatures than strictly needed.
+                -- For example for some 1-of-n native multisig, a wallet might provide multiple signatures
+                -- even if we only want 1, and only paid fees for one.
+                expectedVkeyWitnesses =
+                    List.filter keyHashIsExpected vkeyWitnesses
+
+                keyHashIsExpected vkeyWitness =
+                    List.member (Transaction.hashVKey vkeyWitness.vkey) expectedSignatures
+
                 signedTx =
-                    Transaction.updateSignatures (\_ -> Just vkeyWitnesses) tx
+                    Transaction.updateSignatures (\_ -> Just expectedVkeyWitnesses) tx
             in
             ( Just signedTx
-            , { model | signTxStep = Validating { error = Nothing } { tx = signedTx, vkeyWitnesses = vkeyWitnesses } }
+            , { model | signTxStep = Validating { error = Nothing } { tx = signedTx, expectedSignatures = expectedSignatures, vkeyWitnesses = expectedVkeyWitnesses } }
             )
 
         _ ->
@@ -2898,7 +2909,7 @@ viewSignTxStep ctx buildTxStep signTxStep =
                             [ text "If these keys are all maintained by the connected wallet,"
                             , text " you can try signing and submitting here directly."
                             ]
-                        , Html.p [] [ button [ onClick <| ctx.wrapMsg <| SignTxButtonClicked tx ] [ text "Sign and submit Tx" ] ]
+                        , Html.p [] [ button [ onClick <| ctx.wrapMsg <| SignTxButtonClicked tx expectedSignatures ] [ text "Sign and submit Tx" ] ]
                         ]
                 , Html.p []
                     [ text "Finalize your voting transaction by signing and submitting it via the dedicated siging page: "

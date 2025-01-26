@@ -1,6 +1,5 @@
 module Page.Signing exposing (LoadedTxModel, Model(..), Msg(..), UpdateContext, ViewContext, addWalletSignatures, initialModel, recordSubmittedTx, resetSubmission, update, view)
 
-import Blake2b exposing (blake2b224)
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Address exposing (CredentialHash)
 import Cardano.Cip30 as Cip30
@@ -106,16 +105,24 @@ addWalletSignatures newVkeyWitnesses model =
     case model of
         LoadedTx loadedTxModel ->
             let
-                keyHashHex vkey =
-                    Bytes.toU8 vkey
-                        |> blake2b224 Nothing
-                        |> Bytes.fromU8
-                        |> Bytes.toHex
+                -- Filter out unexpected signatures.
+                -- Because sometimes, a wallet will provide more signatures than strictly needed.
+                -- For example for some 1-of-n native multisig, a wallet might provide multiple signatures
+                -- even if we only want 1, and only paid fees for one.
+                expectedVkeyWitnesses =
+                    List.filter keyHashIsExpected newVkeyWitnesses
+
+                keyHashIsExpected vkeyWitness =
+                    Dict.member (Bytes.toHex <| Transaction.hashVKey vkeyWitness.vkey) loadedTxModel.expectedSigners
 
                 updatedWitnesses =
                     List.foldl (\w acc -> Dict.insert (keyHashHex w.vkey) w acc)
                         loadedTxModel.vkeyWitnesses
-                        newVkeyWitnesses
+                        expectedVkeyWitnesses
+
+                keyHashHex vkey =
+                    Transaction.hashVKey vkey
+                        |> Bytes.toHex
             in
             LoadedTx { loadedTxModel | vkeyWitnesses = updatedWitnesses }
 

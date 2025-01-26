@@ -57,7 +57,7 @@ type alias Model =
 type Step prep validating done
     = Preparing prep
     | Validating prep validating
-    | Done done
+    | Done prep done
 
 
 init : Model
@@ -484,7 +484,7 @@ update ctx msg model =
 
                                 Just output ->
                                     ( { model
-                                        | voterStep = Done voterWitness
+                                        | voterStep = Done form voterWitness
                                         , someRefUtxos = Dict.Any.insert outputRef output model.someRefUtxos
                                       }
                                     , Cmd.none
@@ -543,28 +543,8 @@ update ctx msg model =
 
         ChangeVoterButtonClicked ->
             case model.voterStep of
-                Done voterWitness ->
-                    let
-                        voterStepForm =
-                            case voterWitness of
-                                -- First the three easy cases with vkeys
-                                WithPoolCred poolId ->
-                                    { initVoterForm | govId = Just <| PoolId poolId }
-
-                                WithDrepCred (WithKey hash) ->
-                                    { initVoterForm | govId = Just <| DrepId (VKeyHash hash) }
-
-                                WithCommitteeHotCred (WithKey hash) ->
-                                    { initVoterForm | govId = Just <| CcHotCredId (VKeyHash hash) }
-
-                                -- TODO: improve. Now the two script cases
-                                WithDrepCred (WithScript _ _) ->
-                                    initVoterForm
-
-                                WithCommitteeHotCred (WithScript _ _) ->
-                                    initVoterForm
-                    in
-                    ( { model | voterStep = Preparing voterStepForm }
+                Done prep _ ->
+                    ( { model | voterStep = Preparing prep }
                       -- TODO: also reset all dependents steps
                       -- |> resetProposal
                       -- |> resetRationaleCreation
@@ -584,10 +564,10 @@ update ctx msg model =
         --
         PickProposalButtonClicked actionId ->
             case ( model.pickProposalStep, ctx.proposals ) of
-                ( Preparing _, RemoteData.Success proposalsDict ) ->
+                ( Preparing form, RemoteData.Success proposalsDict ) ->
                     case Dict.get actionId proposalsDict of
                         Just prop ->
-                            ( { model | pickProposalStep = Done prop }
+                            ( { model | pickProposalStep = Done form prop }
                             , Cmd.none
                             )
 
@@ -677,9 +657,9 @@ update ctx msg model =
 
         ValidateRationaleButtonClicked ->
             case validateRationaleForm model.rationaleCreationStep of
-                Done newRationale ->
+                Done prep newRationale ->
                     ( { model
-                        | rationaleCreationStep = Done newRationale
+                        | rationaleCreationStep = Done prep newRationale
                         , rationaleSignatureStep = Preparing <| resetRationaleSignatures newRationale model.rationaleSignatureStep
                       }
                     , Cmd.none
@@ -786,7 +766,7 @@ update ctx msg model =
                 Validating _ _ ->
                     ( model, Cmd.none )
 
-                Done _ ->
+                Done _ _ ->
                     ( model, Cmd.none )
 
         GotIpfsAnswer (Err httpError) ->
@@ -799,7 +779,7 @@ update ctx msg model =
                     , Cmd.none
                     )
 
-                Done _ ->
+                Done _ _ ->
                     ( model, Cmd.none )
 
         GotIpfsAnswer (Ok ipfsAnswer) ->
@@ -810,7 +790,7 @@ update ctx msg model =
                 Validating form _ ->
                     handleIpfsAnswer model form ipfsAnswer
 
-                Done _ ->
+                Done _ _ ->
                     ( model, Cmd.none )
 
         AddOtherStorageButtonCLicked ->
@@ -821,8 +801,8 @@ update ctx msg model =
                 Validating _ _ ->
                     ( model, Cmd.none )
 
-                Done storage ->
-                    ( { model | permanentStorageStep = Preparing storage.config }
+                Done prep _ ->
+                    ( { model | permanentStorageStep = Preparing prep }
                     , Cmd.none
                     )
 
@@ -851,8 +831,8 @@ update ctx msg model =
 
         ReceivedFeeProviderUtxos feeProvider ->
             case model.feeProviderStep of
-                Validating _ _ ->
-                    ( { model | feeProviderStep = Done feeProvider }
+                Validating form _ ->
+                    ( { model | feeProviderStep = Done form feeProvider }
                     , Cmd.none
                     )
 
@@ -861,8 +841,8 @@ update ctx msg model =
 
         ChangeFeeProviderButtonClicked ->
             case model.feeProviderStep of
-                Done _ ->
-                    ( { model | feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing }) }
+                Done prep _ ->
+                    ( { model | feeProviderStep = Preparing prep }
                     , Cmd.none
                     )
 
@@ -901,7 +881,7 @@ update ctx msg model =
                             )
 
                         Ok tx ->
-                            ( { model | buildTxStep = Done tx }
+                            ( { model | buildTxStep = Done { error = Nothing } tx }
                             , Cmd.none
                             )
 
@@ -982,17 +962,17 @@ confirmVoter form loadedRefUtxos =
             justError "The proposal to vote on is selected later. For now please provide you voter ID. It can be a bech32 pool ID, a CIP 129 DRep ID or CC hot ID."
 
         Just (PoolId poolId) ->
-            ( Done <| WithPoolCred poolId
+            ( Done form <| WithPoolCred poolId
             , Cmd.none
             )
 
         Just (DrepId (VKeyHash keyHash)) ->
-            ( Done <| WithDrepCred (WithKey keyHash)
+            ( Done form <| WithDrepCred (WithKey keyHash)
             , Cmd.none
             )
 
         Just (CcHotCredId (VKeyHash keyHash)) ->
-            ( Done <| WithCommitteeHotCred (WithKey keyHash)
+            ( Done form <| WithCommitteeHotCred (WithKey keyHash)
             , Cmd.none
             )
 
@@ -1035,7 +1015,7 @@ validateScriptVoter form loadedRefUtxos toVoter scriptInfo =
                                 , expectedSigners = keepOnlyExpectedSigners form.expectedSigners
                                 }
                         in
-                        ( Done <| toVoter <| WithScript scriptInfo.scriptHash <| NativeWitness witness
+                        ( Done form <| toVoter <| WithScript scriptInfo.scriptHash <| NativeWitness witness
                         , Cmd.none
                         )
 
@@ -1051,7 +1031,7 @@ validateScriptVoter form loadedRefUtxos toVoter scriptInfo =
                             , requiredSigners = Debug.todo "Add a required signers form for Plutus"
                             }
                     in
-                    ( Done <| toVoter <| WithScript scriptInfo.scriptHash <| PlutusWitness witness
+                    ( Done form <| toVoter <| WithScript scriptInfo.scriptHash <| PlutusWitness witness
                     , Cmd.none
                     )
 
@@ -1072,7 +1052,7 @@ validateScriptVoter form loadedRefUtxos toVoter scriptInfo =
                             toVoter <| WithScript scriptInfo.scriptHash <| NativeWitness witness
                     in
                     if Dict.Any.member outputRef loadedRefUtxos then
-                        ( Done voter
+                        ( Done form voter
                         , Cmd.none
                         )
 
@@ -1162,7 +1142,7 @@ validateRationaleForm step =
             in
             case rationaleValidation of
                 Ok _ ->
-                    Done (rationaleFromForm form)
+                    Done form (rationaleFromForm form)
 
                 Err err ->
                     Preparing { form | error = Just err }
@@ -1303,17 +1283,8 @@ editRationale step =
         Validating rationaleForm _ ->
             Preparing rationaleForm
 
-        Done rationale ->
-            Preparing
-                { summary = rationale.summary
-                , rationaleStatement = rationale.rationaleStatement
-                , precedentDiscussion = Maybe.withDefault "" rationale.precedentDiscussion
-                , counterArgumentDiscussion = Maybe.withDefault "" rationale.counterArgumentDiscussion
-                , conclusion = Maybe.withDefault "" rationale.conclusion
-                , internalVote = rationale.internalVote
-                , references = rationale.references
-                , error = Nothing
-                }
+        Done prep _ ->
+            Preparing prep
 
 
 
@@ -1336,7 +1307,7 @@ resetRationaleSignatures rationale step =
         Validating { authors } _ ->
             newRatSig authors
 
-        Done { authors } ->
+        Done _ { authors } ->
             newRatSig authors
 
 
@@ -1468,7 +1439,7 @@ skipRationaleSignature jsonLdContexts step =
                 Nothing ->
                     { form | authors = List.map (\a -> { a | signature = Nothing }) authors }
                         |> rationaleSignatureFromForm jsonLdContexts
-                        |> Done
+                        |> Done form
 
         Validating ({ authors } as form) _ ->
             case findDuplicate (List.map .name authors) of
@@ -1478,10 +1449,10 @@ skipRationaleSignature jsonLdContexts step =
                 Nothing ->
                     { form | authors = List.map (\a -> { a | signature = Nothing }) authors }
                         |> rationaleSignatureFromForm jsonLdContexts
-                        |> Done
+                        |> Done form
 
-        Done signatures ->
-            Done signatures
+        Done _ _ ->
+            step
 
 
 validateRationaleSignature : JsonLdContexts -> Model -> ( Model, Cmd msg )
@@ -1496,14 +1467,14 @@ validateRationaleSignature jsonLdContexts model =
 
                 Ok _ ->
                     -- TODO: change to Validating instead, and emit a command to check signatures
-                    ( { model | rationaleSignatureStep = Done <| rationaleSignatureFromForm jsonLdContexts form }
+                    ( { model | rationaleSignatureStep = Done form <| rationaleSignatureFromForm jsonLdContexts form }
                     , Cmd.none
                     )
 
         Validating _ _ ->
             ( model, Cmd.none )
 
-        Done _ ->
+        Done _ _ ->
             ( model, Cmd.none )
 
 
@@ -1526,11 +1497,8 @@ rationaleSignatureToForm step =
         Validating form _ ->
             form
 
-        Done s ->
-            { authors = s.authors
-            , rationale = s.rationale
-            , error = Nothing
-            }
+        Done form _ ->
+            form
 
 
 validateAuthorsForm : List AuthorWitness -> Result String ()
@@ -1616,14 +1584,14 @@ updateStorageForm formUpdate model =
         Validating _ _ ->
             model
 
-        Done _ ->
+        Done _ _ ->
             model
 
 
 validateIpfsFormAndSendPinRequest : UpdateContext msg -> StorageForm -> Model -> ( Model, Cmd msg )
 validateIpfsFormAndSendPinRequest ctx form model =
     case ( model.rationaleSignatureStep, validateIpfsForm form ) of
-        ( Done ratSig, Ok _ ) ->
+        ( Done _ ratSig, Ok _ ) ->
             ( { model | permanentStorageStep = Validating form {} }
             , ctx.jsonRationaleToFile
                 { fileContent = ratSig.signedJson
@@ -1631,7 +1599,7 @@ validateIpfsFormAndSendPinRequest ctx form model =
                 }
             )
 
-        ( Done _, Err error ) ->
+        ( Done _ _, Err error ) ->
             ( { model | permanentStorageStep = Preparing { form | error = Just error } }
             , Cmd.none
             )
@@ -1699,7 +1667,7 @@ handleIpfsAnswer model form ipfsAnswer =
             )
 
         IpfsAddSuccessful file ->
-            ( { model | permanentStorageStep = Done { config = form, jsonFile = file } }
+            ( { model | permanentStorageStep = Done form { config = form, jsonFile = file } }
             , Cmd.none
             )
 
@@ -1727,7 +1695,7 @@ validateFeeProviderForm maybeWallet feeProviderForm =
             Preparing (ConnectedWalletFeeProvider { error = Just "No wallet connected, please connect a wallet first." })
 
         ( Just { changeAddress, utxos }, ConnectedWalletFeeProvider _ ) ->
-            Done { address = changeAddress, utxos = utxos }
+            Done feeProviderForm { address = changeAddress, utxos = utxos }
 
         ( _, ExternalFeeProvider { endpoint } ) ->
             case Url.fromString endpoint of
@@ -1755,7 +1723,7 @@ type alias TxRequirements =
 allPrepSteps : Maybe CostModels -> Model -> Result String TxRequirements
 allPrepSteps maybeCostModels m =
     case ( maybeCostModels, ( m.voterStep, m.pickProposalStep, m.rationaleSignatureStep ), ( m.permanentStorageStep, m.feeProviderStep ) ) of
-        ( Just costModels, ( Done voter, Done p, Done r ), ( Done s, Done f ) ) ->
+        ( Just costModels, ( Done _ voter, Done _ p, Done _ r ), ( Done _ s, Done _ f ) ) ->
             Ok
                 { voter = voter
                 , actionId = p.id
@@ -1803,8 +1771,8 @@ addTxSignatures vkeyWitnesses model =
 recordSubmittedTx : Bytes TransactionId -> Model -> Model
 recordSubmittedTx txId model =
     case model.signTxStep of
-        Validating _ { tx } ->
-            { model | signTxStep = Done { signedTx = tx, txId = txId } }
+        Validating form { tx } ->
+            { model | signTxStep = Done form { signedTx = tx, txId = txId } }
 
         _ ->
             -- We only expect to submit a Tx while being in the Validating state
@@ -1879,7 +1847,7 @@ viewVoterIdentificationStep ctx step =
                 , Html.p [] [ text "validating voter information ..." ]
                 ]
 
-        Done voter ->
+        Done _ voter ->
             div []
                 [ Html.h3 [] [ text "Voter Identified" ]
                 , Html.map ctx.wrapMsg <| viewIdentifiedVoter voter
@@ -2071,7 +2039,7 @@ viewProposalSelectionStep ctx model =
                 , Html.p [] [ text "Validating the picked proposal ..." ]
                 ]
 
-        Done { id, actionType, metadata } ->
+        Done _ { id, actionType, metadata } ->
             div []
                 [ Html.h3 [] [ text "Pick a Proposal" ]
                 , Html.p []
@@ -2201,7 +2169,7 @@ viewRationaleStep ctx step =
                     , Html.p [] [ button [ onClick EditRationaleButtonClicked ] [ text "Edit rationale" ] ]
                     ]
 
-            Done rationale ->
+            Done _ rationale ->
                 div []
                     [ Html.h3 [] [ text "Vote Rationale" ]
                     , viewSummary rationale.summary
@@ -2514,7 +2482,7 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                 , Html.p [] [ text "Please validate the rationale creation step first." ]
                 ]
 
-        ( Done _, Preparing form ) ->
+        ( Done _ _, Preparing form ) ->
             div []
                 [ Html.h3 [] [ text "Rationale Signature" ]
                 , Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts form
@@ -2534,13 +2502,13 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                             ]
                 ]
 
-        ( Done _, Validating _ _ ) ->
+        ( Done _ _, Validating _ _ ) ->
             div []
                 [ Html.h3 [] [ text "Rationale Signature" ]
                 , Html.p [] [ text "Validating rationale author signatures ..." ]
                 ]
 
-        ( Done _, Done ratSig ) ->
+        ( Done _ _, Done _ ratSig ) ->
             let
                 downloadButton =
                     Html.a
@@ -2691,7 +2659,7 @@ viewSigner { name, witnessAlgorithm, publicKey, signature } =
 viewPermanentStorageStep : ViewContext msg -> Step RationaleSignatureForm {} RationaleSignature -> Step StorageForm {} Storage -> Html msg
 viewPermanentStorageStep ctx rationaleSigStep step =
     case ( rationaleSigStep, step ) of
-        ( Done _, Preparing form ) ->
+        ( Done _ _, Preparing form ) ->
             Html.map ctx.wrapMsg <|
                 div []
                     [ Html.h3 [] [ text "Permanent Storage" ]
@@ -2727,13 +2695,13 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                                 ]
                     ]
 
-        ( Done _, Validating _ _ ) ->
+        ( Done _ _, Validating _ _ ) ->
             div []
                 [ Html.h3 [] [ text "Permanent Storage" ]
                 , Html.p [] [ text "Uploading rationale to IPFS server ..." ]
                 ]
 
-        ( Done r, Done storage ) ->
+        ( Done _ r, Done _ storage ) ->
             let
                 link =
                     "https://ipfs.io/ipfs/" ++ storage.jsonFile.cid
@@ -2827,7 +2795,7 @@ viewFeeProviderStep ctx step =
                 , Html.p [] [ text "validating fee provider information ..." ]
                 ]
 
-        Done { address, utxos } ->
+        Done _ { address, utxos } ->
             div []
                 [ Html.h3 [] [ text "Fee Provider" ]
                 , Html.p [] [ text <| "Address: " ++ prettyAddr address ]
@@ -2930,7 +2898,7 @@ viewBuildTxStep ctx model =
                 , Html.p [] [ text "validating information ..." ]
                 ]
 
-        ( Ok _, Done { tx } ) ->
+        ( Ok _, Done _ { tx } ) ->
             div []
                 [ Html.h3 [] [ text "Tx Building" ]
                 , Html.p [] [ text "The generated Tx (₳ displayed as lovelaces) :" ]
@@ -2948,7 +2916,7 @@ viewBuildTxStep ctx model =
 viewSignTxStep : ViewContext msg -> Step BuildTxPrep {} TxFinalized -> Step {} SigningTx SignedTx -> Html msg
 viewSignTxStep ctx buildTxStep signTxStep =
     case ( buildTxStep, signTxStep ) of
-        ( Done { tx, expectedSignatures }, Preparing _ ) ->
+        ( Done _ { tx, expectedSignatures }, Preparing _ ) ->
             div []
                 [ Html.h3 [] [ text "Tx Signing" ]
                 , Html.p [] [ text "Expecting signatures for the following public key hashes:" ]
@@ -2970,7 +2938,7 @@ viewSignTxStep ctx buildTxStep signTxStep =
                     ]
                 ]
 
-        ( Done _, Validating _ { vkeyWitnesses } ) ->
+        ( Done _ _, Validating _ { vkeyWitnesses } ) ->
             div []
                 [ Html.h3 [] [ text "Tx Signing" ]
                 , if List.isEmpty vkeyWitnesses then
@@ -2980,7 +2948,7 @@ viewSignTxStep ctx buildTxStep signTxStep =
                     Html.p [] [ text "Submitting Tx ..." ]
                 ]
 
-        ( Done _, Done { txId } ) ->
+        ( Done _ _, Done _ { txId } ) ->
             div []
                 [ Html.h3 [] [ text "Tx Signed" ]
                 , Html.p []

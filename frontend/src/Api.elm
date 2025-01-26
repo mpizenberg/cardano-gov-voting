@@ -3,7 +3,7 @@ module Api exposing (ActiveProposal, ApiProvider, IpfsAnswer(..), IpfsFile, Prop
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Address exposing (CredentialHash)
 import Cardano.Gov exposing (ActionId, CostModels)
-import Cardano.Script as Script exposing (NativeScript(..), PlutusVersion(..), Script)
+import Cardano.Script as Script exposing (PlutusVersion(..), Script)
 import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.Utxo exposing (TransactionId)
 import Dict exposing (Dict)
@@ -188,7 +188,7 @@ koiosScriptInfoDecoder =
         )
         (JD.field "script_hash" JD.string)
         (JD.field "type" JD.string)
-        (JD.field "value" <| JD.maybe koiosNativeScriptJsonDecoder)
+        (JD.field "value" <| JD.maybe Script.jsonDecodeNativeScript)
         (JD.field "bytes" <| JD.maybe JD.string)
         |> JD.andThen
             (\result ->
@@ -198,61 +198,6 @@ koiosScriptInfoDecoder =
 
                     Ok info ->
                         JD.succeed info
-            )
-
-
-koiosNativeScriptJsonDecoder : Decoder NativeScript
-koiosNativeScriptJsonDecoder =
-    let
-        sig =
-            JD.field "keyHash" JD.string
-                |> JD.andThen
-                    (\hashHex ->
-                        case Bytes.fromHex hashHex of
-                            Nothing ->
-                                JD.fail <| "Invalid key hash: " ++ hashHex
-
-                            Just hash ->
-                                JD.succeed <| ScriptPubkey hash
-                    )
-    in
-    JD.field "type" JD.string
-        |> JD.andThen
-            (\nodeType ->
-                case nodeType of
-                    "sig" ->
-                        sig
-
-                    "all" ->
-                        JD.field "scripts" <|
-                            JD.map ScriptAll <|
-                                JD.lazy (\_ -> JD.list koiosNativeScriptJsonDecoder)
-
-                    "any" ->
-                        JD.field "scripts" <|
-                            JD.map ScriptAny <|
-                                JD.list (JD.lazy (\_ -> koiosNativeScriptJsonDecoder))
-
-                    "atLeast" ->
-                        JD.map2 ScriptNofK
-                            (JD.field "required" JD.int)
-                            (JD.field "scripts" <| JD.list (JD.lazy (\_ -> koiosNativeScriptJsonDecoder)))
-
-                    -- TODO: is this actually the reverse of the CBOR???
-                    "after" ->
-                        JD.field "slot" JD.int
-                            -- TODO: can we fix this to also be correct with numbers bigger than 2^53?
-                            -- Unlikely error considering slots are in seconds (not milliseconds)?
-                            |> JD.map (InvalidHereafter << Natural.fromSafeInt)
-
-                    "before" ->
-                        JD.field "slot" JD.int
-                            -- TODO: can we fix this to also be correct with numbers bigger than 2^53?
-                            -- Unlikely error considering slots are in seconds (not milliseconds)?
-                            |> JD.map (InvalidBefore << Natural.fromSafeInt)
-
-                    _ ->
-                        JD.fail <| "Unknown type: " ++ nodeType
             )
 
 

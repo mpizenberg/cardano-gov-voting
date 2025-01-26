@@ -519,7 +519,13 @@ handleWalletResponse response model =
 
         -- Received an error message from the wallet
         Cip30.ApiError { info } ->
-            ( { model | errors = info :: model.errors }
+            ( { model
+                -- TODO: ideally, each port to wallet should know
+                -- how to redirect to a new message in fromWallet.
+                -- That would need a bit of thinking to figure out a good way.
+                -- For now, I mostly observed errors at Tx signing/submission
+                | page = resetSigningStep info model.page
+              }
             , Cmd.none
             )
 
@@ -528,6 +534,21 @@ handleWalletResponse response model =
             ( { model | errors = error :: model.errors }
             , Cmd.none
             )
+
+
+{-| Helper function to reset the signing step of the Preparation.
+-}
+resetSigningStep : String -> Page -> Page
+resetSigningStep error page =
+    case page of
+        PreparationPage pageModel ->
+            PreparationPage <| Page.Preparation.resetSigningStep error pageModel
+
+        SigningPage pageModel ->
+            SigningPage <| Page.Signing.resetSubmission error pageModel
+
+        _ ->
+            page
 
 
 

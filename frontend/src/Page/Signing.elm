@@ -1,4 +1,4 @@
-module Page.Signing exposing (LoadedTxModel, Model(..), Msg(..), UpdateContext, ViewContext, addWalletSignatures, initialModel, recordSubmittedTx, update, view)
+module Page.Signing exposing (LoadedTxModel, Model(..), Msg(..), UpdateContext, ViewContext, addWalletSignatures, initialModel, recordSubmittedTx, resetSubmission, update, view)
 
 import Blake2b exposing (blake2b224)
 import Bytes.Comparable as Bytes exposing (Bytes)
@@ -30,6 +30,7 @@ type alias LoadedTxModel =
     , expectedSigners : Dict String { keyHash : Bytes CredentialHash }
     , vkeyWitnesses : Dict String VKeyWitness
     , txSubmitted : Maybe (Bytes TransactionId)
+    , error : Maybe String
     }
 
 
@@ -46,6 +47,7 @@ initialModel expectedSigners maybeTx =
                         |> Dict.fromList
                 , vkeyWitnesses = Dict.empty
                 , txSubmitted = Nothing
+                , error = Nothing
                 }
 
         Nothing ->
@@ -131,6 +133,16 @@ recordSubmittedTx txId model =
             model
 
 
+resetSubmission : String -> Model -> Model
+resetSubmission error model =
+    case model of
+        MissingTx ->
+            MissingTx
+
+        LoadedTx loadedTxModel ->
+            LoadedTx { loadedTxModel | error = Just error, txSubmitted = Nothing }
+
+
 
 -- ###################################################################
 -- VIEW
@@ -155,7 +167,7 @@ view ctx model =
             MissingTx ->
                 Html.p [] [ text "TODO: button to load the Tx from a file" ]
 
-            LoadedTx { tx, txId, expectedSigners, vkeyWitnesses, txSubmitted } ->
+            LoadedTx { tx, txId, expectedSigners, vkeyWitnesses, txSubmitted, error } ->
                 div []
                     [ Html.p [] [ text <| Bytes.toHex txId ]
                     , Html.p [] [ Html.pre [] [ text <| prettyTx tx ] ]
@@ -194,6 +206,7 @@ view ctx model =
 
                         Just _ ->
                             Html.p [] [ text <| "Tx submitted! Tx ID: " ++ Bytes.toHex txId ]
+                    , viewError error
                     ]
         ]
 
@@ -220,3 +233,16 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
     in
     Dict.keys expectedSigners
         |> List.map viewExpectedSigner
+
+
+viewError : Maybe String -> Html msg
+viewError error =
+    case error of
+        Nothing ->
+            text ""
+
+        Just err ->
+            Html.p []
+                [ text "Error:"
+                , Html.pre [] [ text err ]
+                ]

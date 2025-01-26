@@ -1,4 +1,4 @@
-module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterPreparationForm, addTxSignatures, init, pinRationaleFile, recordSubmittedTx, update, view)
+module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterPreparationForm, addTxSignatures, init, pinRationaleFile, recordSubmittedTx, resetSigningStep, update, view)
 
 import Api exposing (ActiveProposal, IpfsAnswer(..), ScriptInfo)
 import Blake2b exposing (blake2b256)
@@ -50,7 +50,7 @@ type alias Model =
     , permanentStorageStep : Step StorageForm {} Storage
     , feeProviderStep : Step FeeProviderForm FeeProviderTemp FeeProvider
     , buildTxStep : Step BuildTxPrep {} TxFinalized
-    , signTxStep : Step {} SigningTx SignedTx
+    , signTxStep : Step { error : Maybe String } SigningTx SignedTx
     }
 
 
@@ -70,7 +70,7 @@ init =
     , permanentStorageStep = Preparing initStorageForm
     , feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing })
     , buildTxStep = Preparing { error = Nothing }
-    , signTxStep = Preparing {}
+    , signTxStep = Preparing { error = Nothing }
     }
 
 
@@ -891,7 +891,7 @@ update ctx msg model =
             )
 
         SignTxButtonClicked tx ->
-            ( { model | signTxStep = Validating {} { tx = tx, vkeyWitnesses = [] } }
+            ( { model | signTxStep = Validating { error = Nothing } { tx = tx, vkeyWitnesses = [] } }
             , ctx.walletSignTx tx
             )
 
@@ -1760,7 +1760,7 @@ addTxSignatures vkeyWitnesses model =
                     Transaction.updateSignatures (\_ -> Just vkeyWitnesses) tx
             in
             ( Just signedTx
-            , { model | signTxStep = Validating {} { tx = signedTx, vkeyWitnesses = vkeyWitnesses } }
+            , { model | signTxStep = Validating { error = Nothing } { tx = signedTx, vkeyWitnesses = vkeyWitnesses } }
             )
 
         _ ->
@@ -1777,6 +1777,11 @@ recordSubmittedTx txId model =
         _ ->
             -- We only expect to submit a Tx while being in the Validating state
             model
+
+
+resetSigningStep : String -> Model -> Model
+resetSigningStep error model =
+    { model | signTxStep = Preparing { error = Just error } }
 
 
 
@@ -1833,12 +1838,7 @@ viewVoterIdentificationStep ctx step =
                     , Html.p [] [ textField "Governance ID (drep/pool/cc_hot)" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
                     , viewValidGovIdForm form
                     , Html.p [] [ button [ onClick <| ValidateVoterFormButtonClicked ] [ text "Confirm Voter" ] ]
-                    , case form.error of
-                        Just error ->
-                            Html.p [] [ Html.pre [] [ text error ] ]
-
-                        Nothing ->
-                            text ""
+                    , viewError form.error
                     ]
 
         Validating _ _ ->
@@ -2151,15 +2151,7 @@ viewRationaleStep ctx step =
                     , viewInternalVoteForm form.internalVote
                     , viewReferencesForm form.references
                     , Html.p [] [ Html.button [ onClick ValidateRationaleButtonClicked ] [ text "Confirm rationale" ] ]
-                    , case form.error of
-                        Nothing ->
-                            text ""
-
-                        Just error ->
-                            Html.p []
-                                [ text "Error:"
-                                , Html.pre [] [ text error ]
-                                ]
+                    , viewError form.error
                     ]
 
             Validating _ _ ->
@@ -2491,15 +2483,7 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                     , text " or "
                     , button [ onClick <| ctx.wrapMsg ValidateRationaleSignaturesButtonClicked ] [ text "Validate rationale signing" ]
                     ]
-                , case form.error of
-                    Nothing ->
-                        text ""
-
-                    Just error ->
-                        Html.p []
-                            [ text "Error:"
-                            , Html.pre [] [ text error ]
-                            ]
+                , viewError form.error
                 ]
 
         ( Done _ _, Validating _ _ ) ->
@@ -2684,15 +2668,7 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                         ]
                     , Html.ul [] (List.indexedMap viewHeader form.headers)
                     , Html.p [] [ button [ onClick PinJsonIpfsButtonClicked ] [ text "Pin JSON rationale to IPFS" ] ]
-                    , case form.error of
-                        Nothing ->
-                            text ""
-
-                        Just error ->
-                            Html.p []
-                                [ text "Error:"
-                                , Html.pre [] [ text error ]
-                                ]
+                    , viewError form.error
                     ]
 
         ( Done _ _, Validating _ _ ) ->
@@ -2881,15 +2857,7 @@ viewBuildTxStep ctx model =
                     , text " "
                     , button [ onClick <| ctx.wrapMsg <| BuildTxButtonClicked Gov.VoteAbstain ] [ text "Vote ABSTAIN" ]
                     ]
-                , case error of
-                    Nothing ->
-                        text ""
-
-                    Just err ->
-                        Html.p []
-                            [ text "Error:"
-                            , Html.pre [] [ text err ]
-                            ]
+                , viewError error
                 ]
 
         ( Ok _, Validating _ _ ) ->
@@ -2913,10 +2881,10 @@ viewBuildTxStep ctx model =
 --
 
 
-viewSignTxStep : ViewContext msg -> Step BuildTxPrep {} TxFinalized -> Step {} SigningTx SignedTx -> Html msg
+viewSignTxStep : ViewContext msg -> Step BuildTxPrep {} TxFinalized -> Step { error : Maybe String } SigningTx SignedTx -> Html msg
 viewSignTxStep ctx buildTxStep signTxStep =
     case ( buildTxStep, signTxStep ) of
-        ( Done _ { tx, expectedSignatures }, Preparing _ ) ->
+        ( Done _ { tx, expectedSignatures }, Preparing { error } ) ->
             div []
                 [ Html.h3 [] [ text "Tx Signing" ]
                 , Html.p [] [ text "Expecting signatures for the following public key hashes:" ]
@@ -2936,6 +2904,7 @@ viewSignTxStep ctx buildTxStep signTxStep =
                     [ text "Finalize your voting transaction by signing and submitting it via the dedicated siging page: "
                     , ctx.signingLink tx expectedSignatures [ text "signing page" ]
                     ]
+                , viewError error
                 ]
 
         ( Done _ _, Validating _ { vkeyWitnesses } ) ->
@@ -2962,4 +2931,23 @@ viewSignTxStep ctx buildTxStep signTxStep =
             div []
                 [ Html.h3 [] [ text "Tx Signing" ]
                 , Html.p [] [ text "Please complete the Tx building step first." ]
+                ]
+
+
+
+--
+-- Helpers
+--
+
+
+viewError : Maybe String -> Html msg
+viewError error =
+    case error of
+        Nothing ->
+            text ""
+
+        Just err ->
+            Html.p []
+                [ text "Error:"
+                , Html.pre [] [ text err ]
                 ]

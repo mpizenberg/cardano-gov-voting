@@ -22,7 +22,8 @@ A container config is provided for convenience in the `container/` directory.
 
 ```sh
 # Build the container yourself
-cd container/
+git clone --recursive https://github.com/mpizenberg/cardano-gov-voting.git
+cd cardano-gov-voting/container/
 docker compose up --build
 ```
 

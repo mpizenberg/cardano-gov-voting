@@ -8,6 +8,7 @@ import Cardano.Address exposing (Address, Credential(..), CredentialHash)
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
 import Cardano.Gov as Gov exposing (ActionId, Anchor, CostModels, Id(..), Vote)
+import Cardano.Pool as Pool
 import Cardano.Script as Script
 import Cardano.Transaction as Transaction exposing (Transaction, VKeyWitness)
 import Cardano.TxExamples exposing (prettyTx)
@@ -28,6 +29,7 @@ import Json.Encode as JE
 import List.Extra
 import Markdown.Parser as Md
 import Markdown.Renderer as Md
+import Natural
 import Platform.Cmd as Cmd
 import RemoteData exposing (WebData)
 import Set exposing (Set)
@@ -81,6 +83,7 @@ init =
 type alias VoterPreparationForm =
     { govId : Maybe Gov.Id
     , scriptInfo : WebData ScriptInfo
+    , poolLiveStake : WebData { pool : Bytes Pool.Id, stake : Int }
     , utxoRef : String
     , expectedSigners : Dict String { expected : Bool, key : Bytes CredentialHash }
     , error : Maybe String
@@ -91,6 +94,7 @@ initVoterForm : VoterPreparationForm
 initVoterForm =
     { govId = Nothing
     , scriptInfo = RemoteData.NotAsked
+    , poolLiveStake = RemoteData.NotAsked
     , utxoRef = ""
     , expectedSigners = Dict.empty
     , error = Nothing
@@ -340,6 +344,7 @@ type Msg
       -- Voter Step
     | VoterGovIdChange String
     | GotScriptInfo (Result Http.Error ScriptInfo)
+    | GotPoolLiveStake (Result Http.Error { pool : Bytes Pool.Id, stake : Int })
     | UtxoRefChange String
     | ToggleExpectedSigner String Bool
     | ValidateVoterFormButtonClicked
@@ -506,8 +511,16 @@ update ctx msg model =
                     , Cmd.none
                     )
 
-                Ok ( govId, cmd ) ->
-                    ( updateVoterForm (\_ -> { initVoterForm | govId = Just <| govId, scriptInfo = RemoteData.Loading }) model
+                Ok { govId, scriptInfo, poolLiveStake, cmd } ->
+                    ( updateVoterForm
+                        (\_ ->
+                            { initVoterForm
+                                | govId = Just govId
+                                , scriptInfo = scriptInfo
+                                , poolLiveStake = poolLiveStake
+                            }
+                        )
+                        model
                     , Cmd.map ctx.wrapMsg cmd
                     )
 
@@ -534,6 +547,18 @@ update ctx msg model =
                             }
                         )
                         model
+                    , Cmd.none
+                    )
+
+        GotPoolLiveStake result ->
+            case result of
+                Err error ->
+                    ( updateVoterForm (\form -> { form | poolLiveStake = RemoteData.Failure error }) model
+                    , Cmd.none
+                    )
+
+                Ok poolLiveStake ->
+                    ( updateVoterForm (\form -> { form | poolLiveStake = RemoteData.Success poolLiveStake }) model
                     , Cmd.none
                     )
 
@@ -911,13 +936,29 @@ updateVoterForm f ({ voterStep } as model) =
             model
 
 
-checkGovId : String -> Result String ( Gov.Id, Cmd Msg )
+type alias GovIdCheck =
+    { govId : Gov.Id
+    , scriptInfo : WebData ScriptInfo
+    , poolLiveStake : WebData { pool : Bytes Pool.Id, stake : Int }
+    , cmd : Cmd Msg
+    }
+
+
+checkGovId : String -> Result String GovIdCheck
 checkGovId str =
     case Gov.idFromBech32 str of
         Nothing ->
             Err <| "This doesn’t look like a valid CIP 129 governance Id: " ++ str
 
         Just govId ->
+            let
+                defaultCheck =
+                    { govId = govId
+                    , scriptInfo = RemoteData.NotAsked
+                    , poolLiveStake = RemoteData.NotAsked
+                    , cmd = Cmd.none
+                    }
+            in
             case govId of
                 Gov.CcColdCredId _ ->
                     Err <| "You are supposed to vote with your hot CC key, not the cold key: " ++ str
@@ -927,21 +968,33 @@ checkGovId str =
 
                 -- Using a public key for the gov Id is the simplest case
                 Gov.CcHotCredId (VKeyHash _) ->
-                    Ok ( govId, Cmd.none )
+                    Ok defaultCheck
 
                 Gov.DrepId (VKeyHash _) ->
-                    Ok ( govId, Cmd.none )
+                    Ok defaultCheck
 
-                Gov.PoolId _ ->
-                    Ok ( govId, Cmd.none )
+                Gov.PoolId poolId ->
+                    Ok
+                        { defaultCheck
+                            | poolLiveStake = RemoteData.Loading
+                            , cmd = Api.defaultApiProvider.getPoolLiveStake poolId GotPoolLiveStake
+                        }
 
                 -- Using a script voter will require some extra information to be fetched
                 -- TODO: Keep loaded script somewhere in the model to avoid the need for an http request if not necessary
                 Gov.CcHotCredId (ScriptHash scriptHash) ->
-                    Ok ( govId, Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo )
+                    Ok
+                        { defaultCheck
+                            | scriptInfo = RemoteData.Loading
+                            , cmd = Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
+                        }
 
                 Gov.DrepId (ScriptHash scriptHash) ->
-                    Ok ( govId, Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo )
+                    Ok
+                        { defaultCheck
+                            | scriptInfo = RemoteData.Loading
+                            , cmd = Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
+                        }
 
 
 confirmVoter : VoterPreparationForm -> Utxo.RefDict Output -> ( Step VoterPreparationForm VoterWitness VoterWitness, Cmd Msg )
@@ -1845,8 +1898,7 @@ viewVoterIdentificationStep ctx step =
         Preparing form ->
             Html.map ctx.wrapMsg <|
                 div []
-                    [ Html.h3 [] [ text "Voter Identification" ]
-                    , Html.p [] [ textField "Governance ID (drep/pool/cc_hot)" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
+                    [ Html.p [] [ textField "Voter governance ID (drep/pool/cc_hot)" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
                     , viewValidGovIdForm form
                     , Html.p [] [ button [ onClick <| ValidateVoterFormButtonClicked ] [ text "Confirm Voter" ] ]
                     , viewError form.error
@@ -1854,16 +1906,11 @@ viewVoterIdentificationStep ctx step =
 
         Validating _ _ ->
             div []
-                [ Html.h3 [] [ text "Voter Identification" ]
-                , Html.p [] [ text "validating voter information ..." ]
+                [ Html.p [] [ text "validating voter information ..." ]
                 ]
 
-        Done _ voter ->
-            div []
-                [ Html.h3 [] [ text "Voter Identified" ]
-                , Html.map ctx.wrapMsg <| viewIdentifiedVoter voter
-                , Html.p [] [ text "TODO: display voting power" ]
-                ]
+        Done form voter ->
+            Html.map ctx.wrapMsg <| viewIdentifiedVoter form voter
 
 
 viewValidGovIdForm : VoterPreparationForm -> Html Msg
@@ -1880,7 +1927,24 @@ viewValidGovIdForm form =
             Html.p [] [ text <| "Voting as a DRep with a key of hash: " ++ Bytes.toHex hash ]
 
         Just (PoolId hash) ->
-            Html.p [] [ text <| "Voting as a SPO with a key of hash: " ++ Bytes.toHex hash ]
+            div []
+                [ Html.p [] [ text <| "Voting as a SPO with pool ID (hex): " ++ Bytes.toHex hash ]
+                , Html.p []
+                    [ text "Live stake: "
+                    , case form.poolLiveStake of
+                        RemoteData.NotAsked ->
+                            text "not querried"
+
+                        RemoteData.Loading ->
+                            text "loading ..."
+
+                        RemoteData.Failure error ->
+                            text <| "error: " ++ Debug.toString error
+
+                        RemoteData.Success { stake } ->
+                            text <| Helper.prettyAdaLovelace <| Natural.fromSafeInt stake
+                    ]
+                ]
 
         -- Then the hard case: voting with a script
         Just (CcHotCredId (ScriptHash hash)) ->
@@ -1976,8 +2040,8 @@ textField label value toMsg =
         ]
 
 
-viewIdentifiedVoter : VoterWitness -> Html Msg
-viewIdentifiedVoter voter =
+viewIdentifiedVoter : VoterPreparationForm -> VoterWitness -> Html Msg
+viewIdentifiedVoter form voter =
     let
         ( voterTypeText, voterCred ) =
             case voter of
@@ -1985,16 +2049,27 @@ viewIdentifiedVoter voter =
                     ( "Constitutional Committee Voter", cred )
 
                 WithDrepCred cred ->
-                    ( "DRep Voter", cred )
+                    ( "DRep Voter (voting power: TODO)", cred )
 
                 WithPoolCred hash ->
-                    ( "SPO Voter", WithKey hash )
+                    let
+                        votingPower =
+                            case form.poolLiveStake of
+                                RemoteData.Success { stake } ->
+                                    Helper.prettyAdaLovelace (Natural.fromSafeInt stake)
+
+                                _ ->
+                                    "?"
+                    in
+                    ( "SPO Voter (voting power: " ++ votingPower ++ "): " ++ Pool.toBech32 hash
+                    , WithKey hash
+                    )
     in
     div []
         [ Html.p [] [ text voterTypeText ]
         , case voterCred of
             WithKey cred ->
-                Html.p [] [ text <| "Using key for credential hash: " ++ Bytes.toHex cred ]
+                Html.p [] [ text <| "Using the key of hash: " ++ Bytes.toHex cred ]
 
             WithScript hash (NativeWitness { expectedSigners }) ->
                 div []

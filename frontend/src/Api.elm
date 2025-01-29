@@ -3,6 +3,7 @@ module Api exposing (ActiveProposal, ApiProvider, IpfsAnswer(..), IpfsFile, Prop
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Address exposing (CredentialHash)
 import Cardano.Gov exposing (ActionId, CostModels)
+import Cardano.Pool as Pool
 import Cardano.Script as Script exposing (PlutusVersion(..), Script)
 import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.Utxo exposing (TransactionId)
@@ -20,6 +21,7 @@ type alias ApiProvider msg =
     , loadGovProposals : (Result Http.Error (List ActiveProposal) -> msg) -> Cmd msg
     , retrieveTxs : List (Bytes TransactionId) -> (Result Http.Error (Dict String Transaction) -> msg) -> Cmd msg
     , getScriptInfo : Bytes CredentialHash -> (Result Http.Error ScriptInfo -> msg) -> Cmd msg
+    , getPoolLiveStake : Bytes Pool.Id -> (Result Http.Error { pool : Bytes Pool.Id, stake : Int } -> msg) -> Cmd msg
     , ipfsAdd : { rpc : String, headers : List ( String, String ), file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     }
 
@@ -202,6 +204,16 @@ koiosScriptInfoDecoder =
 
 
 
+-- Pool Live Stake
+
+
+poolStakeDecoder : Bytes Pool.Id -> Decoder { pool : Bytes Pool.Id, stake : Int }
+poolStakeDecoder poolId =
+    JD.map (\stake -> { pool = poolId, stake = stake })
+        (JD.at [ "result", Pool.toBech32 poolId, "stake", "ada", "lovelace" ] JD.int)
+
+
+
 -- IPFS
 
 
@@ -336,6 +348,29 @@ defaultApiProvider =
                             ]
                         )
                 , expect = Http.expectJson toMsg koiosFirstScriptInfoDecoder
+                }
+    , getPoolLiveStake =
+        \poolId toMsg ->
+            Http.post
+                { url = "https://preview.koios.rest/api/v1/ogmios"
+                , body =
+                    Http.jsonBody
+                        (JE.object
+                            [ ( "jsonrpc", JE.string "2.0" )
+                            , ( "method", JE.string "queryLedgerState/stakePools" )
+                            , ( "params"
+                              , JE.object
+                                    [ ( "includeStake", JE.bool True )
+                                    , ( "stakePools"
+                                      , JE.list
+                                            (\p -> JE.object [ ( "id", JE.string <| Bytes.toHex p ) ])
+                                            [ poolId ]
+                                      )
+                                    ]
+                              )
+                            ]
+                        )
+                , expect = Http.expectJson toMsg (poolStakeDecoder poolId)
                 }
 
     -- Make a request to an IPFS RPC

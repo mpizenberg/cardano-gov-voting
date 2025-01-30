@@ -1,6 +1,6 @@
 module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterPreparationForm, addTxSignatures, init, pinRationaleFile, recordSubmittedTx, resetSigningStep, update, view)
 
-import Api exposing (ActiveProposal, IpfsAnswer(..), ScriptInfo)
+import Api exposing (ActiveProposal, DrepInfo, IpfsAnswer(..), ScriptInfo)
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..), TxFinalized, VoterWitness(..), WitnessSource(..))
@@ -83,6 +83,7 @@ init =
 type alias VoterPreparationForm =
     { govId : Maybe Gov.Id
     , scriptInfo : WebData ScriptInfo
+    , drepInfo : WebData DrepInfo
     , poolLiveStake : WebData { pool : Bytes Pool.Id, stake : Int }
     , utxoRef : String
     , expectedSigners : Dict String { expected : Bool, key : Bytes CredentialHash }
@@ -94,6 +95,7 @@ initVoterForm : VoterPreparationForm
 initVoterForm =
     { govId = Nothing
     , scriptInfo = RemoteData.NotAsked
+    , drepInfo = RemoteData.NotAsked
     , poolLiveStake = RemoteData.NotAsked
     , utxoRef = ""
     , expectedSigners = Dict.empty
@@ -344,6 +346,7 @@ type Msg
       -- Voter Step
     | VoterGovIdChange String
     | GotScriptInfo (Result Http.Error ScriptInfo)
+    | GotDrepInfo (Result Http.Error DrepInfo)
     | GotPoolLiveStake (Result Http.Error { pool : Bytes Pool.Id, stake : Int })
     | UtxoRefChange String
     | ToggleExpectedSigner String Bool
@@ -547,6 +550,18 @@ update ctx msg model =
                             }
                         )
                         model
+                    , Cmd.none
+                    )
+
+        GotDrepInfo result ->
+            case result of
+                Err error ->
+                    ( updateVoterForm (\form -> { form | drepInfo = RemoteData.Failure error }) model
+                    , Cmd.none
+                    )
+
+                Ok drepInfo ->
+                    ( updateVoterForm (\form -> { form | drepInfo = RemoteData.Success drepInfo }) model
                     , Cmd.none
                     )
 
@@ -940,6 +955,7 @@ type alias GovIdCheck =
     { govId : Gov.Id
     , scriptInfo : WebData ScriptInfo
     , poolLiveStake : WebData { pool : Bytes Pool.Id, stake : Int }
+    , drepInfo : WebData DrepInfo
     , cmd : Cmd Msg
     }
 
@@ -956,6 +972,7 @@ checkGovId str =
                     { govId = govId
                     , scriptInfo = RemoteData.NotAsked
                     , poolLiveStake = RemoteData.NotAsked
+                    , drepInfo = RemoteData.NotAsked
                     , cmd = Cmd.none
                     }
             in
@@ -970,8 +987,12 @@ checkGovId str =
                 Gov.CcHotCredId (VKeyHash _) ->
                     Ok defaultCheck
 
-                Gov.DrepId (VKeyHash _) ->
-                    Ok defaultCheck
+                Gov.DrepId ((VKeyHash _) as cred) ->
+                    Ok
+                        { defaultCheck
+                            | drepInfo = RemoteData.Loading
+                            , cmd = Api.defaultApiProvider.getDrepInfo cred GotDrepInfo
+                        }
 
                 Gov.PoolId poolId ->
                     Ok
@@ -989,11 +1010,15 @@ checkGovId str =
                             , cmd = Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
                         }
 
-                Gov.DrepId (ScriptHash scriptHash) ->
+                Gov.DrepId ((ScriptHash scriptHash) as cred) ->
                     Ok
                         { defaultCheck
                             | scriptInfo = RemoteData.Loading
-                            , cmd = Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
+                            , cmd =
+                                Cmd.batch
+                                    [ Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
+                                    , Api.defaultApiProvider.getDrepInfo cred GotDrepInfo
+                                    ]
                         }
 
 
@@ -1915,6 +1940,21 @@ viewVoterIdentificationStep ctx step =
 
 viewValidGovIdForm : VoterPreparationForm -> Html Msg
 viewValidGovIdForm form =
+    let
+        viewVotingPower accessor webData =
+            case webData of
+                RemoteData.NotAsked ->
+                    text "not querried"
+
+                RemoteData.Loading ->
+                    text "loading ..."
+
+                RemoteData.Failure error ->
+                    text <| "error: " ++ Debug.toString error
+
+                RemoteData.Success success ->
+                    text <| Helper.prettyAdaLovelace <| Natural.fromSafeInt <| accessor success
+    in
     case form.govId of
         Nothing ->
             text ""
@@ -1924,25 +1964,20 @@ viewValidGovIdForm form =
             Html.p [] [ text <| "Voting as a CC member with a hot key of hash: " ++ Bytes.toHex hash ]
 
         Just (DrepId (VKeyHash hash)) ->
-            Html.p [] [ text <| "Voting as a DRep with a key of hash: " ++ Bytes.toHex hash ]
+            div []
+                [ Html.p [] [ text <| "Voting as a DRep with a key of hash: " ++ Bytes.toHex hash ]
+                , Html.p []
+                    [ text "Voting power: "
+                    , viewVotingPower .votingPower form.drepInfo
+                    ]
+                ]
 
         Just (PoolId hash) ->
             div []
                 [ Html.p [] [ text <| "Voting as a SPO with pool ID (hex): " ++ Bytes.toHex hash ]
                 , Html.p []
                     [ text "Live stake: "
-                    , case form.poolLiveStake of
-                        RemoteData.NotAsked ->
-                            text "not querried"
-
-                        RemoteData.Loading ->
-                            text "loading ..."
-
-                        RemoteData.Failure error ->
-                            text <| "error: " ++ Debug.toString error
-
-                        RemoteData.Success { stake } ->
-                            text <| Helper.prettyAdaLovelace <| Natural.fromSafeInt stake
+                    , viewVotingPower .stake form.poolLiveStake
                     ]
                 ]
 
@@ -1956,6 +1991,10 @@ viewValidGovIdForm form =
         Just (DrepId (ScriptHash hash)) ->
             div []
                 [ Html.p [] [ text <| "Voting as a DRep with a script of hash: " ++ Bytes.toHex hash ]
+                , Html.p []
+                    [ text "Voting power: "
+                    , viewVotingPower .votingPower form.drepInfo
+                    ]
                 , viewScriptForm form
                 ]
 
@@ -2049,7 +2088,16 @@ viewIdentifiedVoter form voter =
                     ( "Constitutional Committee Voter", cred )
 
                 WithDrepCred cred ->
-                    ( "DRep Voter (voting power: TODO)", cred )
+                    let
+                        votingPowerStr =
+                            case form.drepInfo of
+                                RemoteData.Success { votingPower } ->
+                                    Helper.prettyAdaLovelace (Natural.fromSafeInt votingPower)
+
+                                _ ->
+                                    "?"
+                    in
+                    ( "DRep Voter (voting power: " ++ votingPowerStr ++ ")", cred )
 
                 WithPoolCred hash ->
                     let

@@ -1,7 +1,7 @@
-module Api exposing (ActiveProposal, ApiProvider, IpfsAnswer(..), IpfsFile, ProposalMetadata, ProtocolParams, ScriptInfo, defaultApiProvider)
+module Api exposing (ActiveProposal, ApiProvider, DrepInfo, IpfsAnswer(..), IpfsFile, ProposalMetadata, ProtocolParams, ScriptInfo, defaultApiProvider)
 
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano.Address exposing (CredentialHash)
+import Cardano.Address exposing (Credential(..), CredentialHash)
 import Cardano.Gov exposing (ActionId, CostModels)
 import Cardano.Pool as Pool
 import Cardano.Script as Script exposing (PlutusVersion(..), Script)
@@ -12,6 +12,7 @@ import File exposing (File)
 import Http
 import Json.Decode as JD exposing (Decoder)
 import Json.Encode as JE
+import List.Extra
 import Natural exposing (Natural)
 import RemoteData exposing (WebData)
 
@@ -21,6 +22,7 @@ type alias ApiProvider msg =
     , loadGovProposals : (Result Http.Error (List ActiveProposal) -> msg) -> Cmd msg
     , retrieveTxs : List (Bytes TransactionId) -> (Result Http.Error (Dict String Transaction) -> msg) -> Cmd msg
     , getScriptInfo : Bytes CredentialHash -> (Result Http.Error ScriptInfo -> msg) -> Cmd msg
+    , getDrepInfo : Credential -> (Result Http.Error DrepInfo -> msg) -> Cmd msg
     , getPoolLiveStake : Bytes Pool.Id -> (Result Http.Error { pool : Bytes Pool.Id, stake : Int } -> msg) -> Cmd msg
     , ipfsAdd : { rpc : String, headers : List ( String, String ), file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     }
@@ -204,6 +206,96 @@ koiosScriptInfoDecoder =
 
 
 
+-- DRep Info
+
+
+type AnyDrepInfo
+    = Abstain
+    | NoConfidence
+    | Registered DrepInfo
+
+
+type alias DrepInfo =
+    { credential : Credential
+
+    -- TODO: eventually need to change to Natural,
+    -- but it’s not possible with regular http requests,
+    -- because Elm will call JSON.parse() which will silently
+    -- lose precision on integers > 2^53
+    , votingPower : Int
+    }
+
+
+ogmiosSpecificDrepInfoDecoder : Credential -> Decoder DrepInfo
+ogmiosSpecificDrepInfoDecoder cred =
+    let
+        extractRegistered anyDrep =
+            case anyDrep of
+                Registered info ->
+                    Just info
+
+                _ ->
+                    Nothing
+    in
+    JD.field "result" (JD.list ogmiosAnyDrepInfoDecoder)
+        |> JD.map (List.filterMap extractRegistered)
+        |> JD.map (List.Extra.find (\drep -> drep.credential == cred))
+        |> JD.andThen
+            (\drepFound ->
+                case drepFound of
+                    Nothing ->
+                        JD.fail <| "DRep not in the response: " ++ Debug.toString cred
+
+                    Just drepInfo ->
+                        JD.succeed drepInfo
+            )
+
+
+ogmiosAnyDrepInfoDecoder : Decoder AnyDrepInfo
+ogmiosAnyDrepInfoDecoder =
+    JD.field "type" JD.string
+        |> JD.andThen
+            (\drepType ->
+                case drepType of
+                    "abstain" ->
+                        JD.succeed Abstain
+
+                    "noConfidence" ->
+                        JD.succeed NoConfidence
+
+                    "registered" ->
+                        JD.map Registered ogmiosRegisteredDrepInfoDecoder
+
+                    _ ->
+                        JD.fail <| "Unknown DRep type: " ++ drepType
+            )
+
+
+ogmiosRegisteredDrepInfoDecoder : Decoder DrepInfo
+ogmiosRegisteredDrepInfoDecoder =
+    JD.field "from" JD.string
+        |> JD.andThen
+            (\from ->
+                case from of
+                    "verificationKey" ->
+                        JD.succeed VKeyHash
+
+                    "script" ->
+                        JD.succeed ScriptHash
+
+                    _ ->
+                        JD.fail <| "Unknow credential type: " ++ from
+            )
+        |> JD.andThen
+            (\credType ->
+                JD.map2 (\id stake -> { credential = credType id, votingPower = stake })
+                    -- TODO: replace fromHexUnchecked with error handling
+                    (JD.field "id" JD.string |> JD.map Bytes.fromHexUnchecked)
+                    (JD.at [ "stake", "ada", "lovelace" ] JD.int)
+            )
+
+
+
 -- Pool Live Stake
 
 
@@ -349,6 +441,31 @@ defaultApiProvider =
                         )
                 , expect = Http.expectJson toMsg koiosFirstScriptInfoDecoder
                 }
+
+    -- Retrieve DRep info via Koios using an Ogmios endpoint
+    , getDrepInfo =
+        \cred toMsg ->
+            Http.post
+                { url = "https://preview.koios.rest/api/v1/ogmios"
+                , body =
+                    Http.jsonBody
+                        (JE.object
+                            [ ( "jsonrpc", JE.string "2.0" )
+                            , ( "method", JE.string "queryLedgerState/delegateRepresentatives" )
+                            , ( "params"
+                              , case cred of
+                                    VKeyHash hash ->
+                                        JE.object [ ( "keys", JE.list JE.string <| [ Bytes.toHex hash ] ) ]
+
+                                    ScriptHash hash ->
+                                        JE.object [ ( "scripts", JE.list JE.string <| [ Bytes.toHex hash ] ) ]
+                              )
+                            ]
+                        )
+                , expect = Http.expectJson toMsg (ogmiosSpecificDrepInfoDecoder cred)
+                }
+
+    -- Retrieve Pool live stake (end of previous epoch)
     , getPoolLiveStake =
         \poolId toMsg ->
             Http.post

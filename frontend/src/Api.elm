@@ -1,4 +1,4 @@
-module Api exposing (ActiveProposal, ApiProvider, DrepInfo, IpfsAnswer(..), IpfsFile, ProposalMetadata, ProtocolParams, ScriptInfo, defaultApiProvider)
+module Api exposing (ActiveProposal, ApiProvider, CcInfo, DrepInfo, IpfsAnswer(..), IpfsFile, ProposalMetadata, ProtocolParams, ScriptInfo, defaultApiProvider)
 
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Address exposing (Credential(..), CredentialHash)
@@ -23,6 +23,7 @@ type alias ApiProvider msg =
     , retrieveTxs : List (Bytes TransactionId) -> (Result Http.Error (Dict String Transaction) -> msg) -> Cmd msg
     , getScriptInfo : Bytes CredentialHash -> (Result Http.Error ScriptInfo -> msg) -> Cmd msg
     , getDrepInfo : Credential -> (Result Http.Error DrepInfo -> msg) -> Cmd msg
+    , getCcInfo : Credential -> (Result Http.Error CcInfo -> msg) -> Cmd msg
     , getPoolLiveStake : Bytes Pool.Id -> (Result Http.Error { pool : Bytes Pool.Id, stake : Int } -> msg) -> Cmd msg
     , ipfsAdd : { rpc : String, headers : List ( String, String ), file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     }
@@ -273,26 +274,63 @@ ogmiosAnyDrepInfoDecoder =
 
 ogmiosRegisteredDrepInfoDecoder : Decoder DrepInfo
 ogmiosRegisteredDrepInfoDecoder =
-    JD.field "from" JD.string
-        |> JD.andThen
-            (\from ->
-                case from of
-                    "verificationKey" ->
-                        JD.succeed VKeyHash
+    JD.map2 (\cred stake -> { credential = cred, votingPower = stake })
+        ogmiosCredDecoder
+        (JD.at [ "stake", "ada", "lovelace" ] JD.int)
 
-                    "script" ->
-                        JD.succeed ScriptHash
+
+ogmiosCredDecoder : Decoder Credential
+ogmiosCredDecoder =
+    JD.map2 Tuple.pair (JD.field "from" JD.string) (JD.field "id" JD.string)
+        |> JD.andThen
+            (\( from, id ) ->
+                case ( from, Bytes.fromHex id ) of
+                    ( "verificationKey", Just hash ) ->
+                        JD.succeed <| VKeyHash hash
+
+                    ( "script", Just hash ) ->
+                        JD.succeed <| ScriptHash hash
 
                     _ ->
-                        JD.fail <| "Unknow credential type: " ++ from
+                        JD.fail <| "Invalid credential: " ++ from ++ ", " ++ id
             )
+
+
+
+-- CC Info
+
+
+type alias CcInfo =
+    { coldCred : Credential
+    , hotCred : Credential
+    , status : String
+    , epochMandateEnd : Int
+    }
+
+
+ogmiosSpecificCcInfoDecoder : Credential -> Decoder CcInfo
+ogmiosSpecificCcInfoDecoder hotCred =
+    JD.at [ "result", "members" ] (JD.list ogmiosCcInfoDecoder)
+        |> JD.map (List.Extra.find (\info -> info.hotCred == hotCred))
         |> JD.andThen
-            (\credType ->
-                JD.map2 (\id stake -> { credential = credType id, votingPower = stake })
-                    -- TODO: replace fromHexUnchecked with error handling
-                    (JD.field "id" JD.string |> JD.map Bytes.fromHexUnchecked)
-                    (JD.at [ "stake", "ada", "lovelace" ] JD.int)
+            (\maybeInfo ->
+                case maybeInfo of
+                    Nothing ->
+                        JD.fail <| "Hot cred not present in CC members: " ++ Debug.toString hotCred
+
+                    Just info ->
+                        JD.succeed info
             )
+
+
+ogmiosCcInfoDecoder : Decoder CcInfo
+ogmiosCcInfoDecoder =
+    JD.map4 CcInfo
+        -- Cold credential at the top, then Hot credential inside the "delegate" field
+        ogmiosCredDecoder
+        (JD.field "delegate" ogmiosCredDecoder)
+        (JD.field "status" JD.string)
+        (JD.at [ "mandate", "epoch" ] JD.int)
 
 
 
@@ -463,6 +501,21 @@ defaultApiProvider =
                             ]
                         )
                 , expect = Http.expectJson toMsg (ogmiosSpecificDrepInfoDecoder cred)
+                }
+
+    -- Retrieve CC member info
+    , getCcInfo =
+        \cred toMsg ->
+            Http.post
+                { url = "https://preview.koios.rest/api/v1/ogmios"
+                , body =
+                    Http.jsonBody
+                        (JE.object
+                            [ ( "jsonrpc", JE.string "2.0" )
+                            , ( "method", JE.string "queryLedgerState/constitutionalCommittee" )
+                            ]
+                        )
+                , expect = Http.expectJson toMsg (ogmiosSpecificCcInfoDecoder cred)
                 }
 
     -- Retrieve Pool live stake (end of previous epoch)

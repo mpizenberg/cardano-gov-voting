@@ -1,6 +1,6 @@
 module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterPreparationForm, addTxSignatures, init, pinRationaleFile, recordSubmittedTx, resetSigningStep, update, view)
 
-import Api exposing (ActiveProposal, DrepInfo, IpfsAnswer(..), ScriptInfo)
+import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), ScriptInfo)
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..), TxFinalized, VoterWitness(..), WitnessSource(..))
@@ -84,6 +84,7 @@ type alias VoterPreparationForm =
     { govId : Maybe Gov.Id
     , scriptInfo : WebData ScriptInfo
     , drepInfo : WebData DrepInfo
+    , ccInfo : WebData CcInfo
     , poolLiveStake : WebData { pool : Bytes Pool.Id, stake : Int }
     , utxoRef : String
     , expectedSigners : Dict String { expected : Bool, key : Bytes CredentialHash }
@@ -96,6 +97,7 @@ initVoterForm =
     { govId = Nothing
     , scriptInfo = RemoteData.NotAsked
     , drepInfo = RemoteData.NotAsked
+    , ccInfo = RemoteData.NotAsked
     , poolLiveStake = RemoteData.NotAsked
     , utxoRef = ""
     , expectedSigners = Dict.empty
@@ -347,6 +349,7 @@ type Msg
     | VoterGovIdChange String
     | GotScriptInfo (Result Http.Error ScriptInfo)
     | GotDrepInfo (Result Http.Error DrepInfo)
+    | GotCcInfo (Result Http.Error CcInfo)
     | GotPoolLiveStake (Result Http.Error { pool : Bytes Pool.Id, stake : Int })
     | UtxoRefChange String
     | ToggleExpectedSigner String Bool
@@ -562,6 +565,18 @@ update ctx msg model =
 
                 Ok drepInfo ->
                     ( updateVoterForm (\form -> { form | drepInfo = RemoteData.Success drepInfo }) model
+                    , Cmd.none
+                    )
+
+        GotCcInfo result ->
+            case result of
+                Err error ->
+                    ( updateVoterForm (\form -> { form | ccInfo = RemoteData.Failure error }) model
+                    , Cmd.none
+                    )
+
+                Ok ccInfo ->
+                    ( updateVoterForm (\form -> { form | ccInfo = RemoteData.Success ccInfo }) model
                     , Cmd.none
                     )
 
@@ -984,8 +999,8 @@ checkGovId str =
                     Err "Please use one of the drep/pool/cc_hot CIP 129 governance Ids. Proposal to vote on will be selected later."
 
                 -- Using a public key for the gov Id is the simplest case
-                Gov.CcHotCredId (VKeyHash _) ->
-                    Ok defaultCheck
+                Gov.CcHotCredId ((VKeyHash _) as cred) ->
+                    Ok { defaultCheck | cmd = Api.defaultApiProvider.getCcInfo cred GotCcInfo }
 
                 Gov.DrepId ((VKeyHash _) as cred) ->
                     Ok
@@ -1003,11 +1018,15 @@ checkGovId str =
 
                 -- Using a script voter will require some extra information to be fetched
                 -- TODO: Keep loaded script somewhere in the model to avoid the need for an http request if not necessary
-                Gov.CcHotCredId (ScriptHash scriptHash) ->
+                Gov.CcHotCredId ((ScriptHash scriptHash) as cred) ->
                     Ok
                         { defaultCheck
                             | scriptInfo = RemoteData.Loading
-                            , cmd = Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
+                            , cmd =
+                                Cmd.batch
+                                    [ Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
+                                    , Api.defaultApiProvider.getCcInfo cred GotCcInfo
+                                    ]
                         }
 
                 Gov.DrepId ((ScriptHash scriptHash) as cred) ->
@@ -1961,7 +1980,10 @@ viewValidGovIdForm form =
 
         -- First the easy case: voting with a key
         Just (CcHotCredId (VKeyHash hash)) ->
-            Html.p [] [ text <| "Voting as a CC member with a hot key of hash: " ++ Bytes.toHex hash ]
+            div []
+                [ Html.p [] [ text <| "Voting as a CC member with a hot key of hash: " ++ Bytes.toHex hash ]
+                , viewCcInfo form.ccInfo
+                ]
 
         Just (DrepId (VKeyHash hash)) ->
             div []
@@ -1985,6 +2007,7 @@ viewValidGovIdForm form =
         Just (CcHotCredId (ScriptHash hash)) ->
             div []
                 [ Html.p [] [ text <| "Voting as a CC member with a script of hash: " ++ Bytes.toHex hash ]
+                , viewCcInfo form.ccInfo
                 , viewScriptForm form
                 ]
 
@@ -2000,6 +2023,27 @@ viewValidGovIdForm form =
 
         Just govId ->
             Html.p [] [ text <| "Unexpected type of governance Id: " ++ Debug.toString govId ]
+
+
+viewCcInfo : WebData CcInfo -> Html msg
+viewCcInfo remoteCcInfo =
+    case remoteCcInfo of
+        RemoteData.Success { coldCred, hotCred, status, epochMandateEnd } ->
+            div []
+                [ Html.p [] [ text <| "Cold credential: " ++ Gov.idToBech32 (CcColdCredId coldCred) ]
+                , Html.p [] [ text <| "Hot credential (used to vote): " ++ Gov.idToBech32 (CcHotCredId hotCred) ]
+                , Html.p [] [ text <| "Member status: " ++ status ]
+                , Html.p [] [ text <| "Mandate ending at epoch: " ++ String.fromInt epochMandateEnd ]
+                ]
+
+        RemoteData.NotAsked ->
+            Html.p [] [ text "CC member info not querried" ]
+
+        RemoteData.Loading ->
+            Html.p [] [ text "CC member info loading ..." ]
+
+        RemoteData.Failure error ->
+            Html.p [] [ text <| "CC member info loading error: " ++ Debug.toString error ]
 
 
 viewScriptForm : VoterPreparationForm -> Html Msg

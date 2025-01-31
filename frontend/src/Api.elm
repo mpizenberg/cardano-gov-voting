@@ -14,12 +14,13 @@ import Json.Decode as JD exposing (Decoder)
 import Json.Encode as JE
 import List.Extra
 import Natural exposing (Natural)
-import RemoteData exposing (WebData)
+import RemoteData exposing (RemoteData)
 
 
 type alias ApiProvider msg =
     { loadProtocolParams : (Result Http.Error ProtocolParams -> msg) -> Cmd msg
     , loadGovProposals : (Result Http.Error (List ActiveProposal) -> msg) -> Cmd msg
+    , loadProposalMetadata : String -> (Result String ProposalMetadata -> msg) -> Cmd msg
     , retrieveTxs : List (Bytes TransactionId) -> (Result Http.Error (Dict String Transaction) -> msg) -> Cmd msg
     , getScriptInfo : Bytes CredentialHash -> (Result Http.Error ScriptInfo -> msg) -> Cmd msg
     , getDrepInfo : Credential -> (Result Http.Error DrepInfo -> msg) -> Cmd msg
@@ -60,14 +61,16 @@ protocolParamsDecoder =
 type alias ActiveProposal =
     { id : ActionId
     , actionType : String
-    , metadata : WebData ProposalMetadata
+    , metadataUrl : String
+    , metadataHash : String
+    , metadata : RemoteData String ProposalMetadata
     }
 
 
 type alias ProposalMetadata =
-    { title : String
-    , abstract : String
-    , rawJson : String
+    { title : Maybe String
+    , abstract : Maybe String
+    , raw : String
     }
 
 
@@ -75,7 +78,7 @@ proposalsDecoder : Decoder (List ActiveProposal)
 proposalsDecoder =
     JD.field "result" <|
         JD.list <|
-            JD.map3 ActiveProposal
+            JD.map5 ActiveProposal
                 (JD.map2
                     (\id index ->
                         { transactionId = Bytes.fromHexUnchecked id
@@ -86,7 +89,23 @@ proposalsDecoder =
                     (JD.at [ "proposal", "index" ] JD.int)
                 )
                 (JD.at [ "action", "type" ] JD.string)
+                (JD.at [ "metadata", "url" ] JD.string)
+                (JD.at [ "metadata", "hash" ] JD.string)
                 (JD.succeed RemoteData.Loading)
+
+
+decodeProposalMetadata : String -> ProposalMetadata
+decodeProposalMetadata raw =
+    let
+        titleAndAbstractDecoder : Decoder ( Maybe String, Maybe String )
+        titleAndAbstractDecoder =
+            JD.map2 Tuple.pair
+                (JD.maybe <| JD.at [ "body", "title" ] JD.string)
+                (JD.maybe <| JD.at [ "body", "abstract" ] JD.string)
+    in
+    JD.decodeString titleAndAbstractDecoder raw
+        |> Result.map (\( title, abstract ) -> ProposalMetadata title abstract raw)
+        |> Result.withDefault (ProposalMetadata Nothing Nothing raw)
 
 
 
@@ -445,6 +464,35 @@ defaultApiProvider =
                             ]
                         )
                 , expect = Http.expectJson toMsg proposalsDecoder
+                }
+
+    -- Load the metadata associated with a governance proposal
+    , loadProposalMetadata =
+        \url toMsg ->
+            let
+                decodeData : Http.Response String -> Result String ProposalMetadata
+                decodeData response =
+                    case response of
+                        Http.GoodStatus_ _ body ->
+                            Ok <| decodeProposalMetadata body
+
+                        Http.NetworkError_ ->
+                            Err "Network error. Maybe you lost your connection, or the request was blocked by CORS on the server."
+
+                        _ ->
+                            Err <| Debug.toString response
+
+                adjustedUrl =
+                    -- Differentiate HTTP and IPFS protocols to adjust the IPFS URL to a gateway
+                    if String.startsWith "ipfs://" url then
+                        "https://ipfs.io/ipfs/" ++ String.dropLeft 7 url
+
+                    else
+                        url
+            in
+            Http.get
+                { url = adjustedUrl
+                , expect = Http.expectStringResponse toMsg decodeData
                 }
 
     -- Retrieve transactions via Koios by proxying with the server (to avoid CORS errors)

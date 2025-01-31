@@ -1,6 +1,6 @@
 port module Main exposing (main)
 
-import Api exposing (ActiveProposal, ProtocolParams)
+import Api exposing (ActiveProposal, ProposalMetadata, ProtocolParams)
 import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
@@ -125,6 +125,7 @@ type Msg
     | DisconnectWalletButtonClicked
     | GotProtocolParams (Result Http.Error ProtocolParams)
     | GotProposals (Result Http.Error (List ActiveProposal))
+    | GotProposalMetadata String (Result String ProposalMetadata)
       -- Preparation page
     | PreparationPageMsg Page.Preparation.Msg
     | GotRationaleAsFile Value
@@ -366,15 +367,34 @@ update msg model =
 
                 Ok activeProposals ->
                     let
-                        proposalsDict =
-                            activeProposals
-                                |> List.map (\p -> ( Gov.actionIdToString p.id, p ))
-                                |> Dict.fromList
+                        proposalsList =
+                            List.map (\p -> ( Gov.actionIdToString p.id, p )) activeProposals
+
+                        metadataRequest ( id, p ) =
+                            Api.defaultApiProvider.loadProposalMetadata p.metadataUrl (GotProposalMetadata id)
                     in
-                    ( { model | proposals = RemoteData.Success proposalsDict }
-                      -- TODO: load proposals metadata
-                    , Cmd.none
+                    ( { model | proposals = RemoteData.Success <| Dict.fromList proposalsList }
+                      -- Load proposals metadata
+                    , Cmd.batch <| List.map metadataRequest proposalsList
                     )
+
+        -- Result String ProposalMetadata
+        ( GotProposalMetadata id result, _ ) ->
+            let
+                updateMetadata maybeProposal =
+                    case ( maybeProposal, result ) of
+                        ( Nothing, _ ) ->
+                            Nothing
+
+                        ( Just p, Ok metadata ) ->
+                            Just { p | metadata = RemoteData.Success metadata }
+
+                        ( Just p, Err error ) ->
+                            Just { p | metadata = RemoteData.Failure error }
+            in
+            ( { model | proposals = RemoteData.map (\ps -> Dict.update id updateMetadata ps) model.proposals }
+            , Cmd.none
+            )
 
 
 handleUrlChange : Route -> Model -> ( Model, Cmd Msg )

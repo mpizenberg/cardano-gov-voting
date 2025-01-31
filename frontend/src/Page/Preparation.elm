@@ -2242,34 +2242,47 @@ viewProposalSelectionStep ctx model =
                 , Html.p [] [ text "Validating the picked proposal ..." ]
                 ]
 
-        Done _ { id, actionType, metadata } ->
+        Done _ { id, actionType, metadata, metadataUrl } ->
+            let
+                ( title, content ) =
+                    case metadata of
+                        RemoteData.NotAsked ->
+                            ( "not loading", Nothing )
+
+                        RemoteData.Loading ->
+                            ( "loading ...", Nothing )
+
+                        RemoteData.Failure error ->
+                            ( "ERROR for " ++ metadataUrl ++ ": " ++ Debug.toString error
+                            , Nothing
+                            )
+
+                        RemoteData.Success meta ->
+                            ( meta.title |> Maybe.withDefault "unknown (unexpected metadata format)"
+                            , Just <|
+                                div []
+                                    [ Html.p [] [ text "Abstract:" ]
+                                    , Html.p [] [ text <| Maybe.withDefault "Unknown abstract (unexpected metadata format)" meta.abstract ]
+                                    , Html.p [] [ text "Raw metadata:" ]
+                                    , Html.pre [] [ text meta.raw ]
+                                    ]
+                            )
+            in
             div []
                 [ Html.h3 [] [ text "Pick a Proposal" ]
-                , Html.p []
-                    [ text "Picked: "
-                    , cardanoScanActionLink id
-                    , text <| ", type: " ++ actionType
-                    , text ", title: "
-                    , text <|
-                        case metadata of
-                            RemoteData.NotAsked ->
-                                "not loading"
-
-                            RemoteData.Loading ->
-                                "loading ..."
-
-                            RemoteData.Failure error ->
-                                "ERROR: " ++ Debug.toString error
-
-                            RemoteData.Success meta ->
-                                meta.title
+                , div []
+                    [ Html.p [] [ text "Picked: ", cardanoScanActionLink id ]
+                    , Html.p [] [ text <| "Type: " ++ actionType ]
+                    , Html.p [] [ Html.strong [] [ text <| "Title: " ++ title ] ]
+                    , content
+                        |> Maybe.withDefault (text "")
                     ]
                 , Html.p [] [ button [ onClick <| ctx.wrapMsg ChangeProposalButtonClicked ] [ text "Change Proposal" ] ]
                 ]
 
 
 viewActiveProposal : ActiveProposal -> Html Msg
-viewActiveProposal { id, actionType, metadata } =
+viewActiveProposal { id, actionType, metadata, metadataUrl } =
     Html.p []
         [ button [ onClick (PickProposalButtonClicked <| Gov.actionIdToString id) ] [ text "Pick this proposal" ]
         , text " "
@@ -2285,10 +2298,11 @@ viewActiveProposal { id, actionType, metadata } =
                     "loading ..."
 
                 RemoteData.Failure error ->
-                    "ERROR: " ++ Debug.toString error
+                    "ERROR for " ++ metadataUrl ++ ": " ++ Debug.toString error
 
                 RemoteData.Success meta ->
                     meta.title
+                        |> Maybe.withDefault "unknown (unexpected metadata format)"
         ]
 
 

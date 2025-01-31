@@ -2075,6 +2075,18 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
 
                     else
                         Html.p [] [ text <| "Weirdly, using a reference input for your script would cost you more: " ++ prettyAdaLovelace (Natural.fromSafeInt -refScriptFeeSavings) ]
+
+                additionalSignerCost =
+                    Natural.fromSafeInt <|
+                        Transaction.defaultTxFeeParams.feePerByte
+                            * additionalBytesPerSignature
+
+                additionalBytesPerSignature =
+                    Transaction.encodeVKeyWitness
+                        { vkey = Bytes.dummy 32 "", signature = Bytes.dummy 64 "" }
+                        |> Cbor.Encode.encode
+                        |> Bytes.fromBytes
+                        |> Bytes.width
             in
             case script of
                 Script.Native _ ->
@@ -2082,7 +2094,7 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
                         div []
                             [ Html.p [] [ text "Type of script: Native Script" ]
                             , refScriptSuggestion
-                            , Html.p [] [ text "Expected signers:" ]
+                            , Html.p [] [ text <| "Expected signers: (each adds " ++ prettyAdaLovelace additionalSignerCost ++ " to the Tx fees)" ]
                             , div [] (List.map viewExpectedSignerCheckbox <| Dict.values expectedSigners)
                             ]
 
@@ -2091,6 +2103,8 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
                             [ Html.p [] [ text "Type of script: Native Script" ]
                             , Html.p [] [ text <| "IMPORTANT: for technical reasons, we need you to provide a reference UTxO containing your script of hash: " ++ Bytes.toHex scriptHash ]
                             , utxoRefForm
+                            , Html.p [] [ text <| "Expected signers: (each adds " ++ prettyAdaLovelace additionalSignerCost ++ " to the Tx fees)" ]
+                            , div [] (List.map viewExpectedSignerCheckbox <| Dict.values expectedSigners)
                             ]
 
                 Script.Plutus plutusScript ->
@@ -2117,7 +2131,7 @@ viewExpectedSignerCheckbox { expected, key } =
             , onCheck (ToggleExpectedSigner keyHex)
             ]
             []
-        , Html.label [ HA.for keyHex ] [ text <| " key: " ++ keyHex ]
+        , Html.label [ HA.for keyHex ] [ text <| " key hash: " ++ keyHex ]
         ]
 
 

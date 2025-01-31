@@ -19,7 +19,7 @@ import Dict exposing (Dict)
 import Dict.Any
 import File exposing (File)
 import File.Select
-import Helper exposing (prettyAddr)
+import Helper exposing (prettyAdaLovelace, prettyAddr)
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onCheck, onClick)
@@ -2062,14 +2062,26 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
             let
                 utxoRefForm =
                     Html.p [] [ textField "Reference UTxO" utxoRef UtxoRefChange ]
+
+                refScriptFeeSavings =
+                    Transaction.estimateRefScriptFeeSavings script
+
+                refScriptSuggestion =
+                    if refScriptFeeSavings >= 0 then
+                        div []
+                            [ Html.p [] [ text <| "By using a reference input for your script, you could save this much in Tx fees: " ++ prettyAdaLovelace (Natural.fromSafeInt refScriptFeeSavings) ]
+                            , utxoRefForm
+                            ]
+
+                    else
+                        Html.p [] [ text <| "Weirdly, using a reference input for your script would cost you more: " ++ prettyAdaLovelace (Natural.fromSafeInt -refScriptFeeSavings) ]
             in
             case script of
                 Script.Native _ ->
                     if nativeCborEncodingMatchesHash == Just True then
                         div []
                             [ Html.p [] [ text "Type of script: Native Script" ]
-                            , Html.p [] [ text "TODO: propose using a reference UTxO for less fees" ]
-                            , utxoRefForm
+                            , refScriptSuggestion
                             , Html.p [] [ text "Expected signers:" ]
                             , div [] (List.map viewExpectedSignerCheckbox <| Dict.values expectedSigners)
                             ]
@@ -2085,8 +2097,7 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
                     div []
                         [ Html.p [] [ text <| "Plutus script version: " ++ Debug.toString plutusScript.version ]
                         , Html.p [] [ text <| "Script size: " ++ (String.fromInt <| Bytes.width plutusScript.script) ++ " Bytes" ]
-                        , Html.p [] [ text "TODO: propose using a reference UTxO for less fees" ]
-                        , utxoRefForm
+                        , refScriptSuggestion
                         , Html.p [] [ text "WIP: we are waiting for someone needing this to implement Plutus voters" ]
                         ]
 

@@ -23,6 +23,7 @@ import Helper exposing (prettyAdaLovelace, prettyAddr)
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onCheck, onClick)
+import Html.Lazy
 import Http
 import Json.Decode as JD
 import Json.Encode as JE
@@ -557,7 +558,7 @@ update ctx msg model =
         GotDrepInfo result ->
             case result of
                 Err error ->
-                    ( updateVoterForm (\form -> { form | drepInfo = RemoteData.Failure error }) model
+                    ( updateVoterForm (\form -> { form | drepInfo = RemoteData.Failure (Debug.log "ERROR loading DRep info" error) }) model
                     , Cmd.none
                     )
 
@@ -1889,7 +1890,7 @@ viewVoterIdentificationStep ctx step =
             Html.map ctx.wrapMsg <|
                 div []
                     [ Html.p [] [ textField "Voter governance ID (drep/pool/cc_hot)" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
-                    , viewValidGovIdForm form
+                    , Html.Lazy.lazy viewValidGovIdForm form
                     , Html.p [] [ button [ onClick <| ValidateVoterFormButtonClicked ] [ text "Confirm Voter" ] ]
                     , viewError form.error
                     ]
@@ -1903,22 +1904,6 @@ viewVoterIdentificationStep ctx step =
             Html.map ctx.wrapMsg <| viewIdentifiedVoter form voter
 
 
-logErrorAndReturnUniqueId : { info : String } -> String -> String
-logErrorAndReturnUniqueId { info } error =
-    -- Helper function to log errors in the console
-    let
-        computeErrorId err =
-            Bytes.blake2b256 (Bytes.fromText err)
-                |> Bytes.toHex
-                |> String.left 8
-
-        errorId =
-            computeErrorId error
-    in
-    Debug.log ("ERROR (" ++ errorId ++ "): " ++ info) error
-        |> computeErrorId
-
-
 viewValidGovIdForm : VoterPreparationForm -> Html Msg
 viewValidGovIdForm form =
     let
@@ -1930,12 +1915,8 @@ viewValidGovIdForm form =
                 RemoteData.Loading ->
                     text "loading ..."
 
-                RemoteData.Failure error ->
-                    let
-                        errorId =
-                            logErrorAndReturnUniqueId { info = "Voting power request error" } (Debug.toString error)
-                    in
-                    text <| "? Most likely, this voter is not registered yet, or was just registered this epoch. More info in the console logs for error: " ++ errorId
+                RemoteData.Failure _ ->
+                    text <| "? Most likely, this voter is not registered yet, or was just registered this epoch."
 
                 RemoteData.Success success ->
                     text <| Helper.prettyAdaLovelace <| Natural.fromSafeInt <| accessor success

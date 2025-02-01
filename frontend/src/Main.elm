@@ -673,6 +673,6 @@ viewAvailableWallets wallets =
                 Html.button [ onClick (ConnectButtonClicked { id = id }) ] [ text "connect" ]
 
             walletRow w =
-                div [] [ walletIcon w, text (walletDescription w), connectButton w ]
+                div [] [ walletIcon w, text (walletDescription w), text " ", connectButton w ]
         in
         div [] (List.map walletRow wallets)

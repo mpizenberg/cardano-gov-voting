@@ -2,11 +2,11 @@ module Page.MultisigRegistration exposing (LoadedWallet, Model, Msg(..), Registe
 
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CertificateIntent(..), CredentialWitness(..), ScriptWitness(..), SpendSource(..), TxFinalized, TxIntent(..), WitnessSource(..))
-import Cardano.Address as Address exposing (Address, Credential, CredentialHash, NetworkId(..))
+import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
-import Cardano.Gov exposing (CostModels)
-import Cardano.Script as Script exposing (NativeScript, Script)
+import Cardano.Gov as Gov exposing (CostModels)
+import Cardano.Script as Script exposing (NativeScript)
 import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.TxExamples exposing (prettyTx)
 import Cardano.Uplc as Uplc
@@ -44,6 +44,7 @@ type alias RegisterTxSummary =
     , nativeScript : NativeScript
     , scriptHash : Bytes CredentialHash
     , scriptRefInput : Maybe OutputReference
+    , drepId : Gov.Id
     }
 
 
@@ -59,7 +60,7 @@ initialModel =
     { minCount = 1
     , hashes = []
     , register = True
-    , createOutputRef = True
+    , createOutputRef = False
     , registerTxSummary = Nothing
     , unregisterTxSummary = Nothing
     , error = Nothing
@@ -177,6 +178,7 @@ validateFormAndBuildRegister ctx model =
                                     , scriptRefInput =
                                         Transaction.locateScriptWithHash scriptHash tx.body.outputs
                                             |> Maybe.map (\( index, _ ) -> OutputReference (Transaction.computeTxId tx) index)
+                                    , drepId = Gov.DrepId (ScriptHash scriptHash)
                                     }
                             , error = Nothing
                           }
@@ -454,14 +456,11 @@ view ctx model =
         [ Html.h2 [] [ text "Registering a multisig DRep" ]
         , Html.p []
             [ text "This page aims to facilitate registration of multisig DReps."
-            , text " The goal is to build a Tx that both"
-            , text " (1) registers the multisig as a DRep,"
-            , text " and (2) saves the multisig script into a reference output."
-            ]
-        , Html.p []
-            [ text "Saving the multisig in a reference output serves two purposes,"
-            , text " (1) paying less fees on subsequent transactions,"
-            , text " and (2) avoid possible misrepresentations of the same multisig due to different CBOR encodings."
+            , text " The goal is to build a Tx that can both"
+            , text " (1) register the multisig as a DRep,"
+            , text " and (2) save the multisig script into a reference output."
+            , text " For multisigs with 5 keys or more, it’s starting to be interesting to use a script reference"
+            , text " instead of an inline script to pay less fees."
             ]
         , Html.hr [] []
         , Html.h3 [] [ text "Multisig Configuration" ]
@@ -475,7 +474,8 @@ view ctx model =
 
             Just summary ->
                 div []
-                    [ Html.p [] [ text "Tx to sign:" ]
+                    [ Html.p [] [ text <| "Tx ID: " ++ (Bytes.toHex <| Transaction.computeTxId summary.tx) ]
+                    , Html.p [] [ text "Tx details: (₳ amounts are in lovelaces)" ]
                     , Html.pre [] [ text <| prettyTx summary.tx ]
                     , viewImportantSummaryTx summary
                     , ctx.signingLink summary.tx summary.expectedSignatures [ text "Sign & submit the Tx on the signing page" ]
@@ -483,27 +483,29 @@ view ctx model =
         , Html.hr [] []
         , Html.h3 [] [ text "DRep Unregistration" ]
         , Html.map ctx.wrapMsg <|
-            Html.p [] [ button [ onClick BuildUnregistrationTxButtonClicked ] [ text "Build Unegistration Tx" ] ]
+            Html.p [] [ button [ onClick BuildUnregistrationTxButtonClicked ] [ text "Build Unregistration Tx" ] ]
         , case model.unregisterTxSummary of
             Nothing ->
                 text ""
 
             Just summary ->
                 div []
-                    [ Html.p [] [ text "Tx to sign:" ]
+                    [ Html.p [] [ text <| "Tx ID: " ++ (Bytes.toHex <| Transaction.computeTxId summary.tx) ]
+                    , Html.p [] [ text "Tx details: (₳ amounts are in lovelaces)" ]
                     , Html.pre [] [ text <| prettyTx summary.tx ]
                     , ctx.signingLink summary.tx summary.expectedSignatures [ text "Sign & submit the Tx on the signing page" ]
                     ]
-        , Html.hr [] []
-        , Html.h3 [] [ text "Summary" ]
         , case model.error of
             Nothing ->
                 text ""
 
             Just err ->
-                Html.p []
-                    [ text "Error:"
-                    , Html.pre [] [ text err ]
+                div []
+                    [ Html.hr [] []
+                    , Html.p []
+                        [ text "Error:"
+                        , Html.pre [] [ text err ]
+                        ]
                     ]
         ]
 
@@ -564,10 +566,10 @@ viewOneKeyForm n hash =
 
 
 viewImportantSummaryTx : RegisterTxSummary -> Html msg
-viewImportantSummaryTx { nativeScript, scriptHash, scriptRefInput } =
+viewImportantSummaryTx { nativeScript, scriptHash, scriptRefInput, drepId } =
     -- Display:
     --  * the script hash
-    --  * TODO: the reference input for the script, this needs compute the Tx ID
+    --  * the reference input for the script, this needs compute the Tx ID
     let
         scriptBytes =
             Cbor.Encode.encode (Script.encodeNativeScript nativeScript)
@@ -582,9 +584,9 @@ viewImportantSummaryTx { nativeScript, scriptHash, scriptRefInput } =
                     Bytes.toHex transactionId ++ "#" ++ String.fromInt outputIndex
     in
     div []
-        [ Html.p [] [ text "This is the important info to note as it will be useful to reuse the multisig!" ]
-        , Html.p [] [ text <| "DRep ID: TODO" ]
-        , Html.p [] [ text <| "Script hash: " ++ Bytes.toHex scriptHash ]
-        , Html.p [] [ text <| "Script bytes: " ++ Bytes.toHex scriptBytes ]
+        [ Html.p [] [ Html.strong [] [ text "Important info to note as it will be useful to reuse the multisig:" ] ]
+        , Html.p [] [ text <| "DRep ID: " ++ Gov.idToBech32 drepId ]
+        , Html.p [] [ text <| "Native script hash: " ++ Bytes.toHex scriptHash ]
+        , Html.p [] [ text <| "Native script bytes: " ++ Bytes.toHex scriptBytes ]
         , Html.p [] [ text <| "Script reference UTxO: " ++ scriptRef ]
         ]

@@ -1969,7 +1969,11 @@ viewValidGovIdForm form =
                     text "loading ..."
 
                 RemoteData.Failure error ->
-                    text <| "error: " ++ Debug.toString error
+                    let
+                        _ =
+                            Debug.log "Voting power request error: " error
+                    in
+                    text <| "? Most likely, this voter is not registered yet, or was just registered this epoch. More info in the console logs."
 
                 RemoteData.Success success ->
                     text <| Helper.prettyAdaLovelace <| Natural.fromSafeInt <| accessor success
@@ -2067,14 +2071,20 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
                     Transaction.estimateRefScriptFeeSavings script
 
                 refScriptSuggestion =
-                    if refScriptFeeSavings >= 0 then
+                    -- Suggest reference script for more than ₳0.005 savings
+                    if refScriptFeeSavings >= 5000 then
                         div []
                             [ Html.p [] [ text <| "By using a reference input for your script, you could save this much in Tx fees: " ++ prettyAdaLovelace (Natural.fromSafeInt refScriptFeeSavings) ]
                             , utxoRefForm
                             ]
+                        -- Print warning for more than ₳0.005 additional cost of using a reference script
+
+                    else if refScriptFeeSavings <= -5000 then
+                        Html.p [] [ text <| "Weirdly, using a reference input for your script would cost you more: " ++ prettyAdaLovelace (Natural.fromSafeInt -refScriptFeeSavings) ]
+                        -- Just ignore if it doesn’t affect the fees in any significant way
 
                     else
-                        Html.p [] [ text <| "Weirdly, using a reference input for your script would cost you more: " ++ prettyAdaLovelace (Natural.fromSafeInt -refScriptFeeSavings) ]
+                        text ""
 
                 additionalSignerCost =
                     Natural.fromSafeInt <|

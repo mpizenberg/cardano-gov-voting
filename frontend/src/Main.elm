@@ -583,10 +583,10 @@ viewConnectedWallet wallet maybeChangeAddress =
         [ text <| "Connected Wallet: " ++ (Cip30.walletDescriptor wallet).name
         , case maybeChangeAddress of
             Just addr ->
-                text <| " (" ++ prettyAddr addr ++ ")"
+                text <| " (" ++ prettyAddr addr ++ ") "
 
             Nothing ->
-                text ""
+                text " "
         , button [ onClick DisconnectWalletButtonClicked ] [ text "Disconnect" ]
         ]
 

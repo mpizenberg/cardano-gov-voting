@@ -7,9 +7,16 @@ import Cardano.Transaction as Transaction exposing (Transaction, VKeyWitness)
 import Cardano.TxExamples exposing (prettyTx)
 import Cardano.Utxo exposing (TransactionId)
 import Dict exposing (Dict)
+import File exposing (File)
+import File.Select
 import Helper exposing (shortenedHex)
 import Html exposing (Html, div, text)
+import Html.Attributes as HA
 import Html.Events exposing (onClick)
+import Json.Decode as JD
+import Json.Encode as JE
+import Task
+import Url
 
 
 
@@ -62,6 +69,9 @@ initialModel expectedSigners maybeTx =
 type Msg
     = NoMsg
     | SignTxButtonClicked
+    | LoadSignedTxButtonClicked
+    | SignedTxFileSelected File
+    | LoadedSignedTxJson String
     | SubmitTxButtonClicked
 
 
@@ -84,6 +94,35 @@ update ctx msg model =
         ( SignTxButtonClicked, _ ) ->
             ( model, Cmd.none )
 
+        ( LoadSignedTxButtonClicked, LoadedTx _ ) ->
+            ( model
+            , Cmd.map ctx.wrapMsg <|
+                File.Select.file [] SignedTxFileSelected
+            )
+
+        ( LoadSignedTxButtonClicked, _ ) ->
+            ( model, Cmd.none )
+
+        ( SignedTxFileSelected file, LoadedTx _ ) ->
+            ( model
+            , Task.attempt handleSignedTxFileRead (File.toString file)
+                |> Cmd.map ctx.wrapMsg
+            )
+
+        ( SignedTxFileSelected _, _ ) ->
+            ( model, Cmd.none )
+
+        ( LoadedSignedTxJson txJsonStr, LoadedTx loadedTxModel ) ->
+            case extractVkeyWitnesses loadedTxModel.txId txJsonStr of
+                Ok sigs ->
+                    ( addWalletSignatures sigs model, Cmd.none )
+
+                Err error ->
+                    ( LoadedTx { loadedTxModel | error = Just error }, Cmd.none )
+
+        ( LoadedSignedTxJson _, _ ) ->
+            ( model, Cmd.none )
+
         ( SubmitTxButtonClicked, LoadedTx { tx, vkeyWitnesses } ) ->
             let
                 signedTx =
@@ -98,6 +137,47 @@ update ctx msg model =
 
         ( NoMsg, _ ) ->
             ( model, Cmd.none )
+
+
+handleSignedTxFileRead : Result x String -> Msg
+handleSignedTxFileRead result =
+    case result of
+        Err _ ->
+            NoMsg
+
+        Ok signedTxJson ->
+            LoadedSignedTxJson signedTxJson
+
+
+extractVkeyWitnesses : Bytes TransactionId -> String -> Result String (List VKeyWitness)
+extractVkeyWitnesses txId rawJson =
+    let
+        txJsonDecoder =
+            JD.field "cborHex" JD.string
+                |> JD.andThen
+                    (\txHex ->
+                        case Bytes.fromHex txHex |> Maybe.andThen Transaction.deserialize of
+                            Just tx ->
+                                JD.succeed tx
+
+                            Nothing ->
+                                JD.fail <| "Unable to decode Tx hex: " ++ txHex
+                    )
+    in
+    case JD.decodeString txJsonDecoder rawJson of
+        Ok tx ->
+            let
+                decodedTxId =
+                    Transaction.computeTxId tx
+            in
+            if decodedTxId /= txId then
+                Err <| "The wrong Tx was uploaded. It has a Tx ID of " ++ Bytes.toHex decodedTxId ++ " instead of " ++ Bytes.toHex txId
+
+            else
+                Ok <| Maybe.withDefault [] tx.witnessSet.vkeywitness
+
+        Err error ->
+            Err <| "Error while decoding the Tx: " ++ JD.errorToString error
 
 
 addWalletSignatures : List VKeyWitness -> Model -> Model
@@ -183,18 +263,49 @@ view ctx model =
                             ]
 
                     signSection =
+                        let
+                            downloadButton label description fileName someTx =
+                                Html.a
+                                    [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode (txUnsignedJson description someTx)
+                                    , HA.download fileName
+                                    ]
+                                    [ Html.button [] [ text label ] ]
+
+                            txUnsignedJson description someTx =
+                                JE.encode 2 <|
+                                    JE.object
+                                        [ ( "type", JE.string "Tx ConwayEra" )
+                                        , ( "description", JE.string description )
+                                        , ( "cborHex", JE.string <| Bytes.toHex <| Transaction.serialize someTx )
+                                        ]
+                        in
                         div []
                             [ if ctx.wallet == Nothing then
-                                text ""
+                                Html.p [] [ text "If you want to sign with your web wallet, you need to connect it (see the page top)." ]
+
+                              else if Dict.isEmpty vkeyWitnesses then
+                                Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SignTxButtonClicked ] [ text "Sign Tx with connected wallet" ] ]
 
                               else
-                                Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SignTxButtonClicked ] [ text "Sign Tx with connected wallet" ] ]
+                                let
+                                    signedTx =
+                                        Transaction.updateSignatures (\_ -> Just <| Dict.values vkeyWitnesses) tx
+                                in
+                                Html.p []
+                                    [ Html.button [ onClick <| ctx.wrapMsg SignTxButtonClicked ] [ text "Sign Tx with connected wallet" ]
+                                    , text " "
+                                    , downloadButton "Download partially signed Tx" "signed" "tx-signed.json" signedTx
+                                    ]
                             , Html.p []
                                 [ text <| "If additional signatures are required, please ask the relevant parties"
                                 , text <| " to partially sign the transaction,"
                                 , text <| " and use the button below to load their signatures in the app."
                                 ]
-                            , Html.p [] [ text <| "TODO: button to download unsigned Tx and another to upload the signed Tx from disk" ]
+                            , Html.p []
+                                [ downloadButton "Download unsigned Tx" "unsigned" "tx-unsigned.json" tx
+                                , text " "
+                                , Html.button [ onClick <| ctx.wrapMsg LoadSignedTxButtonClicked ] [ text "Load signed Tx file" ]
+                                ]
                             ]
                 in
                 div []

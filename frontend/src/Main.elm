@@ -485,25 +485,6 @@ handleWalletResponse response model =
         -- The wallet just signed a Tx
         Cip30.ApiResponse _ (Cip30.SignedTx vkeyWitnesses) ->
             case model.page of
-                -- If it was the Preparation page,
-                -- it means we are trying to sign and submit directly.
-                PreparationPage prepModel ->
-                    case ( Page.Preparation.addTxSignatures vkeyWitnesses prepModel, model.wallet ) of
-                        ( _, Nothing ) ->
-                            ( { model | errors = [ "Cannot submit a Tx without a connected wallet" ] }
-                            , Cmd.none
-                            )
-
-                        ( ( Just signedTx, updatedPrepModel ), Just wallet ) ->
-                            ( { model | page = PreparationPage updatedPrepModel }
-                            , toWallet (Cip30.encodeRequest (Cip30.submitTx wallet signedTx))
-                            )
-
-                        ( ( Nothing, updatedPrepModel ), _ ) ->
-                            ( { model | page = PreparationPage updatedPrepModel }
-                            , Cmd.none
-                            )
-
                 SigningPage pageModel ->
                     ( { model | page = SigningPage <| Page.Signing.addWalletSignatures vkeyWitnesses pageModel }
                     , Cmd.none
@@ -516,13 +497,6 @@ handleWalletResponse response model =
         -- The wallet just submitted a Tx
         Cip30.ApiResponse _ (Cip30.SubmittedTx txId) ->
             case model.page of
-                -- If it was the Preparation page,
-                -- it means we are trying to sign and submit directly.
-                PreparationPage prepModel ->
-                    ( { model | page = PreparationPage <| Page.Preparation.recordSubmittedTx txId prepModel }
-                    , Cmd.none
-                    )
-
                 SigningPage pageModel ->
                     ( { model | page = SigningPage <| Page.Signing.recordSubmittedTx txId pageModel }
                     , Cmd.none
@@ -561,9 +535,6 @@ handleWalletResponse response model =
 resetSigningStep : String -> Page -> Page
 resetSigningStep error page =
     case page of
-        PreparationPage pageModel ->
-            PreparationPage <| Page.Preparation.resetSigningStep error pageModel
-
         SigningPage pageModel ->
             SigningPage <| Page.Signing.resetSubmission error pageModel
 
@@ -584,7 +555,7 @@ view model =
         , viewContent model
         , viewErrors model.errors
         , Html.hr [] []
-        , Html.p [] [ text "Built with <3 by the CF, using elm-cardano" ]
+        , Html.p [] [ text "Built with <3 by the CF, using elm-cardano, data provided by Koios" ]
         ]
 
 

@@ -1,4 +1,4 @@
-module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterPreparationForm, addTxSignatures, init, pinRationaleFile, recordSubmittedTx, resetSigningStep, update, view)
+module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterPreparationForm, init, pinRationaleFile, update, view)
 
 import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), ScriptInfo)
 import Blake2b exposing (blake2b256)
@@ -403,8 +403,6 @@ type Msg
       -- Build Tx Step
     | BuildTxButtonClicked Vote
     | ChangeVoteButtonClicked
-      -- Sign Tx Step
-    | SignTxButtonClicked Transaction (List (Bytes CredentialHash))
 
 
 type alias UpdateContext msg =
@@ -944,11 +942,6 @@ update ctx msg model =
         ChangeVoteButtonClicked ->
             ( { model | buildTxStep = Preparing { error = Nothing } }
             , Cmd.none
-            )
-
-        SignTxButtonClicked tx expectedSignatures ->
-            ( { model | signTxStep = Validating { error = Nothing } { tx = tx, expectedSignatures = expectedSignatures, vkeyWitnesses = [] } }
-            , ctx.walletSignTx tx
             )
 
 
@@ -1846,53 +1839,6 @@ allPrepSteps maybeCostModels m =
 
 
 
--- Sign Tx step
-
-
-addTxSignatures : List VKeyWitness -> Model -> ( Maybe Transaction, Model )
-addTxSignatures vkeyWitnesses model =
-    case model.signTxStep of
-        Validating _ { tx, expectedSignatures } ->
-            let
-                -- Filter out unexpected signatures.
-                -- Because sometimes, a wallet will provide more signatures than strictly needed.
-                -- For example for some 1-of-n native multisig, a wallet might provide multiple signatures
-                -- even if we only want 1, and only paid fees for one.
-                expectedVkeyWitnesses =
-                    List.filter keyHashIsExpected vkeyWitnesses
-
-                keyHashIsExpected vkeyWitness =
-                    List.member (Transaction.hashVKey vkeyWitness.vkey) expectedSignatures
-
-                signedTx =
-                    Transaction.updateSignatures (\_ -> Just expectedVkeyWitnesses) tx
-            in
-            ( Just signedTx
-            , { model | signTxStep = Validating { error = Nothing } { tx = signedTx, expectedSignatures = expectedSignatures, vkeyWitnesses = expectedVkeyWitnesses } }
-            )
-
-        _ ->
-            -- We only expect to sign a Tx while being in the Validating state
-            ( Nothing, model )
-
-
-recordSubmittedTx : Bytes TransactionId -> Model -> Model
-recordSubmittedTx txId model =
-    case model.signTxStep of
-        Validating form { tx } ->
-            { model | signTxStep = Done form { signedTx = tx, txId = txId } }
-
-        _ ->
-            -- We only expect to submit a Tx while being in the Validating state
-            model
-
-
-resetSigningStep : String -> Model -> Model
-resetSigningStep error model =
-    { model | signTxStep = Preparing { error = Just error } }
-
-
-
 -- ###################################################################
 -- VIEW
 -- ###################################################################
@@ -1926,7 +1872,7 @@ view ctx model =
         , Html.hr [] []
         , viewBuildTxStep ctx model
         , Html.hr [] []
-        , viewSignTxStep ctx model.buildTxStep model.signTxStep
+        , viewSignTxStep ctx model.buildTxStep
         ]
 
 
@@ -1957,6 +1903,22 @@ viewVoterIdentificationStep ctx step =
             Html.map ctx.wrapMsg <| viewIdentifiedVoter form voter
 
 
+logErrorAndReturnUniqueId : { info : String } -> String -> String
+logErrorAndReturnUniqueId { info } error =
+    -- Helper function to log errors in the console
+    let
+        computeErrorId err =
+            Bytes.blake2b256 (Bytes.fromText err)
+                |> Bytes.toHex
+                |> String.left 8
+
+        errorId =
+            computeErrorId error
+    in
+    Debug.log ("ERROR (" ++ errorId ++ "): " ++ info) error
+        |> computeErrorId
+
+
 viewValidGovIdForm : VoterPreparationForm -> Html Msg
 viewValidGovIdForm form =
     let
@@ -1970,10 +1932,10 @@ viewValidGovIdForm form =
 
                 RemoteData.Failure error ->
                     let
-                        _ =
-                            Debug.log "Voting power request error: " error
+                        errorId =
+                            logErrorAndReturnUniqueId { info = "Voting power request error" } (Debug.toString error)
                     in
-                    text <| "? Most likely, this voter is not registered yet, or was just registered this epoch. More info in the console logs."
+                    text <| "? Most likely, this voter is not registered yet, or was just registered this epoch. More info in the console logs for error: " ++ errorId
 
                 RemoteData.Success success ->
                     text <| Helper.prettyAdaLovelace <| Natural.fromSafeInt <| accessor success
@@ -2161,10 +2123,14 @@ textField label value toMsg =
 viewIdentifiedVoter : VoterPreparationForm -> VoterWitness -> Html Msg
 viewIdentifiedVoter form voter =
     let
+        govIdStr =
+            Maybe.map Gov.idToBech32 form.govId
+                |> Maybe.withDefault ""
+
         ( voterTypeText, voterCred ) =
             case voter of
                 WithCommitteeHotCred cred ->
-                    ( "Constitutional Committee Voter", cred )
+                    ( "Constitutional Committee Voter: " ++ govIdStr, cred )
 
                 WithDrepCred cred ->
                     let
@@ -2176,7 +2142,7 @@ viewIdentifiedVoter form voter =
                                 _ ->
                                     "?"
                     in
-                    ( "DRep Voter (voting power: " ++ votingPowerStr ++ ")", cred )
+                    ( "DRep Voter (voting power: " ++ votingPowerStr ++ "): " ++ govIdStr, cred )
 
                 WithPoolCred hash ->
                     let
@@ -2204,7 +2170,7 @@ viewIdentifiedVoter form voter =
                         [ text <| "Using a native script (hash: " ++ Bytes.toHex hash ++ ")"
                         , text " and expecting the following signers:"
                         ]
-                    , Html.ul [] (List.map (\s -> Html.li [] [ text <| Bytes.toHex s ]) expectedSigners)
+                    , Html.ul [] (List.map (\s -> Html.li [] [ text <| "key hash: " ++ Bytes.toHex s ]) expectedSigners)
                     ]
 
             WithScript _ (PlutusWitness _) ->
@@ -2314,16 +2280,6 @@ viewActiveProposal { id, actionType, metadata, metadataUrl } =
                     meta.title
                         |> Maybe.withDefault "unknown (unexpected metadata format)"
         ]
-
-
-cardanoScanTxLink : Bytes TransactionId -> List (Html msg) -> Html msg
-cardanoScanTxLink id html =
-    Html.a
-        [ HA.href <| "https://preview.cardanoscan.io/transaction/" ++ Bytes.toHex id
-        , HA.target "_blank"
-        , HA.rel "noopener noreferrer"
-        ]
-        html
 
 
 cardanoScanActionLink : ActionId -> Html msg
@@ -2878,6 +2834,10 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                         [ text "Only the hash of your rationale is stored on Cardano,"
                         , text " so it’s recommended to also store the actual JSON file containing the rationale in a permanent storage solution."
                         , text " Here we provide an easy way to store it on IPFS."
+                        , text " You can specify your own IPFS RPC server, or use one of an API provider, such as Blockfrost for example."
+                        , text " More info on "
+                        , Html.a [ HA.href "https://blockfrost.dev/start-building/ipfs/", HA.target "_blank", HA.rel "noopener noreferrer" ]
+                            [ text "Blockfrost docs." ]
                         ]
                     , Html.p []
                         [ Html.text "IPFS RPC server: "
@@ -3108,50 +3068,18 @@ viewBuildTxStep ctx model =
 --
 
 
-viewSignTxStep : ViewContext msg -> Step BuildTxPrep {} TxFinalized -> Step { error : Maybe String } SigningTx SignedTx -> Html msg
-viewSignTxStep ctx buildTxStep signTxStep =
-    case ( buildTxStep, signTxStep ) of
-        ( Done _ { tx, expectedSignatures }, Preparing { error } ) ->
+viewSignTxStep : ViewContext msg -> Step BuildTxPrep {} TxFinalized -> Html msg
+viewSignTxStep ctx buildTxStep =
+    case buildTxStep of
+        Done _ { tx, expectedSignatures } ->
             div []
                 [ Html.h3 [] [ text "Tx Signing" ]
                 , Html.p [] [ text "Expecting signatures for the following public key hashes:" ]
                 , Html.ul [] (List.map (\hash -> Html.li [] [ Html.pre [] [ text <| Bytes.toHex hash ] ]) expectedSignatures)
-                , if ctx.walletChangeAddress == Nothing then
-                    text ""
-
-                  else
-                    Html.div []
-                        [ Html.p []
-                            [ text "If these keys are all maintained by the connected wallet,"
-                            , text " you can try signing and submitting here directly."
-                            ]
-                        , Html.p [] [ button [ onClick <| ctx.wrapMsg <| SignTxButtonClicked tx expectedSignatures ] [ text "Sign and submit Tx" ] ]
-                        ]
                 , Html.p []
-                    [ text "Finalize your voting transaction by signing and submitting it via the dedicated siging page: "
+                    [ text "Finalize your voting transaction by signing and submitting it via the dedicated signing page: "
                     , ctx.signingLink tx expectedSignatures [ text "signing page" ]
                     ]
-                , viewError error
-                ]
-
-        ( Done _ _, Validating _ { vkeyWitnesses } ) ->
-            div []
-                [ Html.h3 [] [ text "Tx Signing" ]
-                , if List.isEmpty vkeyWitnesses then
-                    Html.p [] [ text "Signing Tx ..." ]
-
-                  else
-                    Html.p [] [ text "Submitting Tx ..." ]
-                ]
-
-        ( Done _ _, Done _ { txId } ) ->
-            div []
-                [ Html.h3 [] [ text "Tx Signed" ]
-                , Html.p []
-                    [ text <| "Tx ID: "
-                    , cardanoScanTxLink txId [ text <| Bytes.toHex txId ]
-                    ]
-                , Html.p [] [ text "The link to the explorer should show the Tx as soon as it picks it up onchain. It might take a minute." ]
                 ]
 
         _ ->

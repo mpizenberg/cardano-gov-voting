@@ -175,36 +175,56 @@ view ctx model =
                 Html.p [] [ text "TODO: button to load the Tx from a file" ]
 
             LoadedTx { tx, txId, expectedSigners, vkeyWitnesses, txSubmitted, error } ->
+                let
+                    gatheredSignaturesSection =
+                        div []
+                            [ Html.div [] (viewExpectedSignatures expectedSigners vkeyWitnesses)
+                            , Html.p [] [ text "Remark that at least one of these is to pay the Tx fees." ]
+                            ]
+
+                    signSection =
+                        div []
+                            [ if ctx.wallet == Nothing then
+                                text ""
+
+                              else
+                                Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SignTxButtonClicked ] [ text "Sign Tx with connected wallet" ] ]
+                            , Html.p []
+                                [ text <| "If additional signatures are required, please ask the relevant parties"
+                                , text <| " to partially sign the transaction,"
+                                , text <| " and use the button below to load their signatures in the app."
+                                ]
+                            , Html.p [] [ text <| "TODO: button to download unsigned Tx and another to upload the signed Tx from disk" ]
+                            ]
+                in
                 div []
-                    [ Html.p [] [ text <| Bytes.toHex txId ]
+                    [ Html.p [] [ text <| "Tx ID: " ++ Bytes.toHex txId ]
                     , Html.p [] [ Html.pre [] [ text <| prettyTx tx ] ]
-                    , Html.h3 [] [ text <| "Expected Signatures" ]
-                    , Html.div [] (viewExpectedSignatures expectedSigners vkeyWitnesses)
-                    , Html.p []
-                        [ text <| "Remark that at least one of these is to pay the Tx fees."
-                        , text <| " If you are paying the fees, or signing the vote with your wallet,"
-                        , text <| " make sure it’s connected and use the button below to sign."
-                        ]
-                    , Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SignTxButtonClicked ] [ text "Sign Tx with connected wallet" ] ]
-                    , Html.p []
-                        [ text <| "If additional signatures are required, please ask the relevant parties"
-                        , text <| " to partially sign the transaction,"
-                        , text <| " and use the button below to load their signatures in the app."
-                        ]
-                    , Html.p [] [ text <| "TODO: button to download unsigned Tx and another to upload the signed Tx from disk" ]
-                    , Html.h3 [] [ text "Tx Submission" ]
                     , if Dict.isEmpty expectedSigners then
                         div []
-                            [ Html.p [] [ text "Expected signers are unknown so whenever you think it’s ready for submission, go for it!" ]
-                            , Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SubmitTxButtonClicked ] [ text "Submit Tx anyway!" ] ]
+                            [ Html.h3 [] [ text <| "Gathered Signatures" ]
+                            , gatheredSignaturesSection
+                            , signSection
+                            , Html.h3 [] [ text "Tx Submission" ]
+                            , Html.p [] [ text "Expected signers are unknown so whenever you think it’s ready for submission, go for it!" ]
+                            , Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SubmitTxButtonClicked ] [ text "Submit Tx when ready!" ] ]
                             ]
 
                       else if Dict.isEmpty (Dict.diff expectedSigners vkeyWitnesses) then
-                        Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SubmitTxButtonClicked ] [ text "Submit Tx" ] ]
+                        div []
+                            [ Html.h3 [] [ text <| "Expected Signatures" ]
+                            , gatheredSignaturesSection
+                            , Html.h3 [] [ text "Tx Submission" ]
+                            , Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SubmitTxButtonClicked ] [ text "Submit Tx" ] ]
+                            ]
 
                       else
                         div []
-                            [ Html.p [] [ text "Not all expected signatures are gathered yet, but if you still think it’s ready, go for it!" ]
+                            [ Html.h3 [] [ text <| "Expected Signatures" ]
+                            , gatheredSignaturesSection
+                            , signSection
+                            , Html.h3 [] [ text "Tx Submission" ]
+                            , Html.p [] [ text "Not all expected signatures are gathered yet, but if you still think it’s ready, go for it!" ]
                             , Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SubmitTxButtonClicked ] [ text "Submit Tx anyway!" ] ]
                             ]
                     , case txSubmitted of

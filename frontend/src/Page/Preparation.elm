@@ -1,4 +1,4 @@
-module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType, Step, StorageForm, UpdateContext, ViewContext, VoterPreparationForm, init, pinRationaleFile, update, view)
+module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType(..), Step, StorageForm, UpdateContext, ViewContext, VoterPreparationForm, init, noInternalVote, pinRationaleFile, update, view)
 
 import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), ScriptInfo)
 import Blake2b exposing (blake2b256)
@@ -1403,8 +1403,8 @@ resetRationaleSignatures rationale step =
             newRatSig authors
 
 
-encodeJsonLd : Rationale -> JE.Value
-encodeJsonLd rationale =
+encodeJsonLdRationale : Rationale -> JE.Value
+encodeJsonLdRationale rationale =
     JE.object <|
         List.filterMap identity
             [ Just ( "summary", JE.string rationale.summary )
@@ -2727,7 +2727,7 @@ createJsonRationale jsonLdContexts rationale authors =
         List.filterMap identity
             [ Just ( "@context", jsonLdContexts.ccCip136Context )
             , Just ( "hashAlgorithm", JE.string "blake2b-256" )
-            , Just ( "body", encodeJsonLd rationale )
+            , Just ( "body", encodeJsonLdRationale rationale )
             , if List.isEmpty authors then
                 Nothing
 

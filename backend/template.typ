@@ -10,18 +10,21 @@
 
 // Title
 #align(center, text(22pt)[
-  *CC Member Vote*
+  *Vote Rationale*
 ])
 
 // Authors (extracted from the 'authors' field of the JSON)
-#align(center, grid(
-  columns: calc.min(2, data.authors.len()),
-  row-gutter: 10pt,
-  column-gutter: 35pt,
-  ..data.authors.map(author => [
-    #author.name
-  ])
-))
+#if "authors" in data and data.authors.len() > 0 [
+  #align(center, grid(
+    columns: calc.min(2, data.authors.len()),
+    row-gutter: 10pt,
+    column-gutter: 35pt,
+    ..data.authors.map(author => [
+      #author.name
+    ])
+  ))
+  #v(1em)
+]
 
 #v(1em) // add some vertical space
 
@@ -37,29 +40,44 @@ This document is automatically generated from the CIP-0136 JSON file attached to
 
 #cmarker.render(data.body.rationaleStatement)
 
-= Precedent Discussion
+// Optional Precedent Discussion
+#if "precedentDiscussion" in data.body [
+  = Precedent Discussion
 
-#cmarker.render(data.body.precedentDiscussion)
+  #cmarker.render(data.body.precedentDiscussion)
+]
 
-= Counter-argument Discussion
+// Optional Counter-argument Discussion
+#if "counterargumentDiscussion" in data.body [
+  = Counter-argument Discussion
 
-#cmarker.render(data.body.counterargumentDiscussion)
+  #cmarker.render(data.body.counterargumentDiscussion)
+]
 
-= Conclusion
+// Optional Conclusion
+#if "conclusion" in data.body [
+  = Conclusion
 
-#cmarker.render(data.body.conclusion)
+  #cmarker.render(data.body.conclusion)
+]
 
-= Internal Vote
+// Optional Internal Vote
+#if "internalVote" in data.body [
+  = Internal Vote
 
-- Constitutional: #data.body.internalVote.constitutional
-- Unconstitutional: #data.body.internalVote.unconstitutional
-- Abstain: #data.body.internalVote.abstain
-- Did not vote: #data.body.internalVote.didNotVote
+  - Constitutional: #data.body.internalVote.constitutional
+  - Unconstitutional: #data.body.internalVote.unconstitutional
+  - Abstain: #data.body.internalVote.abstain
+  - Did not vote: #data.body.internalVote.didNotVote
+]
 
-= References
+// Optional References
+#if "references" in data.body [
+  = References
 
-#show link: underline
+  #show link: underline
 
-#for reference in data.body.references [
-  - #reference.at("@type"): #link(reference.uri)[#reference.label]
+  #for reference in data.body.references [
+    - #reference.at("@type"): #link(reference.uri)[#reference.label]
+  ]
 ]

@@ -17,6 +17,7 @@ import Html.Events exposing (onClick, preventDefaultOn)
 import Http
 import Json.Decode as JD exposing (Decoder, Value)
 import Page.MultisigRegistration
+import Page.Pdf
 import Page.Preparation exposing (JsonLdContexts)
 import Page.Signing
 import Platform.Cmd as Cmd
@@ -85,6 +86,7 @@ type Page
     | PreparationPage Page.Preparation.Model
     | SigningPage Page.Signing.Model
     | MultisigRegistrationPage Page.MultisigRegistration.Model
+    | PdfPage Page.Pdf.Model
 
 
 init : { url : String, jsonLdContexts : JsonLdContexts } -> ( Model, Cmd Msg )
@@ -133,6 +135,8 @@ type Msg
     | SigningPageMsg Page.Signing.Msg
       -- Multisig DRep registration page
     | MultisigPageMsg Page.MultisigRegistration.Msg
+      -- PDF page
+    | PdfPageMsg Page.Pdf.Msg
 
 
 type Route
@@ -140,6 +144,7 @@ type Route
     | RoutePreparation
     | RouteSigning { expectedSigners : List (Bytes CredentialHash), tx : Maybe Transaction }
     | RouteMultisigRegistration
+    | RoutePdf
     | Route404
 
 
@@ -199,6 +204,9 @@ locationHrefToRoute locationHref =
                 [ "page", "registration" ] ->
                     RouteMultisigRegistration
 
+                [ "page", "pdf" ] ->
+                    RoutePdf
+
                 _ ->
                     Route404
 
@@ -223,6 +231,9 @@ routeToAppUrl route =
 
         RouteMultisigRegistration ->
             AppUrl.fromPath [ "page", "registration" ]
+
+        RoutePdf ->
+            AppUrl.fromPath [ "page", "pdf" ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -357,6 +368,20 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        ( PdfPageMsg pageMsg, { page } ) ->
+            case page of
+                PdfPage pageModel ->
+                    let
+                        ctx =
+                            { wrapMsg = PdfPageMsg
+                            }
+                    in
+                    Page.Pdf.update ctx pageMsg pageModel
+                        |> Tuple.mapFirst (\newPageModel -> { model | page = PdfPage newPageModel })
+
+                _ ->
+                    ( model, Cmd.none )
+
         -- Result Http.Error (List Page.Preparation.ActiveProposal)
         ( GotProposals result, _ ) ->
             case result of
@@ -442,6 +467,14 @@ handleUrlChange route model =
             ( { model
                 | errors = []
                 , page = MultisigRegistrationPage Page.MultisigRegistration.initialModel
+              }
+            , pushUrl <| AppUrl.toString <| routeToAppUrl route
+            )
+
+        RoutePdf ->
+            ( { model
+                | errors = []
+                , page = PdfPage Page.Pdf.initialModel
               }
             , pushUrl <| AppUrl.toString <| routeToAppUrl route
             )
@@ -627,6 +660,12 @@ viewContent model =
                 }
                 pageModel
 
+        PdfPage pageModel ->
+            Page.Pdf.view
+                { wrapMsg = PdfPageMsg
+                }
+                pageModel
+
 
 viewLandingPage : Html Msg
 viewLandingPage =
@@ -635,6 +674,7 @@ viewLandingPage =
         , Html.p [] [ link RoutePreparation [] [ text "Start vote preparation" ] ]
         , Html.p [] [ link (RouteSigning { expectedSigners = [], tx = Nothing }) [] [ text "Sign an already prepared Tx" ] ]
         , Html.p [] [ link RouteMultisigRegistration [] [ text "Register as a Multisig DRep" ] ]
+        , Html.p [] [ link RoutePdf [] [ text "Generate PDFs for governance metadata" ] ]
         ]
 
 

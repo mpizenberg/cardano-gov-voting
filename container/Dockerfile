@@ -4,6 +4,25 @@ FROM ghcr.io/astral-sh/uv:python3.10-alpine AS backend-builder
 # Install the server into `/backend`
 WORKDIR /backend
 
+# Get the architecture using ARG
+ARG TARGETARCH
+
+# Set the typst compiler download URL based on architecture
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+    ARCHIVE_NAME="typst-x86_64-unknown-linux-musl"; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+    ARCHIVE_NAME="typst-aarch64-unknown-linux-musl"; \
+    else \
+    echo "Unsupported architecture: $TARGETARCH"; \
+    exit 1; \
+    fi && \
+    wget "https://github.com/typst/typst/releases/download/v0.12.0/$ARCHIVE_NAME.tar.xz" -O "$ARCHIVE_NAME.tar.xz" && \
+    tar xf "$ARCHIVE_NAME.tar.xz" && \
+    mv "${ARCHIVE_NAME}/typst" .
+
+# Copy the typst template for rationales
+COPY backend/template.typ template.typ
+
 # Enable bytecode compilation
 ENV UV_COMPILE_BYTECODE=1
 
@@ -49,10 +68,15 @@ FROM python:3.10-alpine
 COPY --from=backend-builder --chown=backend:backend /backend/.venv /backend/.venv
 COPY --from=backend-builder /backend/server.py /backend/server.py
 
+# Copy the typst compiler and template
+COPY --from=backend-builder /backend/typst /backend/.venv/bin/typst
+COPY --from=backend-builder /backend/template.typ /backend/template.typ
+
 # Copy the compiled frontend code
 COPY --from=frontend-builder /frontend/static /frontend/static
 
 # Run the FastAPI server
 # Uses `--host 0.0.0.0` to allow access from outside the container
 WORKDIR /backend
-CMD [".venv/bin/fastapi", "run", "--host", "0.0.0.0", "server.py"]
+ENV PATH="$PATH:/backend/.venv/bin"
+CMD ["fastapi", "run", "--host", "0.0.0.0", "server.py"]

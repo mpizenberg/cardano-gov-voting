@@ -631,8 +631,21 @@ viewHeader : Model -> Html Msg
 viewHeader model =
     div []
         [ Html.h1 [] [ text "Cardano Governance Voting" ]
+        , Html.p [] (text "Pages: " :: viewPagesLinks)
         , viewWalletSection model
         ]
+
+
+viewPagesLinks : List (Html Msg)
+viewPagesLinks =
+    [ link RouteLanding [] [ text "Home" ]
+    , text " | "
+    , link RoutePreparation [] [ text "Vote Preparation" ]
+    , text " | "
+    , link RouteMultisigRegistration [] [ text "Multisig Registration" ]
+    , text " | "
+    , link RoutePdf [] [ text "PDFs" ]
+    ]
 
 
 viewWalletSection : Model -> Html Msg

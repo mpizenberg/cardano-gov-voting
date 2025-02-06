@@ -1,6 +1,6 @@
 port module Main exposing (main)
 
-import Api exposing (ActiveProposal, DrepInfo, ProposalMetadata, ProtocolParams, ScriptInfo)
+import Api exposing (ActiveProposal, CcInfo, DrepInfo, ProposalMetadata, ProtocolParams, ScriptInfo)
 import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
@@ -78,6 +78,7 @@ type alias Model =
     , proposals : WebData (Dict String ActiveProposal)
     , scriptsInfo : Dict String ScriptInfo
     , drepsInfo : Dict String DrepInfo
+    , ccsInfo : Dict String CcInfo
     , jsonLdContexts : JsonLdContexts
     , errors : List String
     }
@@ -103,6 +104,7 @@ init { url, jsonLdContexts } =
         , proposals = RemoteData.NotAsked
         , scriptsInfo = Dict.empty
         , drepsInfo = Dict.empty
+        , ccsInfo = Dict.empty
         , jsonLdContexts = jsonLdContexts
         , errors = []
         }
@@ -292,6 +294,7 @@ update msg model =
                             , proposals = model.proposals
                             , scriptsInfo = model.scriptsInfo
                             , drepsInfo = model.drepsInfo
+                            , ccsInfo = model.ccsInfo
                             , loadedWallet = loadedWallet
                             , feeProviderAskUtxosCmd = Cmd.none -- TODO
                             , jsonLdContexts = model.jsonLdContexts
@@ -584,6 +587,9 @@ updateModelWithPrepToParentMsg msgToParent model =
 
         Just (Page.Preparation.CacheDrepInfo drepInfo) ->
             { model | drepsInfo = Dict.insert (Bytes.toHex <| Address.extractCredentialHash drepInfo.credential) drepInfo model.drepsInfo }
+
+        Just (Page.Preparation.CacheCcInfo ccInfo) ->
+            { model | ccsInfo = Dict.insert (Bytes.toHex <| Address.extractCredentialHash ccInfo.hotCred) ccInfo model.ccsInfo }
 
 
 {-| Helper function to reset the signing step of the Preparation.

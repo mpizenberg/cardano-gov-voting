@@ -347,6 +347,7 @@ type alias SignedTx =
 type MsgToParent
     = CacheScriptInfo ScriptInfo
     | CacheDrepInfo DrepInfo
+    | CacheCcInfo CcInfo
 
 
 type Msg
@@ -416,6 +417,7 @@ type alias UpdateContext msg =
     , proposals : WebData (Dict String ActiveProposal)
     , scriptsInfo : Dict String ScriptInfo
     , drepsInfo : Dict String DrepInfo
+    , ccsInfo : Dict String CcInfo
     , loadedWallet : Maybe LoadedWallet
     , feeProviderAskUtxosCmd : Cmd msg
     , jsonLdContexts : JsonLdContexts
@@ -530,7 +532,7 @@ update ctx msg model =
                     , Nothing
                     )
 
-                Ok { govId, scriptInfo, expectedSigners, drepInfo, poolLiveStake, cmd } ->
+                Ok { govId, scriptInfo, expectedSigners, drepInfo, ccInfo, poolLiveStake, cmd } ->
                     ( updateVoterForm
                         (\_ ->
                             { initVoterForm
@@ -538,6 +540,7 @@ update ctx msg model =
                                 , scriptInfo = scriptInfo
                                 , expectedSigners = expectedSigners
                                 , drepInfo = drepInfo
+                                , ccInfo = ccInfo
                                 , poolLiveStake = poolLiveStake
                             }
                         )
@@ -599,7 +602,7 @@ update ctx msg model =
                 Ok ccInfo ->
                     ( updateVoterForm (\form -> { form | ccInfo = RemoteData.Success ccInfo }) model
                     , Cmd.none
-                    , Nothing
+                    , Just <| CacheCcInfo ccInfo
                     )
 
         GotPoolLiveStake result ->
@@ -1034,6 +1037,7 @@ type alias GovIdCheck =
     , expectedSigners : Dict String { expected : Bool, key : Bytes CredentialHash }
     , poolLiveStake : WebData { pool : Bytes Pool.Id, stake : Int }
     , drepInfo : WebData DrepInfo
+    , ccInfo : WebData CcInfo
     , cmd : Cmd Msg
     }
 
@@ -1052,6 +1056,7 @@ checkGovId ctx str =
                     , expectedSigners = Dict.empty
                     , poolLiveStake = RemoteData.NotAsked
                     , drepInfo = RemoteData.NotAsked
+                    , ccInfo = RemoteData.NotAsked
                     , cmd = Cmd.none
                     }
             in
@@ -1063,8 +1068,17 @@ checkGovId ctx str =
                     Err "Please use one of the drep/pool/cc_hot CIP 129 governance Ids. Proposal to vote on will be selected later."
 
                 -- Using a public key for the gov Id is the simplest case
-                Gov.CcHotCredId ((VKeyHash _) as cred) ->
-                    Ok { defaultCheck | cmd = Api.defaultApiProvider.getCcInfo cred GotCcInfo }
+                Gov.CcHotCredId ((VKeyHash keyHash) as cred) ->
+                    let
+                        ( ccInfo, fetchCcInfo ) =
+                            case Dict.get (Bytes.toHex keyHash) ctx.ccsInfo of
+                                Nothing ->
+                                    ( RemoteData.Loading, Api.defaultApiProvider.getCcInfo cred GotCcInfo )
+
+                                Just info ->
+                                    ( RemoteData.Success info, Cmd.none )
+                    in
+                    Ok { defaultCheck | ccInfo = ccInfo, cmd = fetchCcInfo }
 
                 Gov.DrepId ((VKeyHash keyHash) as cred) ->
                     let
@@ -1107,16 +1121,21 @@ checkGovId ctx str =
                                             Dict.empty
                                     , Cmd.none
                                     )
+
+                        ( ccInfo, fetchCcInfo ) =
+                            case Dict.get (Bytes.toHex scriptHash) ctx.ccsInfo of
+                                Nothing ->
+                                    ( RemoteData.Loading, Api.defaultApiProvider.getCcInfo cred GotCcInfo )
+
+                                Just info ->
+                                    ( RemoteData.Success info, Cmd.none )
                     in
                     Ok
                         { defaultCheck
                             | scriptInfo = scriptInfo
                             , expectedSigners = expectedSigners
-                            , cmd =
-                                Cmd.batch
-                                    [ fetchScriptInfo
-                                    , Api.defaultApiProvider.getCcInfo cred GotCcInfo
-                                    ]
+                            , ccInfo = ccInfo
+                            , cmd = Cmd.batch [ fetchScriptInfo, fetchCcInfo ]
                         }
 
                 Gov.DrepId ((ScriptHash scriptHash) as cred) ->

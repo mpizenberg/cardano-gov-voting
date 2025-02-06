@@ -346,6 +346,7 @@ type alias SignedTx =
 
 type MsgToParent
     = CacheScriptInfo ScriptInfo
+    | CacheDrepInfo DrepInfo
 
 
 type Msg
@@ -414,6 +415,7 @@ type alias UpdateContext msg =
     { wrapMsg : Msg -> msg
     , proposals : WebData (Dict String ActiveProposal)
     , scriptsInfo : Dict String ScriptInfo
+    , drepsInfo : Dict String DrepInfo
     , loadedWallet : Maybe LoadedWallet
     , feeProviderAskUtxosCmd : Cmd msg
     , jsonLdContexts : JsonLdContexts
@@ -528,12 +530,14 @@ update ctx msg model =
                     , Nothing
                     )
 
-                Ok { govId, scriptInfo, poolLiveStake, cmd } ->
+                Ok { govId, scriptInfo, expectedSigners, drepInfo, poolLiveStake, cmd } ->
                     ( updateVoterForm
                         (\_ ->
                             { initVoterForm
                                 | govId = Just govId
                                 , scriptInfo = scriptInfo
+                                , expectedSigners = expectedSigners
+                                , drepInfo = drepInfo
                                 , poolLiveStake = poolLiveStake
                             }
                         )
@@ -581,7 +585,7 @@ update ctx msg model =
                 Ok drepInfo ->
                     ( updateVoterForm (\form -> { form | drepInfo = RemoteData.Success drepInfo }) model
                     , Cmd.none
-                    , Nothing
+                    , Just <| CacheDrepInfo drepInfo
                     )
 
         GotCcInfo result ->
@@ -1027,6 +1031,7 @@ updateVoterForm f ({ voterStep } as model) =
 type alias GovIdCheck =
     { govId : Gov.Id
     , scriptInfo : WebData ScriptInfo
+    , expectedSigners : Dict String { expected : Bool, key : Bytes CredentialHash }
     , poolLiveStake : WebData { pool : Bytes Pool.Id, stake : Int }
     , drepInfo : WebData DrepInfo
     , cmd : Cmd Msg
@@ -1044,6 +1049,7 @@ checkGovId ctx str =
                 defaultCheck =
                     { govId = govId
                     , scriptInfo = RemoteData.NotAsked
+                    , expectedSigners = Dict.empty
                     , poolLiveStake = RemoteData.NotAsked
                     , drepInfo = RemoteData.NotAsked
                     , cmd = Cmd.none
@@ -1060,12 +1066,17 @@ checkGovId ctx str =
                 Gov.CcHotCredId ((VKeyHash _) as cred) ->
                     Ok { defaultCheck | cmd = Api.defaultApiProvider.getCcInfo cred GotCcInfo }
 
-                Gov.DrepId ((VKeyHash _) as cred) ->
-                    Ok
-                        { defaultCheck
-                            | drepInfo = RemoteData.Loading
-                            , cmd = Api.defaultApiProvider.getDrepInfo cred GotDrepInfo
-                        }
+                Gov.DrepId ((VKeyHash keyHash) as cred) ->
+                    let
+                        ( drepInfo, fetchDrepInfo ) =
+                            case Dict.get (Bytes.toHex keyHash) ctx.drepsInfo of
+                                Nothing ->
+                                    ( RemoteData.Loading, Api.defaultApiProvider.getDrepInfo cred GotDrepInfo )
+
+                                Just info ->
+                                    ( RemoteData.Success info, Cmd.none )
+                    in
+                    Ok { defaultCheck | drepInfo = drepInfo, cmd = fetchDrepInfo }
 
                 Gov.PoolId poolId ->
                     Ok
@@ -1077,30 +1088,63 @@ checkGovId ctx str =
                 -- Using a script voter will require some extra information to be fetched
                 Gov.CcHotCredId ((ScriptHash scriptHash) as cred) ->
                     let
-                        ( scriptInfo, fetchScriptInfoCmd ) =
+                        ( scriptInfo, expectedSigners, fetchScriptInfo ) =
                             case Dict.get (Bytes.toHex scriptHash) ctx.scriptsInfo of
                                 Nothing ->
-                                    ( RemoteData.Loading, Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo )
+                                    ( RemoteData.Loading
+                                    , Dict.empty
+                                    , Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
+                                    )
 
                                 Just info ->
-                                    ( RemoteData.Success info, Cmd.none )
+                                    ( RemoteData.Success info
+                                    , case info.script of
+                                        Script.Native nativeScript ->
+                                            Script.extractSigners nativeScript
+                                                |> Dict.map (\_ key -> { expected = True, key = key })
+
+                                        Script.Plutus _ ->
+                                            Dict.empty
+                                    , Cmd.none
+                                    )
                     in
                     Ok
                         { defaultCheck
                             | scriptInfo = scriptInfo
+                            , expectedSigners = expectedSigners
                             , cmd =
                                 Cmd.batch
-                                    [ fetchScriptInfoCmd
+                                    [ fetchScriptInfo
                                     , Api.defaultApiProvider.getCcInfo cred GotCcInfo
                                     ]
                         }
 
                 Gov.DrepId ((ScriptHash scriptHash) as cred) ->
                     let
-                        ( scriptInfo, fetchScriptInfoCmd ) =
+                        ( scriptInfo, expectedSigners, fetchScriptInfo ) =
                             case Dict.get (Bytes.toHex scriptHash) ctx.scriptsInfo of
                                 Nothing ->
-                                    ( RemoteData.Loading, Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo )
+                                    ( RemoteData.Loading
+                                    , Dict.empty
+                                    , Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
+                                    )
+
+                                Just info ->
+                                    ( RemoteData.Success info
+                                    , case info.script of
+                                        Script.Native nativeScript ->
+                                            Script.extractSigners nativeScript
+                                                |> Dict.map (\_ key -> { expected = True, key = key })
+
+                                        Script.Plutus _ ->
+                                            Dict.empty
+                                    , Cmd.none
+                                    )
+
+                        ( drepInfo, fetchDrepInfo ) =
+                            case Dict.get (Bytes.toHex scriptHash) ctx.drepsInfo of
+                                Nothing ->
+                                    ( RemoteData.Loading, Api.defaultApiProvider.getDrepInfo cred GotDrepInfo )
 
                                 Just info ->
                                     ( RemoteData.Success info, Cmd.none )
@@ -1108,11 +1152,9 @@ checkGovId ctx str =
                     Ok
                         { defaultCheck
                             | scriptInfo = scriptInfo
-                            , cmd =
-                                Cmd.batch
-                                    [ fetchScriptInfoCmd
-                                    , Api.defaultApiProvider.getDrepInfo cred GotDrepInfo
-                                    ]
+                            , expectedSigners = expectedSigners
+                            , drepInfo = drepInfo
+                            , cmd = Cmd.batch [ fetchScriptInfo, fetchDrepInfo ]
                         }
 
 

@@ -1,10 +1,10 @@
 port module Main exposing (main)
 
-import Api exposing (ActiveProposal, ProposalMetadata, ProtocolParams, ScriptInfo)
+import Api exposing (ActiveProposal, DrepInfo, ProposalMetadata, ProtocolParams, ScriptInfo)
 import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano.Address exposing (Address, CredentialHash)
+import Cardano.Address as Address exposing (Address, CredentialHash)
 import Cardano.Cip30 as Cip30 exposing (WalletDescriptor)
 import Cardano.Gov as Gov
 import Cardano.Transaction as Transaction exposing (Transaction)
@@ -77,6 +77,7 @@ type alias Model =
     , protocolParams : Maybe ProtocolParams
     , proposals : WebData (Dict String ActiveProposal)
     , scriptsInfo : Dict String ScriptInfo
+    , drepsInfo : Dict String DrepInfo
     , jsonLdContexts : JsonLdContexts
     , errors : List String
     }
@@ -101,6 +102,7 @@ init { url, jsonLdContexts } =
         , protocolParams = Nothing
         , proposals = RemoteData.NotAsked
         , scriptsInfo = Dict.empty
+        , drepsInfo = Dict.empty
         , jsonLdContexts = jsonLdContexts
         , errors = []
         }
@@ -289,6 +291,7 @@ update msg model =
                             { wrapMsg = PreparationPageMsg
                             , proposals = model.proposals
                             , scriptsInfo = model.scriptsInfo
+                            , drepsInfo = model.drepsInfo
                             , loadedWallet = loadedWallet
                             , feeProviderAskUtxosCmd = Cmd.none -- TODO
                             , jsonLdContexts = model.jsonLdContexts
@@ -578,6 +581,9 @@ updateModelWithPrepToParentMsg msgToParent model =
 
         Just (Page.Preparation.CacheScriptInfo scriptInfo) ->
             { model | scriptsInfo = Dict.insert (Bytes.toHex scriptInfo.scriptHash) scriptInfo model.scriptsInfo }
+
+        Just (Page.Preparation.CacheDrepInfo drepInfo) ->
+            { model | drepsInfo = Dict.insert (Bytes.toHex <| Address.extractCredentialHash drepInfo.credential) drepInfo model.drepsInfo }
 
 
 {-| Helper function to reset the signing step of the Preparation.

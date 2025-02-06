@@ -1,6 +1,6 @@
 port module Main exposing (main)
 
-import Api exposing (ActiveProposal, CcInfo, DrepInfo, ProposalMetadata, ProtocolParams, ScriptInfo)
+import Api exposing (ActiveProposal, CcInfo, DrepInfo, PoolInfo, ProposalMetadata, ProtocolParams, ScriptInfo)
 import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
@@ -79,6 +79,7 @@ type alias Model =
     , scriptsInfo : Dict String ScriptInfo
     , drepsInfo : Dict String DrepInfo
     , ccsInfo : Dict String CcInfo
+    , poolsInfo : Dict String PoolInfo
     , jsonLdContexts : JsonLdContexts
     , errors : List String
     }
@@ -105,6 +106,7 @@ init { url, jsonLdContexts } =
         , scriptsInfo = Dict.empty
         , drepsInfo = Dict.empty
         , ccsInfo = Dict.empty
+        , poolsInfo = Dict.empty
         , jsonLdContexts = jsonLdContexts
         , errors = []
         }
@@ -295,6 +297,7 @@ update msg model =
                             , scriptsInfo = model.scriptsInfo
                             , drepsInfo = model.drepsInfo
                             , ccsInfo = model.ccsInfo
+                            , poolsInfo = model.poolsInfo
                             , loadedWallet = loadedWallet
                             , feeProviderAskUtxosCmd = Cmd.none -- TODO
                             , jsonLdContexts = model.jsonLdContexts
@@ -590,6 +593,9 @@ updateModelWithPrepToParentMsg msgToParent model =
 
         Just (Page.Preparation.CacheCcInfo ccInfo) ->
             { model | ccsInfo = Dict.insert (Bytes.toHex <| Address.extractCredentialHash ccInfo.hotCred) ccInfo model.ccsInfo }
+
+        Just (Page.Preparation.CachePoolInfo poolInfo) ->
+            { model | poolsInfo = Dict.insert (Bytes.toHex poolInfo.pool) poolInfo model.poolsInfo }
 
 
 {-| Helper function to reset the signing step of the Preparation.

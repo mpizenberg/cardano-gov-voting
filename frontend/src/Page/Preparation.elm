@@ -1,6 +1,6 @@
 module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, MsgToParent(..), Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType(..), Step, StorageForm, UpdateContext, ViewContext, VoterPreparationForm, init, noInternalVote, pinRationaleFile, update, view)
 
-import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), ScriptInfo)
+import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), PoolInfo, ScriptInfo)
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..), TxFinalized, VoterWitness(..), WitnessSource(..))
@@ -86,7 +86,7 @@ type alias VoterPreparationForm =
     , scriptInfo : WebData ScriptInfo
     , drepInfo : WebData DrepInfo
     , ccInfo : WebData CcInfo
-    , poolLiveStake : WebData { pool : Bytes Pool.Id, stake : Int }
+    , poolInfo : WebData PoolInfo
     , utxoRef : String
     , expectedSigners : Dict String { expected : Bool, key : Bytes CredentialHash }
     , error : Maybe String
@@ -99,7 +99,7 @@ initVoterForm =
     , scriptInfo = RemoteData.NotAsked
     , drepInfo = RemoteData.NotAsked
     , ccInfo = RemoteData.NotAsked
-    , poolLiveStake = RemoteData.NotAsked
+    , poolInfo = RemoteData.NotAsked
     , utxoRef = ""
     , expectedSigners = Dict.empty
     , error = Nothing
@@ -348,6 +348,7 @@ type MsgToParent
     = CacheScriptInfo ScriptInfo
     | CacheDrepInfo DrepInfo
     | CacheCcInfo CcInfo
+    | CachePoolInfo PoolInfo
 
 
 type Msg
@@ -357,7 +358,7 @@ type Msg
     | GotScriptInfo (Result Http.Error ScriptInfo)
     | GotDrepInfo (Result Http.Error DrepInfo)
     | GotCcInfo (Result Http.Error CcInfo)
-    | GotPoolLiveStake (Result Http.Error { pool : Bytes Pool.Id, stake : Int })
+    | GotPoolInfo (Result Http.Error PoolInfo)
     | UtxoRefChange String
     | ToggleExpectedSigner String Bool
     | ValidateVoterFormButtonClicked
@@ -418,6 +419,7 @@ type alias UpdateContext msg =
     , scriptsInfo : Dict String ScriptInfo
     , drepsInfo : Dict String DrepInfo
     , ccsInfo : Dict String CcInfo
+    , poolsInfo : Dict String PoolInfo
     , loadedWallet : Maybe LoadedWallet
     , feeProviderAskUtxosCmd : Cmd msg
     , jsonLdContexts : JsonLdContexts
@@ -532,7 +534,7 @@ update ctx msg model =
                     , Nothing
                     )
 
-                Ok { govId, scriptInfo, expectedSigners, drepInfo, ccInfo, poolLiveStake, cmd } ->
+                Ok { govId, scriptInfo, expectedSigners, drepInfo, ccInfo, poolInfo, cmd } ->
                     ( updateVoterForm
                         (\_ ->
                             { initVoterForm
@@ -541,7 +543,7 @@ update ctx msg model =
                                 , expectedSigners = expectedSigners
                                 , drepInfo = drepInfo
                                 , ccInfo = ccInfo
-                                , poolLiveStake = poolLiveStake
+                                , poolInfo = poolInfo
                             }
                         )
                         model
@@ -605,18 +607,18 @@ update ctx msg model =
                     , Just <| CacheCcInfo ccInfo
                     )
 
-        GotPoolLiveStake result ->
+        GotPoolInfo result ->
             case result of
                 Err error ->
-                    ( updateVoterForm (\form -> { form | poolLiveStake = RemoteData.Failure error }) model
+                    ( updateVoterForm (\form -> { form | poolInfo = RemoteData.Failure error }) model
                     , Cmd.none
                     , Nothing
                     )
 
-                Ok poolLiveStake ->
-                    ( updateVoterForm (\form -> { form | poolLiveStake = RemoteData.Success poolLiveStake }) model
+                Ok poolInfo ->
+                    ( updateVoterForm (\form -> { form | poolInfo = RemoteData.Success poolInfo }) model
                     , Cmd.none
-                    , Nothing
+                    , Just <| CachePoolInfo poolInfo
                     )
 
         UtxoRefChange utxoRef ->
@@ -1035,7 +1037,7 @@ type alias GovIdCheck =
     { govId : Gov.Id
     , scriptInfo : WebData ScriptInfo
     , expectedSigners : Dict String { expected : Bool, key : Bytes CredentialHash }
-    , poolLiveStake : WebData { pool : Bytes Pool.Id, stake : Int }
+    , poolInfo : WebData PoolInfo
     , drepInfo : WebData DrepInfo
     , ccInfo : WebData CcInfo
     , cmd : Cmd Msg
@@ -1054,7 +1056,7 @@ checkGovId ctx str =
                     { govId = govId
                     , scriptInfo = RemoteData.NotAsked
                     , expectedSigners = Dict.empty
-                    , poolLiveStake = RemoteData.NotAsked
+                    , poolInfo = RemoteData.NotAsked
                     , drepInfo = RemoteData.NotAsked
                     , ccInfo = RemoteData.NotAsked
                     , cmd = Cmd.none
@@ -1093,11 +1095,16 @@ checkGovId ctx str =
                     Ok { defaultCheck | drepInfo = drepInfo, cmd = fetchDrepInfo }
 
                 Gov.PoolId poolId ->
-                    Ok
-                        { defaultCheck
-                            | poolLiveStake = RemoteData.Loading
-                            , cmd = Api.defaultApiProvider.getPoolLiveStake poolId GotPoolLiveStake
-                        }
+                    let
+                        ( poolInfo, fetchPoolInfo ) =
+                            case Dict.get (Bytes.toHex poolId) ctx.poolsInfo of
+                                Nothing ->
+                                    ( RemoteData.Loading, Api.defaultApiProvider.getPoolLiveStake poolId GotPoolInfo )
+
+                                Just info ->
+                                    ( RemoteData.Success info, Cmd.none )
+                    in
+                    Ok { defaultCheck | poolInfo = poolInfo, cmd = fetchPoolInfo }
 
                 -- Using a script voter will require some extra information to be fetched
                 Gov.CcHotCredId ((ScriptHash scriptHash) as cred) ->
@@ -2065,7 +2072,7 @@ viewValidGovIdForm form =
                     text "loading ..."
 
                 RemoteData.Failure _ ->
-                    text <| "? Most likely, this voter is not registered yet, or was just registered this epoch."
+                    text <| "? Most likely, this voter is inactive, or not registered yet, or was just registered this epoch."
 
                 RemoteData.Success success ->
                     text <| Helper.prettyAdaLovelace <| Natural.fromSafeInt <| accessor success
@@ -2095,7 +2102,7 @@ viewValidGovIdForm form =
                 [ Html.p [] [ text <| "Voting as a SPO with pool ID (hex): " ++ Bytes.toHex hash ]
                 , Html.p []
                     [ text "Live stake: "
-                    , viewVotingPower .stake form.poolLiveStake
+                    , viewVotingPower .stake form.poolInfo
                     ]
                 ]
 
@@ -2277,7 +2284,7 @@ viewIdentifiedVoter form voter =
                 WithPoolCred hash ->
                     let
                         votingPower =
-                            case form.poolLiveStake of
+                            case form.poolInfo of
                                 RemoteData.Success { stake } ->
                                     Helper.prettyAdaLovelace (Natural.fromSafeInt stake)
 

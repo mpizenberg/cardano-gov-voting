@@ -1,4 +1,4 @@
-module Api exposing (ActiveProposal, ApiProvider, CcInfo, DrepInfo, IpfsAnswer(..), IpfsFile, ProposalMetadata, ProtocolParams, ScriptInfo, defaultApiProvider)
+module Api exposing (ActiveProposal, ApiProvider, CcInfo, DrepInfo, IpfsAnswer(..), IpfsFile, PoolInfo, ProposalMetadata, ProtocolParams, ScriptInfo, defaultApiProvider)
 
 import Bytes as ElmBytes
 import Bytes.Comparable as Bytes exposing (Bytes)
@@ -26,7 +26,7 @@ type alias ApiProvider msg =
     , getScriptInfo : Bytes CredentialHash -> (Result Http.Error ScriptInfo -> msg) -> Cmd msg
     , getDrepInfo : Credential -> (Result Http.Error DrepInfo -> msg) -> Cmd msg
     , getCcInfo : Credential -> (Result Http.Error CcInfo -> msg) -> Cmd msg
-    , getPoolLiveStake : Bytes Pool.Id -> (Result Http.Error { pool : Bytes Pool.Id, stake : Int } -> msg) -> Cmd msg
+    , getPoolLiveStake : Bytes Pool.Id -> (Result Http.Error PoolInfo -> msg) -> Cmd msg
     , ipfsAdd : { rpc : String, headers : List ( String, String ), file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     , convertToPdf : String -> (Result Http.Error ElmBytes.Bytes -> msg) -> Cmd msg
     }
@@ -358,7 +358,13 @@ ogmiosCcInfoDecoder =
 -- Pool Live Stake
 
 
-poolStakeDecoder : Bytes Pool.Id -> Decoder { pool : Bytes Pool.Id, stake : Int }
+type alias PoolInfo =
+    { pool : Bytes Pool.Id
+    , stake : Int
+    }
+
+
+poolStakeDecoder : Bytes Pool.Id -> Decoder PoolInfo
 poolStakeDecoder poolId =
     JD.map (\stake -> { pool = poolId, stake = stake })
         (JD.at [ "result", Pool.toBech32 poolId, "stake", "ada", "lovelace" ] JD.int)

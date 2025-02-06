@@ -396,7 +396,7 @@ responseToIpfsAnswer response =
                     Err <| "Bad status (" ++ String.fromInt meta.statusCode ++ "): " ++ meta.statusText
 
         Http.NetworkError_ ->
-            Err "Network error. Maybe you lost your connection, or some other network error occured."
+            Err "Network error. Maybe you lost your connection, or an IPFS gateway did not respond in time, or some other network error occured."
 
         Http.Timeout_ ->
             Err "The Pin request timed out."

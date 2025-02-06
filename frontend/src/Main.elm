@@ -1,6 +1,6 @@
 port module Main exposing (main)
 
-import Api exposing (ActiveProposal, ProposalMetadata, ProtocolParams)
+import Api exposing (ActiveProposal, ProposalMetadata, ProtocolParams, ScriptInfo)
 import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
@@ -76,6 +76,7 @@ type alias Model =
     , walletUtxos : Maybe (Utxo.RefDict Output)
     , protocolParams : Maybe ProtocolParams
     , proposals : WebData (Dict String ActiveProposal)
+    , scriptsInfo : Dict String ScriptInfo
     , jsonLdContexts : JsonLdContexts
     , errors : List String
     }
@@ -99,6 +100,7 @@ init { url, jsonLdContexts } =
         , walletChangeAddress = Nothing
         , protocolParams = Nothing
         , proposals = RemoteData.NotAsked
+        , scriptsInfo = Dict.empty
         , jsonLdContexts = jsonLdContexts
         , errors = []
         }
@@ -286,6 +288,7 @@ update msg model =
                         ctx =
                             { wrapMsg = PreparationPageMsg
                             , proposals = model.proposals
+                            , scriptsInfo = model.scriptsInfo
                             , loadedWallet = loadedWallet
                             , feeProviderAskUtxosCmd = Cmd.none -- TODO
                             , jsonLdContexts = model.jsonLdContexts
@@ -300,9 +303,13 @@ update msg model =
                                         Just wallet ->
                                             toWallet (Cip30.encodeRequest (Cip30.signTx wallet { partialSign = True } tx))
                             }
+
+                        ( newPageModel, cmds, msgToParent ) =
+                            Page.Preparation.update ctx pageMsg pageModel
                     in
-                    Page.Preparation.update ctx pageMsg pageModel
-                        |> Tuple.mapFirst (\newPageModel -> { model | page = PreparationPage newPageModel })
+                    ( updateModelWithPrepToParentMsg msgToParent { model | page = PreparationPage newPageModel }
+                    , cmds
+                    )
 
                 _ ->
                     ( model, Cmd.none )
@@ -561,6 +568,16 @@ handleWalletResponse response model =
             ( { model | errors = error :: model.errors }
             , Cmd.none
             )
+
+
+updateModelWithPrepToParentMsg : Maybe Page.Preparation.MsgToParent -> Model -> Model
+updateModelWithPrepToParentMsg msgToParent model =
+    case msgToParent of
+        Nothing ->
+            model
+
+        Just (Page.Preparation.CacheScriptInfo scriptInfo) ->
+            { model | scriptsInfo = Dict.insert (Bytes.toHex scriptInfo.scriptHash) scriptInfo model.scriptsInfo }
 
 
 {-| Helper function to reset the signing step of the Preparation.

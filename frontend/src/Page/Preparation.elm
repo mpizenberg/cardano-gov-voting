@@ -1,4 +1,4 @@
-module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType(..), Step, StorageForm, UpdateContext, ViewContext, VoterPreparationForm, init, noInternalVote, pinRationaleFile, update, view)
+module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, MsgToParent(..), Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType(..), Step, StorageForm, UpdateContext, ViewContext, VoterPreparationForm, init, noInternalVote, pinRationaleFile, update, view)
 
 import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), ScriptInfo)
 import Blake2b exposing (blake2b256)
@@ -344,6 +344,10 @@ type alias SignedTx =
 -- ###################################################################
 
 
+type MsgToParent
+    = CacheScriptInfo ScriptInfo
+
+
 type Msg
     = NoMsg
       -- Voter Step
@@ -409,6 +413,7 @@ type Msg
 type alias UpdateContext msg =
     { wrapMsg : Msg -> msg
     , proposals : WebData (Dict String ActiveProposal)
+    , scriptsInfo : Dict String ScriptInfo
     , loadedWallet : Maybe LoadedWallet
     , feeProviderAskUtxosCmd : Cmd msg
     , jsonLdContexts : JsonLdContexts
@@ -429,11 +434,11 @@ type alias LoadedWallet =
     }
 
 
-update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg )
+update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg, Maybe MsgToParent )
 update ctx msg model =
     case msg of
         NoMsg ->
-            ( model, Cmd.none )
+            ( model, Cmd.none, Nothing )
 
         --
         -- Voter Step
@@ -447,6 +452,7 @@ update ctx msg model =
             in
             ( updateVoterForm (\form -> { form | expectedSigners = updatedExpectedSigners form.expectedSigners }) model
             , Cmd.none
+            , Nothing
             )
 
         ValidateVoterFormButtonClicked ->
@@ -458,10 +464,11 @@ update ctx msg model =
                     in
                     ( { model | voterStep = newVoterStep }
                     , Cmd.map ctx.wrapMsg cmds
+                    , Nothing
                     )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
         GotRefUtxoTx outputRef txsResult ->
             case ( model.voterStep, txsResult ) of
@@ -477,6 +484,7 @@ update ctx msg model =
                             in
                             ( { model | voterStep = Preparing { form | error = Just errorMsg } }
                             , Cmd.none
+                            , Nothing
                             )
 
                         Just tx ->
@@ -491,6 +499,7 @@ update ctx msg model =
                                     in
                                     ( { model | voterStep = Preparing { form | error = Just errorMsg } }
                                     , Cmd.none
+                                    , Nothing
                                     )
 
                                 Just output ->
@@ -499,21 +508,24 @@ update ctx msg model =
                                         , someRefUtxos = Dict.Any.insert outputRef output model.someRefUtxos
                                       }
                                     , Cmd.none
+                                    , Nothing
                                     )
 
                 ( Validating form _, Err httpError ) ->
                     ( { model | voterStep = Preparing { form | error = Just (Debug.toString httpError) } }
                     , Cmd.none
+                    , Nothing
                     )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
         VoterGovIdChange govIdStr ->
-            case checkGovId govIdStr of
+            case checkGovId ctx govIdStr of
                 Err error ->
                     ( updateVoterForm (\_ -> { initVoterForm | error = Just error }) model
                     , Cmd.none
+                    , Nothing
                     )
 
                 Ok { govId, scriptInfo, poolLiveStake, cmd } ->
@@ -527,6 +539,7 @@ update ctx msg model =
                         )
                         model
                     , Cmd.map ctx.wrapMsg cmd
+                    , Nothing
                     )
 
         GotScriptInfo scriptInfoResult ->
@@ -534,6 +547,7 @@ update ctx msg model =
                 Err error ->
                     ( updateVoterForm (\form -> { form | scriptInfo = RemoteData.Failure error }) model
                     , Cmd.none
+                    , Nothing
                     )
 
                 Ok scriptInfo ->
@@ -553,6 +567,7 @@ update ctx msg model =
                         )
                         model
                     , Cmd.none
+                    , Just <| CacheScriptInfo scriptInfo
                     )
 
         GotDrepInfo result ->
@@ -560,11 +575,13 @@ update ctx msg model =
                 Err error ->
                     ( updateVoterForm (\form -> { form | drepInfo = RemoteData.Failure (Debug.log "ERROR loading DRep info" error) }) model
                     , Cmd.none
+                    , Nothing
                     )
 
                 Ok drepInfo ->
                     ( updateVoterForm (\form -> { form | drepInfo = RemoteData.Success drepInfo }) model
                     , Cmd.none
+                    , Nothing
                     )
 
         GotCcInfo result ->
@@ -572,11 +589,13 @@ update ctx msg model =
                 Err error ->
                     ( updateVoterForm (\form -> { form | ccInfo = RemoteData.Failure error }) model
                     , Cmd.none
+                    , Nothing
                     )
 
                 Ok ccInfo ->
                     ( updateVoterForm (\form -> { form | ccInfo = RemoteData.Success ccInfo }) model
                     , Cmd.none
+                    , Nothing
                     )
 
         GotPoolLiveStake result ->
@@ -584,16 +603,19 @@ update ctx msg model =
                 Err error ->
                     ( updateVoterForm (\form -> { form | poolLiveStake = RemoteData.Failure error }) model
                     , Cmd.none
+                    , Nothing
                     )
 
                 Ok poolLiveStake ->
                     ( updateVoterForm (\form -> { form | poolLiveStake = RemoteData.Success poolLiveStake }) model
                     , Cmd.none
+                    , Nothing
                     )
 
         UtxoRefChange utxoRef ->
             ( updateVoterForm (\form -> { form | utxoRef = utxoRef }) model
             , Cmd.none
+            , Nothing
             )
 
         ChangeVoterButtonClicked ->
@@ -609,10 +631,11 @@ update ctx msg model =
                       -- |> resetTxBuilding
                       -- |> resetTxSigning
                     , Cmd.none
+                    , Nothing
                     )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
         --
         -- Pick Proposal Step
@@ -624,17 +647,19 @@ update ctx msg model =
                         Just prop ->
                             ( { model | pickProposalStep = Done form prop }
                             , Cmd.none
+                            , Nothing
                             )
 
                         Nothing ->
-                            ( model, Cmd.none )
+                            ( model, Cmd.none, Nothing )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
         ChangeProposalButtonClicked ->
             ( { model | pickProposalStep = Preparing {} }
             , Cmd.none
+            , Nothing
             )
 
         --
@@ -643,71 +668,85 @@ update ctx msg model =
         RationaleSummaryChange summary ->
             ( updateRationaleForm (\form -> { form | summary = summary }) model
             , Cmd.none
+            , Nothing
             )
 
         RationaleStatementChange statement ->
             ( updateRationaleForm (\form -> { form | rationaleStatement = statement }) model
             , Cmd.none
+            , Nothing
             )
 
         PrecedentDiscussionChange precedentDiscussion ->
             ( updateRationaleForm (\form -> { form | precedentDiscussion = precedentDiscussion }) model
             , Cmd.none
+            , Nothing
             )
 
         CounterArgumentChange argument ->
             ( updateRationaleForm (\form -> { form | counterArgumentDiscussion = argument }) model
             , Cmd.none
+            , Nothing
             )
 
         ConclusionChange conclusion ->
             ( updateRationaleForm (\form -> { form | conclusion = conclusion }) model
             , Cmd.none
+            , Nothing
             )
 
         InternalConstitutionalVoteChange constitutionalStr ->
             ( updateRationaleInternalVoteForm (\n internal -> { internal | constitutional = n }) constitutionalStr model
             , Cmd.none
+            , Nothing
             )
 
         InternalUnconstitutionalVoteChange unconstitutionalStr ->
             ( updateRationaleInternalVoteForm (\n internal -> { internal | unconstitutional = n }) unconstitutionalStr model
             , Cmd.none
+            , Nothing
             )
 
         InternalAbstainVoteChange abstainStr ->
             ( updateRationaleInternalVoteForm (\n internal -> { internal | abstain = n }) abstainStr model
             , Cmd.none
+            , Nothing
             )
 
         InternalDidNotVoteChange didNotVoteStr ->
             ( updateRationaleInternalVoteForm (\n internal -> { internal | didNotVote = n }) didNotVoteStr model
             , Cmd.none
+            , Nothing
             )
 
         AddRefButtonClicked ->
             ( updateRationaleForm (\form -> { form | references = initRefForm :: form.references }) model
             , Cmd.none
+            , Nothing
             )
 
         DeleteRefButtonClicked n ->
             ( updateRationaleForm (\form -> { form | references = List.Extra.removeAt n form.references }) model
             , Cmd.none
+            , Nothing
             )
 
         ReferenceLabelChange n label ->
             ( updateRationaleForm (\form -> { form | references = List.Extra.updateAt n (\ref -> { ref | label = label }) form.references }) model
             , Cmd.none
+            , Nothing
             )
 
         ReferenceUriChange n uri ->
             ( updateRationaleForm (\form -> { form | references = List.Extra.updateAt n (\ref -> { ref | uri = uri }) form.references }) model
             , Cmd.none
+            , Nothing
             )
 
         ReferenceTypeChange n refTypeStr ->
             ( updateRationaleForm (\form -> { form | references = List.Extra.updateAt n (\ref -> { ref | type_ = refTypeFromString refTypeStr }) form.references }) model
             , Cmd.none
+            , Nothing
             )
 
         ValidateRationaleButtonClicked ->
@@ -718,14 +757,16 @@ update ctx msg model =
                         , rationaleSignatureStep = Preparing <| resetRationaleSignatures newRationale model.rationaleSignatureStep
                       }
                     , Cmd.none
+                    , Nothing
                     )
 
                 prepOrValidating ->
-                    ( { model | rationaleCreationStep = prepOrValidating }, Cmd.none )
+                    ( { model | rationaleCreationStep = prepOrValidating }, Cmd.none, Nothing )
 
         EditRationaleButtonClicked ->
             ( { model | rationaleCreationStep = editRationale model.rationaleCreationStep }
             , Cmd.none
+            , Nothing
             )
 
         --
@@ -734,16 +775,19 @@ update ctx msg model =
         AddAuthorButtonClicked ->
             ( updateAuthorsForm (\authors -> initAuthorForm :: authors) model
             , Cmd.none
+            , Nothing
             )
 
         DeleteAuthorButtonClicked n ->
             ( updateAuthorsForm (\authors -> List.Extra.removeAt n authors) model
             , Cmd.none
+            , Nothing
             )
 
         AuthorNameChange n name ->
             ( updateAuthorsForm (\authors -> List.Extra.updateAt n (\author -> { author | name = name }) authors) model
             , Cmd.none
+            , Nothing
             )
 
         LoadJsonSignatureButtonClicked n authorName ->
@@ -751,12 +795,14 @@ update ctx msg model =
             , Cmd.map ctx.wrapMsg <|
                 File.Select.file [ "application/json" ] <|
                     FileSelectedForJsonSignature n authorName
+            , Nothing
             )
 
         FileSelectedForJsonSignature n authorName file ->
             ( model
             , Task.attempt (handleJsonSignatureFileRead n authorName) (File.toString file)
                 |> Cmd.map ctx.wrapMsg
+            , Nothing
             )
 
         LoadedAuthorSignatureJsonRationale n authorName jsonStr ->
@@ -770,11 +816,13 @@ update ctx msg model =
                 Ok authorWitness ->
                     updateAuthorsForm (\authors -> List.Extra.updateAt n (\_ -> authorWitness) authors) model
             , Cmd.none
+            , Nothing
             )
 
         SkipRationaleSignaturesButtonClicked ->
             ( { model | rationaleSignatureStep = skipRationaleSignature ctx.jsonLdContexts model.rationaleSignatureStep }
             , Cmd.none
+            , Nothing
             )
 
         ValidateRationaleSignaturesButtonClicked ->
@@ -783,6 +831,7 @@ update ctx msg model =
         ChangeAuthorsButtonClicked ->
             ( { model | rationaleSignatureStep = Preparing <| rationaleSignatureToForm model.rationaleSignatureStep }
             , Cmd.none
+            , Nothing
             )
 
         --
@@ -791,26 +840,31 @@ update ctx msg model =
         IpfsServerChange ipfsServer ->
             ( updateStorageForm (\form -> { form | ipfsServer = ipfsServer }) model
             , Cmd.none
+            , Nothing
             )
 
         AddHeaderButtonClicked ->
             ( updateStorageForm (\form -> { form | headers = ( "", "" ) :: form.headers }) model
             , Cmd.none
+            , Nothing
             )
 
         DeleteHeaderButtonClicked n ->
             ( updateStorageForm (\form -> { form | headers = List.Extra.removeAt n form.headers }) model
             , Cmd.none
+            , Nothing
             )
 
         StorageHeaderFieldChange n field ->
             ( updateStorageForm (\form -> { form | headers = List.Extra.updateAt n (\( _, v ) -> ( field, v )) form.headers }) model
             , Cmd.none
+            , Nothing
             )
 
         StorageHeaderValueChange n value ->
             ( updateStorageForm (\form -> { form | headers = List.Extra.updateAt n (\( f, _ ) -> ( f, value )) form.headers }) model
             , Cmd.none
+            , Nothing
             )
 
         PinJsonIpfsButtonClicked ->
@@ -819,46 +873,48 @@ update ctx msg model =
                     validateIpfsFormAndSendPinRequest ctx form model
 
                 Validating _ _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
                 Done _ _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
         GotIpfsAnswer (Err httpError) ->
             case model.permanentStorageStep of
                 Preparing _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
                 Validating form _ ->
                     ( { model | permanentStorageStep = Preparing { form | error = Just <| Debug.toString httpError } }
                     , Cmd.none
+                    , Nothing
                     )
 
                 Done _ _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
         GotIpfsAnswer (Ok ipfsAnswer) ->
             case model.permanentStorageStep of
                 Preparing _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
                 Validating form _ ->
                     handleIpfsAnswer model form ipfsAnswer
 
                 Done _ _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
         AddOtherStorageButtonCLicked ->
             case model.permanentStorageStep of
                 Preparing _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
                 Validating _ _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
                 Done prep _ ->
                     ( { model | permanentStorageStep = Preparing prep }
                     , Cmd.none
+                    , Nothing
                     )
 
         --
@@ -867,6 +923,7 @@ update ctx msg model =
         FeeProviderUpdated feeProviderForm ->
             ( updateFeeProviderForm feeProviderForm model
             , Cmd.none
+            , Nothing
             )
 
         ValidateFeeProviderFormButtonClicked ->
@@ -876,33 +933,36 @@ update ctx msg model =
                         (Validating _ _) as validating ->
                             ( { model | feeProviderStep = validating }
                             , ctx.feeProviderAskUtxosCmd
+                            , Nothing
                             )
 
                         validated ->
-                            ( { model | feeProviderStep = validated }, Cmd.none )
+                            ( { model | feeProviderStep = validated }, Cmd.none, Nothing )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
         ReceivedFeeProviderUtxos feeProvider ->
             case model.feeProviderStep of
                 Validating form _ ->
                     ( { model | feeProviderStep = Done form feeProvider }
                     , Cmd.none
+                    , Nothing
                     )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
         ChangeFeeProviderButtonClicked ->
             case model.feeProviderStep of
                 Done prep _ ->
                     ( { model | feeProviderStep = Preparing prep }
                     , Cmd.none
+                    , Nothing
                     )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Cmd.none, Nothing )
 
         --
         -- Build Tx Step
@@ -912,6 +972,7 @@ update ctx msg model =
                 Err error ->
                     ( { model | buildTxStep = Preparing { error = Just error } }
                     , Cmd.none
+                    , Nothing
                     )
 
                 Ok { voter, actionId, rationaleAnchor, localStateUtxos, feeProviderAddress, costModels } ->
@@ -933,16 +994,19 @@ update ctx msg model =
                         Err error ->
                             ( { model | buildTxStep = Preparing { error = Just <| "Error while building the Tx: " ++ Debug.toString error } }
                             , Cmd.none
+                            , Nothing
                             )
 
                         Ok tx ->
                             ( { model | buildTxStep = Done { error = Nothing } tx }
                             , Cmd.none
+                            , Nothing
                             )
 
         ChangeVoteButtonClicked ->
             ( { model | buildTxStep = Preparing { error = Nothing } }
             , Cmd.none
+            , Nothing
             )
 
 
@@ -969,8 +1033,8 @@ type alias GovIdCheck =
     }
 
 
-checkGovId : String -> Result String GovIdCheck
-checkGovId str =
+checkGovId : UpdateContext msg -> String -> Result String GovIdCheck
+checkGovId ctx str =
     case Gov.idFromBech32 str of
         Nothing ->
             Err <| "This doesn’t look like a valid CIP 129 governance Id: " ++ str
@@ -1011,25 +1075,42 @@ checkGovId str =
                         }
 
                 -- Using a script voter will require some extra information to be fetched
-                -- TODO: Keep loaded script somewhere in the model to avoid the need for an http request if not necessary
                 Gov.CcHotCredId ((ScriptHash scriptHash) as cred) ->
+                    let
+                        ( scriptInfo, fetchScriptInfoCmd ) =
+                            case Dict.get (Bytes.toHex scriptHash) ctx.scriptsInfo of
+                                Nothing ->
+                                    ( RemoteData.Loading, Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo )
+
+                                Just info ->
+                                    ( RemoteData.Success info, Cmd.none )
+                    in
                     Ok
                         { defaultCheck
-                            | scriptInfo = RemoteData.Loading
+                            | scriptInfo = scriptInfo
                             , cmd =
                                 Cmd.batch
-                                    [ Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
+                                    [ fetchScriptInfoCmd
                                     , Api.defaultApiProvider.getCcInfo cred GotCcInfo
                                     ]
                         }
 
                 Gov.DrepId ((ScriptHash scriptHash) as cred) ->
+                    let
+                        ( scriptInfo, fetchScriptInfoCmd ) =
+                            case Dict.get (Bytes.toHex scriptHash) ctx.scriptsInfo of
+                                Nothing ->
+                                    ( RemoteData.Loading, Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo )
+
+                                Just info ->
+                                    ( RemoteData.Success info, Cmd.none )
+                    in
                     Ok
                         { defaultCheck
-                            | scriptInfo = RemoteData.Loading
+                            | scriptInfo = scriptInfo
                             , cmd =
                                 Cmd.batch
-                                    [ Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
+                                    [ fetchScriptInfoCmd
                                     , Api.defaultApiProvider.getDrepInfo cred GotDrepInfo
                                     ]
                         }
@@ -1547,7 +1628,7 @@ skipRationaleSignature jsonLdContexts step =
             step
 
 
-validateRationaleSignature : JsonLdContexts -> Model -> ( Model, Cmd msg )
+validateRationaleSignature : JsonLdContexts -> Model -> ( Model, Cmd msg, Maybe MsgToParent )
 validateRationaleSignature jsonLdContexts model =
     case model.rationaleSignatureStep of
         Preparing ({ authors } as form) ->
@@ -1555,19 +1636,21 @@ validateRationaleSignature jsonLdContexts model =
                 Err error ->
                     ( { model | rationaleSignatureStep = Preparing { form | error = Just error } }
                     , Cmd.none
+                    , Nothing
                     )
 
                 Ok _ ->
                     -- TODO: change to Validating instead, and emit a command to check signatures
                     ( { model | rationaleSignatureStep = Done form <| rationaleSignatureFromForm jsonLdContexts form }
                     , Cmd.none
+                    , Nothing
                     )
 
         Validating _ _ ->
-            ( model, Cmd.none )
+            ( model, Cmd.none, Nothing )
 
         Done _ _ ->
-            ( model, Cmd.none )
+            ( model, Cmd.none, Nothing )
 
 
 rationaleSignatureFromForm : JsonLdContexts -> RationaleSignatureForm -> RationaleSignature
@@ -1680,7 +1763,7 @@ updateStorageForm formUpdate model =
             model
 
 
-validateIpfsFormAndSendPinRequest : UpdateContext msg -> StorageForm -> Model -> ( Model, Cmd msg )
+validateIpfsFormAndSendPinRequest : UpdateContext msg -> StorageForm -> Model -> ( Model, Cmd msg, Maybe MsgToParent )
 validateIpfsFormAndSendPinRequest ctx form model =
     case ( model.rationaleSignatureStep, validateIpfsForm form ) of
         ( Done _ ratSig, Ok _ ) ->
@@ -1689,16 +1772,19 @@ validateIpfsFormAndSendPinRequest ctx form model =
                 { fileContent = ratSig.signedJson
                 , fileName = "rationale-signed.json"
                 }
+            , Nothing
             )
 
         ( Done _ _, Err error ) ->
             ( { model | permanentStorageStep = Preparing { form | error = Just error } }
             , Cmd.none
+            , Nothing
             )
 
         _ ->
             ( { model | permanentStorageStep = Preparing { form | error = Just "Validate the rationale signature step first." } }
             , Cmd.none
+            , Nothing
             )
 
 
@@ -1750,17 +1836,19 @@ pinRationaleFile fileAsValue model =
             ( model, Cmd.none )
 
 
-handleIpfsAnswer : Model -> StorageForm -> IpfsAnswer -> ( Model, Cmd msg )
+handleIpfsAnswer : Model -> StorageForm -> IpfsAnswer -> ( Model, Cmd msg, Maybe MsgToParent )
 handleIpfsAnswer model form ipfsAnswer =
     case ipfsAnswer of
         IpfsError error ->
             ( { model | permanentStorageStep = Preparing { form | error = Just error } }
             , Cmd.none
+            , Nothing
             )
 
         IpfsAddSuccessful file ->
             ( { model | permanentStorageStep = Done form { config = form, jsonFile = file } }
             , Cmd.none
+            , Nothing
             )
 
 

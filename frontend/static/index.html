@@ -1,3 +1,4 @@
+<!doctype html>
 <html>
     <head>
         <meta charset="UTF-8" />
@@ -9,6 +10,8 @@
         <script type="module">
             import * as ElmCardano from "/elm-cardano.js";
             import { jsonLdContexts } from "/json-ld-contexts.js";
+            import * as ConcurrentTask from "/elm-concurrent-task.js";
+            import * as Store from "/storage.js";
 
             // Load the Main.elm file compiled into the main.js bundle
             await ElmCardano.loadMain("/main.js");
@@ -23,6 +26,22 @@
             ElmCardano.init({
                 portFromElmToWallet: mainApp.ports.toWallet,
                 portFromWalletToElm: mainApp.ports.fromWallet,
+            });
+
+            // Task Port (andrewMacmurray/elm-concurrent-task)
+
+            const storage = await Store.init({ stores: ["proposalMetadata"] });
+            ConcurrentTask.register({
+                tasks: {
+                    "storage:read": async ({ storeName, key }) =>
+                        await storage.read({ storeName, key }),
+                    "storage:write": async ({ storeName, key, data }) =>
+                        await storage.write({ storeName, key, data }),
+                },
+                ports: {
+                    send: mainApp.ports.sendTask,
+                    receive: mainApp.ports.receiveTask,
+                },
             });
 
             // Navigation

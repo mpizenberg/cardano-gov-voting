@@ -1,6 +1,6 @@
 port module Main exposing (main)
 
-import Api exposing (ActiveProposal, CcInfo, DrepInfo, PoolInfo, ProposalMetadata, ProtocolParams, ScriptInfo)
+import Api exposing (ActiveProposal, CcInfo, DrepInfo, PoolInfo, ProtocolParams, ScriptInfo)
 import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
@@ -9,6 +9,8 @@ import Cardano.Cip30 as Cip30 exposing (WalletDescriptor)
 import Cardano.Gov as Gov
 import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.Utxo as Utxo exposing (Output)
+import ConcurrentTask exposing (ConcurrentTask)
+import ConcurrentTask.Extra
 import Dict exposing (Dict)
 import Helper exposing (prettyAddr)
 import Html exposing (Html, button, div, text)
@@ -21,7 +23,9 @@ import Page.Pdf
 import Page.Preparation exposing (JsonLdContexts)
 import Page.Signing
 import Platform.Cmd as Cmd
+import ProposalMetadata exposing (ProposalMetadata)
 import RemoteData exposing (WebData)
+import Storage
 import Url
 
 
@@ -34,11 +38,17 @@ main =
         { init = init
         , update = update
         , subscriptions =
-            \_ ->
+            \model ->
                 Sub.batch
                     [ fromWallet WalletMsg
                     , onUrlChange (locationHrefToRoute >> UrlChanged)
                     , gotRationaleAsFile GotRationaleAsFile
+                    , ConcurrentTask.onProgress
+                        { send = sendTask
+                        , receive = receiveTask
+                        , onProgress = OnTaskProgress
+                        }
+                        model.taskPool
                     ]
         , view = view
         }
@@ -63,6 +73,16 @@ port gotRationaleAsFile : (Value -> msg) -> Sub msg
 
 
 
+-- Task port thingy
+
+
+port sendTask : Value -> Cmd msg
+
+
+port receiveTask : (Value -> msg) -> Sub msg
+
+
+
 -- #########################################################
 -- MODEL
 -- #########################################################
@@ -81,6 +101,7 @@ type alias Model =
     , ccsInfo : Dict String CcInfo
     , poolsInfo : Dict String PoolInfo
     , jsonLdContexts : JsonLdContexts
+    , taskPool : ConcurrentTask.Pool Msg String TaskCompleted
     , errors : List String
     }
 
@@ -91,6 +112,10 @@ type Page
     | SigningPage Page.Signing.Model
     | MultisigRegistrationPage Page.MultisigRegistration.Model
     | PdfPage Page.Pdf.Model
+
+
+type TaskCompleted
+    = GotProposalMetadataTask String (Result String ProposalMetadata)
 
 
 init : { url : String, jsonLdContexts : JsonLdContexts } -> ( Model, Cmd Msg )
@@ -108,6 +133,7 @@ init { url, jsonLdContexts } =
         , ccsInfo = Dict.empty
         , poolsInfo = Dict.empty
         , jsonLdContexts = jsonLdContexts
+        , taskPool = ConcurrentTask.pool
         , errors = []
         }
         |> (\( model, cmd ) ->
@@ -135,7 +161,6 @@ type Msg
     | DisconnectWalletButtonClicked
     | GotProtocolParams (Result Http.Error ProtocolParams)
     | GotProposals (Result Http.Error (List ActiveProposal))
-    | GotProposalMetadata String (Result String ProposalMetadata)
       -- Preparation page
     | PreparationPageMsg Page.Preparation.Msg
     | GotRationaleAsFile Value
@@ -145,6 +170,9 @@ type Msg
     | MultisigPageMsg Page.MultisigRegistration.Msg
       -- PDF page
     | PdfPageMsg Page.Pdf.Msg
+      -- Task port
+    | OnTaskProgress ( ConcurrentTask.Pool Msg String TaskCompleted, Cmd Msg )
+    | OnTaskComplete (ConcurrentTask.Response String TaskCompleted)
 
 
 type Route
@@ -411,31 +439,34 @@ update msg model =
                         proposalsList =
                             List.map (\p -> ( Gov.actionIdToString p.id, p )) activeProposals
 
-                        metadataRequest ( id, p ) =
-                            Api.defaultApiProvider.loadProposalMetadata p.metadataUrl (GotProposalMetadata id)
+                        completeReadProposalMetadataTask : ActiveProposal -> ConcurrentTask x TaskCompleted
+                        completeReadProposalMetadataTask { id, metadataHash, metadataUrl } =
+                            Api.defaultApiProvider.loadProposalMetadata metadataUrl
+                                |> Storage.cacheWrap
+                                    { storeName = "proposalMetadata" }
+                                    ProposalMetadata.decoder
+                                    ProposalMetadata.encode
+                                    { key = metadataHash }
+                                |> ConcurrentTask.Extra.toResult
+                                |> ConcurrentTask.map (GotProposalMetadataTask <| Gov.actionIdToString id)
+
+                        ( newPool, cmds ) =
+                            ConcurrentTask.Extra.attemptEach { pool = model.taskPool, send = sendTask, onComplete = OnTaskComplete }
+                                (List.map completeReadProposalMetadataTask activeProposals)
                     in
-                    ( { model | proposals = RemoteData.Success <| Dict.fromList proposalsList }
-                      -- Load proposals metadata
-                    , Cmd.batch <| List.map metadataRequest proposalsList
+                    ( { model
+                        | taskPool = newPool
+                        , proposals = RemoteData.Success <| Dict.fromList proposalsList
+                      }
+                    , Cmd.batch cmds
                     )
 
-        -- Result String ProposalMetadata
-        ( GotProposalMetadata id result, _ ) ->
-            let
-                updateMetadata maybeProposal =
-                    case ( maybeProposal, result ) of
-                        ( Nothing, _ ) ->
-                            Nothing
+        -- Task port thingy
+        ( OnTaskProgress ( taskPool, cmd ), _ ) ->
+            ( { model | taskPool = taskPool }, cmd )
 
-                        ( Just p, Ok metadata ) ->
-                            Just { p | metadata = RemoteData.Success metadata }
-
-                        ( Just p, Err error ) ->
-                            Just { p | metadata = RemoteData.Failure error }
-            in
-            ( { model | proposals = RemoteData.map (\ps -> Dict.update id updateMetadata ps) model.proposals }
-            , Cmd.none
-            )
+        ( OnTaskComplete taskCompleted, _ ) ->
+            handleCompletedTask taskCompleted model
 
 
 handleUrlChange : Route -> Model -> ( Model, Cmd Msg )
@@ -608,6 +639,33 @@ resetSigningStep error page =
 
         _ ->
             page
+
+
+handleCompletedTask : ConcurrentTask.Response String TaskCompleted -> Model -> ( Model, Cmd Msg )
+handleCompletedTask response model =
+    case response of
+        ConcurrentTask.Error error ->
+            ( { model | errors = error :: model.errors }, Cmd.none )
+
+        ConcurrentTask.UnexpectedError error ->
+            ( { model | errors = Debug.toString error :: model.errors }, Cmd.none )
+
+        ConcurrentTask.Success (GotProposalMetadataTask id result) ->
+            let
+                updateMetadata maybeProposal =
+                    case ( maybeProposal, result ) of
+                        ( Nothing, _ ) ->
+                            Nothing
+
+                        ( Just p, Ok metadata ) ->
+                            Just { p | metadata = RemoteData.Success metadata }
+
+                        ( Just p, Err error ) ->
+                            Just { p | metadata = RemoteData.Failure error }
+            in
+            ( { model | proposals = RemoteData.map (\ps -> Dict.update id updateMetadata ps) model.proposals }
+            , Cmd.none
+            )
 
 
 

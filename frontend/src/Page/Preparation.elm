@@ -2371,11 +2371,11 @@ viewProposalSelectionStep ctx model =
                             )
 
                         RemoteData.Success meta ->
-                            ( meta.title |> Maybe.withDefault "unknown (unexpected metadata format)"
+                            ( meta.body.title |> Maybe.withDefault "unknown (unexpected metadata format)"
                             , Just <|
                                 div []
                                     [ Html.p [] [ text "Abstract:" ]
-                                    , Html.p [] [ text <| Maybe.withDefault "Unknown abstract (unexpected metadata format)" meta.abstract ]
+                                    , Html.p [] [ text <| Maybe.withDefault "Unknown abstract (unexpected metadata format)" meta.body.abstract ]
                                     , Html.p [] [ text "Raw metadata:" ]
                                     , Html.pre [] [ text meta.raw ]
                                     ]
@@ -2414,7 +2414,7 @@ viewActiveProposal { id, actionType, metadata, metadataUrl } =
                     "ERROR for " ++ metadataUrl ++ ": " ++ Debug.toString error
 
                 RemoteData.Success meta ->
-                    meta.title
+                    meta.body.title
                         |> Maybe.withDefault "unknown (unexpected metadata format)"
         ]
 

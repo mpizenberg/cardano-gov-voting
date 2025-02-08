@@ -1,4 +1,4 @@
-module Api exposing (ActiveProposal, ApiProvider, CcInfo, DrepInfo, IpfsAnswer(..), IpfsFile, PoolInfo, ProposalMetadata, ProtocolParams, ScriptInfo, defaultApiProvider)
+module Api exposing (ActiveProposal, ApiProvider, CcInfo, DrepInfo, IpfsAnswer(..), IpfsFile, PoolInfo, ProtocolParams, ScriptInfo, defaultApiProvider)
 
 import Bytes as ElmBytes
 import Bytes.Comparable as Bytes exposing (Bytes)
@@ -8,6 +8,8 @@ import Cardano.Pool as Pool
 import Cardano.Script as Script exposing (PlutusVersion(..), Script)
 import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.Utxo exposing (TransactionId)
+import ConcurrentTask exposing (ConcurrentTask)
+import ConcurrentTask.Http
 import Dict exposing (Dict)
 import File exposing (File)
 import Http
@@ -15,13 +17,14 @@ import Json.Decode as JD exposing (Decoder)
 import Json.Encode as JE
 import List.Extra
 import Natural exposing (Natural)
+import ProposalMetadata exposing (ProposalMetadata)
 import RemoteData exposing (RemoteData)
 
 
 type alias ApiProvider msg =
     { loadProtocolParams : (Result Http.Error ProtocolParams -> msg) -> Cmd msg
     , loadGovProposals : (Result Http.Error (List ActiveProposal) -> msg) -> Cmd msg
-    , loadProposalMetadata : String -> (Result String ProposalMetadata -> msg) -> Cmd msg
+    , loadProposalMetadata : String -> ConcurrentTask String ProposalMetadata
     , retrieveTxs : List (Bytes TransactionId) -> (Result Http.Error (Dict String Transaction) -> msg) -> Cmd msg
     , getScriptInfo : Bytes CredentialHash -> (Result Http.Error ScriptInfo -> msg) -> Cmd msg
     , getDrepInfo : Credential -> (Result Http.Error DrepInfo -> msg) -> Cmd msg
@@ -69,13 +72,6 @@ type alias ActiveProposal =
     }
 
 
-type alias ProposalMetadata =
-    { title : Maybe String
-    , abstract : Maybe String
-    , raw : String
-    }
-
-
 proposalsDecoder : Decoder (List ActiveProposal)
 proposalsDecoder =
     JD.field "result" <|
@@ -94,20 +90,6 @@ proposalsDecoder =
                 (JD.at [ "metadata", "url" ] JD.string)
                 (JD.at [ "metadata", "hash" ] JD.string)
                 (JD.succeed RemoteData.Loading)
-
-
-decodeProposalMetadata : String -> ProposalMetadata
-decodeProposalMetadata raw =
-    let
-        titleAndAbstractDecoder : Decoder ( Maybe String, Maybe String )
-        titleAndAbstractDecoder =
-            JD.map2 Tuple.pair
-                (JD.maybe <| JD.at [ "body", "title" ] JD.string)
-                (JD.maybe <| JD.at [ "body", "abstract" ] JD.string)
-    in
-    JD.decodeString titleAndAbstractDecoder raw
-        |> Result.map (\( title, abstract ) -> ProposalMetadata title abstract raw)
-        |> Result.withDefault (ProposalMetadata Nothing Nothing raw)
 
 
 
@@ -475,33 +457,7 @@ defaultApiProvider =
                 }
 
     -- Load the metadata associated with a governance proposal
-    , loadProposalMetadata =
-        \url toMsg ->
-            let
-                decodeData : Http.Response String -> Result String ProposalMetadata
-                decodeData response =
-                    case response of
-                        Http.GoodStatus_ _ body ->
-                            Ok <| decodeProposalMetadata body
-
-                        Http.NetworkError_ ->
-                            Err "Network error. Maybe you lost your connection, or the request was blocked by CORS on the server."
-
-                        _ ->
-                            Err <| Debug.toString response
-
-                adjustedUrl =
-                    -- Differentiate HTTP and IPFS protocols to adjust the IPFS URL to a gateway
-                    if String.startsWith "ipfs://" url then
-                        "https://ipfs.io/ipfs/" ++ String.dropLeft 7 url
-
-                    else
-                        url
-            in
-            Http.get
-                { url = adjustedUrl
-                , expect = Http.expectStringResponse toMsg decodeData
-                }
+    , loadProposalMetadata = taskLoadProposalMetadata
 
     -- Retrieve transactions via Koios by proxying with the server (to avoid CORS errors)
     , retrieveTxs =
@@ -640,3 +596,38 @@ bytesResponseToResult response =
 
         Http.GoodStatus_ _ bytes ->
             Ok bytes
+
+
+
+-- Task port requests
+
+
+taskLoadProposalMetadata : String -> ConcurrentTask String ProposalMetadata
+taskLoadProposalMetadata url =
+    let
+        adjustedUrl =
+            -- Differentiate HTTP and IPFS protocols to adjust the IPFS URL to a gateway
+            if String.startsWith "ipfs://" url then
+                "https://ipfs.io/ipfs/" ++ String.dropLeft 7 url
+
+            else
+                url
+    in
+    ConcurrentTask.Http.get
+        { url = adjustedUrl
+        , headers = []
+        , expect = ConcurrentTask.Http.expectString
+        , timeout = Nothing
+        }
+        |> ConcurrentTask.map ProposalMetadata.fromRaw
+        |> ConcurrentTask.onError
+            (\httpError ->
+                case httpError of
+                    ConcurrentTask.Http.NetworkError ->
+                        Err "Network error. Maybe you lost your connection, or the request was blocked by CORS on the server."
+                            |> ConcurrentTask.fromResult
+
+                    _ ->
+                        Err (Debug.toString httpError)
+                            |> ConcurrentTask.fromResult
+            )

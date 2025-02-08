@@ -9,6 +9,10 @@ import Natural exposing (Natural)
 import Numeral
 
 
+
+-- String formatting
+
+
 prettyAddr : Address -> String
 prettyAddr address =
     let

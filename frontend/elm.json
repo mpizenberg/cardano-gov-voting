@@ -8,6 +8,7 @@
     "dependencies": {
         "direct": {
             "MartinSStewart/elm-uint64": "2.0.0",
+            "andrewMacmurray/elm-concurrent-task": "1.1.1",
             "dillonkearns/elm-markdown": "7.0.1",
             "dwayne/elm-integer": "1.0.0",
             "dwayne/elm-natural": "1.1.1",
@@ -29,7 +30,9 @@
             "turboMaCk/any-dict": "2.6.0"
         },
         "indirect": {
+            "danfishgold/base64-bytes": "1.1.0",
             "elm/parser": "1.1.0",
+            "elm/random": "1.0.0",
             "elm/regex": "1.0.0",
             "elm/time": "1.0.0",
             "elm/virtual-dom": "1.0.3",

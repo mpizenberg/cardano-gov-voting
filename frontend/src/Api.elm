@@ -619,6 +619,28 @@ taskLoadProposalMetadata url =
         , expect = ConcurrentTask.Http.expectString
         , timeout = Nothing
         }
+        |> ConcurrentTask.onError
+            (\httpError ->
+                case httpError of
+                    -- NetworkError is potentially a CORS issue, so we proxy through the server
+                    ConcurrentTask.Http.NetworkError ->
+                        ConcurrentTask.Http.post
+                            { url = "/proxy/json"
+                            , headers = []
+                            , body =
+                                ConcurrentTask.Http.jsonBody
+                                    (JE.object
+                                        [ ( "url", JE.string adjustedUrl )
+                                        , ( "method", JE.string "GET" )
+                                        ]
+                                    )
+                            , expect = ConcurrentTask.Http.expectString
+                            , timeout = Nothing
+                            }
+
+                    _ ->
+                        ConcurrentTask.fromResult (Err httpError)
+            )
         |> ConcurrentTask.map ProposalMetadata.fromRaw
         |> ConcurrentTask.onError
             (\httpError ->

@@ -29,7 +29,7 @@ import Storage
 import Url
 
 
-main : Program { url : String, jsonLdContexts : JsonLdContexts } Model Msg
+main : Program { url : String, jsonLdContexts : JsonLdContexts, db : Value } Model Msg
 main =
     -- The main entry point of our app
     -- More info about that in the Browser package docs:
@@ -102,6 +102,7 @@ type alias Model =
     , poolsInfo : Dict String PoolInfo
     , jsonLdContexts : JsonLdContexts
     , taskPool : ConcurrentTask.Pool Msg String TaskCompleted
+    , db : Value
     , errors : List String
     }
 
@@ -118,8 +119,8 @@ type TaskCompleted
     = GotProposalMetadataTask String (Result String ProposalMetadata)
 
 
-init : { url : String, jsonLdContexts : JsonLdContexts } -> ( Model, Cmd Msg )
-init { url, jsonLdContexts } =
+init : { url : String, jsonLdContexts : JsonLdContexts, db : Value } -> ( Model, Cmd Msg )
+init { url, jsonLdContexts, db } =
     handleUrlChange (locationHrefToRoute url)
         { page = LandingPage
         , walletsDiscovered = []
@@ -134,6 +135,7 @@ init { url, jsonLdContexts } =
         , poolsInfo = Dict.empty
         , jsonLdContexts = jsonLdContexts
         , taskPool = ConcurrentTask.pool
+        , db = db
         , errors = []
         }
         |> (\( model, cmd ) ->
@@ -443,7 +445,7 @@ update msg model =
                         completeReadProposalMetadataTask { id, metadataHash, metadataUrl } =
                             Api.defaultApiProvider.loadProposalMetadata metadataUrl
                                 |> Storage.cacheWrap
-                                    { storeName = "proposalMetadata" }
+                                    { db = model.db, storeName = "proposalMetadata" }
                                     ProposalMetadata.decoder
                                     ProposalMetadata.encode
                                     { key = metadataHash }

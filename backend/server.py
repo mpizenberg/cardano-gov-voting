@@ -8,12 +8,16 @@ import tempfile
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+import httpx
 from pydantic import BaseModel
-import requests
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
+
+TIMEOUT_SECONDS = 10
+MAX_CONCURRENT_REQUESTS = 100
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,8 +32,20 @@ if missing_vars:
     logger.warn(f"Missing environment variables: {', '.join(missing_vars)}")
     logger.warn("All IPFS requests will need to provide RPC config or will fail")
 
+
+# Define an async HTTP client (using httpx) and attach it to the FastAPI app
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(TIMEOUT_SECONDS),
+        limits=httpx.Limits(max_connections=MAX_CONCURRENT_REQUESTS),
+    ) as client:
+        app.async_client = client  # pyright: ignore
+        yield
+
+
 # Initialize FastAPI app
-app = FastAPI(title="Custom Processing Server")
+app = FastAPI(title="Cardano Gov Voting Server", lifespan=lifespan)
 
 # Statically served directory (contains the frontend build)
 static_dir = Path("../frontend/static")
@@ -154,7 +170,7 @@ async def pin_to_ipfs_common(
 
         # Open the file and create the files parameter for the request
         with open(temp_file_path, "rb") as f:
-            response = requests.post(
+            response = await app.async_client.post(  # type: ignore
                 url=f"{server_url}/add",
                 headers=headers,
                 files={"file": f},
@@ -165,9 +181,6 @@ async def pin_to_ipfs_common(
                 media_type=response.headers.get("content-type"),
             )
 
-    except requests.RequestException as e:
-        logger.error(f"IPFS request failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"IPFS request failed: {str(e)}")
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse IPFS output: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to parse IPFS response")
@@ -231,22 +244,13 @@ async def proxy_request(request: ProxyRequest):
             "content-type": "application/json",
         }
 
-        # Merge default headers with custom headers
-        headers = {**default_headers, **request.headers}
-
-        # Prepare the request kwargs
-        request_kwargs = {
-            "method": request.method,
-            "url": request.url,
-            "headers": headers,
-        }
-
-        # Add body if present
-        if request.body is not None:
-            request_kwargs["json"] = request.body
-
         # Make the request
-        response = requests.request(**request_kwargs)
+        response = await app.async_client.request(  # pyright: ignore
+            method=request.method,
+            url=request.url,
+            headers={**default_headers, **request.headers},
+            json=request.body,
+        )
 
         return Response(
             content=response.content,
@@ -254,9 +258,6 @@ async def proxy_request(request: ProxyRequest):
             media_type=response.headers.get("content-type"),
         )
 
-    except requests.RequestException as e:
-        logger.error(f"Proxy request failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Proxy request failed: {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
@@ -276,4 +277,10 @@ if __name__ == "__main__":
         )
 
     # Run the server
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "server:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        limit_concurrency=MAX_CONCURRENT_REQUESTS,
+    )

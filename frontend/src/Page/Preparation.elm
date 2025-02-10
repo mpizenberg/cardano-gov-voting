@@ -1,6 +1,6 @@
-module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, MsgToParent(..), Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType(..), Step, StorageForm, UpdateContext, ViewContext, VoterPreparationForm, init, noInternalVote, pinRationaleFile, update, view)
+module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, MsgToParent(..), Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType(..), Step, StorageForm, TaskCompleted, UpdateContext, ViewContext, VoterPreparationForm, handleTaskCompleted, init, noInternalVote, pinRationaleFile, update, view)
 
-import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), PoolInfo, ScriptInfo)
+import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), PoolInfo)
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..), TxFinalized, VoterWitness(..), WitnessSource(..))
@@ -15,6 +15,9 @@ import Cardano.TxExamples exposing (prettyTx)
 import Cardano.Uplc as Uplc
 import Cardano.Utxo as Utxo exposing (Output, OutputReference, TransactionId)
 import Cbor.Encode
+import ConcurrentTask exposing (ConcurrentTask)
+import ConcurrentTask.Extra
+import ConcurrentTask.Http
 import Dict exposing (Dict)
 import Dict.Any
 import File exposing (File)
@@ -32,8 +35,10 @@ import Markdown.Parser as Md
 import Markdown.Renderer as Md
 import Natural
 import Platform.Cmd as Cmd
-import RemoteData exposing (WebData)
+import RemoteData exposing (RemoteData, WebData)
+import ScriptInfo exposing (ScriptInfo)
 import Set exposing (Set)
+import Storage
 import Task
 import Url
 
@@ -83,7 +88,7 @@ init =
 
 type alias VoterPreparationForm =
     { govId : Maybe Gov.Id
-    , scriptInfo : WebData ScriptInfo
+    , scriptInfo : RemoteData ConcurrentTask.Http.Error ScriptInfo
     , drepInfo : WebData DrepInfo
     , ccInfo : WebData CcInfo
     , poolInfo : WebData PoolInfo
@@ -349,20 +354,24 @@ type MsgToParent
     | CacheDrepInfo DrepInfo
     | CacheCcInfo CcInfo
     | CachePoolInfo PoolInfo
+    | RunTask (ConcurrentTask String TaskCompleted)
+
+
+type TaskCompleted
+    = GotRefUtxoTxBytes OutputReference (Result ConcurrentTask.Http.Error (Bytes Transaction))
+    | GotScriptInfoTask (Result ConcurrentTask.Http.Error ScriptInfo)
 
 
 type Msg
     = NoMsg
       -- Voter Step
     | VoterGovIdChange String
-    | GotScriptInfo (Result Http.Error ScriptInfo)
     | GotDrepInfo (Result Http.Error DrepInfo)
     | GotCcInfo (Result Http.Error CcInfo)
     | GotPoolInfo (Result Http.Error PoolInfo)
     | UtxoRefChange String
     | ToggleExpectedSigner String Bool
     | ValidateVoterFormButtonClicked
-    | GotRefUtxoTx OutputReference (Result Http.Error (Dict String Transaction))
     | ChangeVoterButtonClicked
       -- Pick Proposal Step
     | PickProposalButtonClicked String
@@ -415,6 +424,7 @@ type Msg
 
 type alias UpdateContext msg =
     { wrapMsg : Msg -> msg
+    , db : JD.Value
     , proposals : WebData (Dict String ActiveProposal)
     , scriptsInfo : Dict String ScriptInfo
     , drepsInfo : Dict String DrepInfo
@@ -465,62 +475,12 @@ update ctx msg model =
             case model.voterStep of
                 Preparing form ->
                     let
-                        ( newVoterStep, cmds ) =
-                            confirmVoter form model.someRefUtxos
+                        ( newVoterStep, cmds, toParent ) =
+                            confirmVoter ctx form model.someRefUtxos
                     in
                     ( { model | voterStep = newVoterStep }
                     , Cmd.map ctx.wrapMsg cmds
-                    , Nothing
-                    )
-
-                _ ->
-                    ( model, Cmd.none, Nothing )
-
-        GotRefUtxoTx outputRef txsResult ->
-            case ( model.voterStep, txsResult ) of
-                ( Validating form voterWitness, Ok txs ) ->
-                    case Dict.get (Bytes.toHex outputRef.transactionId) txs of
-                        Nothing ->
-                            let
-                                errorMsg =
-                                    "The Tx ID of the output ref ("
-                                        ++ Bytes.toHex outputRef.transactionId
-                                        ++ ") doesn’t seem to be present in the response we got: "
-                                        ++ String.join ", " (Dict.keys txs)
-                            in
-                            ( { model | voterStep = Preparing { form | error = Just errorMsg } }
-                            , Cmd.none
-                            , Nothing
-                            )
-
-                        Just tx ->
-                            case List.Extra.getAt outputRef.outputIndex tx.body.outputs of
-                                Nothing ->
-                                    let
-                                        errorMsg =
-                                            "The Tx retrieved (id: "
-                                                ++ Bytes.toHex outputRef.transactionId
-                                                ++ ") doesn’t seem to have an output at position "
-                                                ++ String.fromInt outputRef.outputIndex
-                                    in
-                                    ( { model | voterStep = Preparing { form | error = Just errorMsg } }
-                                    , Cmd.none
-                                    , Nothing
-                                    )
-
-                                Just output ->
-                                    ( { model
-                                        | voterStep = Done form voterWitness
-                                        , someRefUtxos = Dict.Any.insert outputRef output model.someRefUtxos
-                                      }
-                                    , Cmd.none
-                                    , Nothing
-                                    )
-
-                ( Validating form _, Err httpError ) ->
-                    ( { model | voterStep = Preparing { form | error = Just (Debug.toString httpError) } }
-                    , Cmd.none
-                    , Nothing
+                    , toParent
                     )
 
                 _ ->
@@ -534,7 +494,7 @@ update ctx msg model =
                     , Nothing
                     )
 
-                Ok { govId, scriptInfo, expectedSigners, drepInfo, ccInfo, poolInfo, cmd } ->
+                Ok { govId, scriptInfo, expectedSigners, drepInfo, ccInfo, poolInfo, cmd, msgToParent } ->
                     ( updateVoterForm
                         (\_ ->
                             { initVoterForm
@@ -548,35 +508,7 @@ update ctx msg model =
                         )
                         model
                     , Cmd.map ctx.wrapMsg cmd
-                    , Nothing
-                    )
-
-        GotScriptInfo scriptInfoResult ->
-            case scriptInfoResult of
-                Err error ->
-                    ( updateVoterForm (\form -> { form | scriptInfo = RemoteData.Failure error }) model
-                    , Cmd.none
-                    , Nothing
-                    )
-
-                Ok scriptInfo ->
-                    ( updateVoterForm
-                        (\form ->
-                            { form
-                                | scriptInfo = RemoteData.Success scriptInfo
-                                , expectedSigners =
-                                    case scriptInfo.script of
-                                        Script.Native nativeScript ->
-                                            Script.extractSigners nativeScript
-                                                |> Dict.map (\_ key -> { expected = True, key = key })
-
-                                        Script.Plutus _ ->
-                                            Dict.empty
-                            }
-                        )
-                        model
-                    , Cmd.none
-                    , Just <| CacheScriptInfo scriptInfo
+                    , msgToParent
                     )
 
         GotDrepInfo result ->
@@ -1019,6 +951,88 @@ update ctx msg model =
             )
 
 
+handleTaskCompleted : TaskCompleted -> Model -> ( Model, Cmd Msg, Maybe MsgToParent )
+handleTaskCompleted task model =
+    case task of
+        GotRefUtxoTxBytes outputRef bytesResult ->
+            case ( model.voterStep, bytesResult ) of
+                ( Validating form voterWitness, Ok txBytes ) ->
+                    case Transaction.deserialize txBytes of
+                        Nothing ->
+                            let
+                                errorMsg =
+                                    "Failed to decode Tx "
+                                        ++ Bytes.toHex outputRef.transactionId
+                                        ++ ": "
+                                        ++ Bytes.toHex txBytes
+                            in
+                            ( { model | voterStep = Preparing { form | error = Just errorMsg } }
+                            , Cmd.none
+                            , Nothing
+                            )
+
+                        Just tx ->
+                            case List.Extra.getAt outputRef.outputIndex tx.body.outputs of
+                                Nothing ->
+                                    let
+                                        errorMsg =
+                                            "The Tx retrieved (id: "
+                                                ++ Bytes.toHex outputRef.transactionId
+                                                ++ ") doesn’t seem to have an output at position "
+                                                ++ String.fromInt outputRef.outputIndex
+                                    in
+                                    ( { model | voterStep = Preparing { form | error = Just errorMsg } }
+                                    , Cmd.none
+                                    , Nothing
+                                    )
+
+                                Just output ->
+                                    ( { model
+                                        | voterStep = Done { form | error = Nothing } voterWitness
+                                        , someRefUtxos = Dict.Any.insert outputRef output model.someRefUtxos
+                                      }
+                                    , Cmd.none
+                                    , Nothing
+                                    )
+
+                ( Validating form _, Err httpError ) ->
+                    ( { model | voterStep = Preparing { form | error = Just (Debug.toString httpError) } }
+                    , Cmd.none
+                    , Nothing
+                    )
+
+                _ ->
+                    ( model, Cmd.none, Nothing )
+
+        GotScriptInfoTask scriptInfoResult ->
+            case scriptInfoResult of
+                Err error ->
+                    ( updateVoterForm (\form -> { form | scriptInfo = RemoteData.Failure error }) model
+                    , Cmd.none
+                    , Nothing
+                    )
+
+                Ok scriptInfo ->
+                    ( updateVoterForm
+                        (\form ->
+                            { form
+                                | scriptInfo = RemoteData.Success scriptInfo
+                                , expectedSigners =
+                                    case scriptInfo.script of
+                                        Script.Native nativeScript ->
+                                            Script.extractSigners nativeScript
+                                                |> Dict.map (\_ key -> { expected = True, key = key })
+
+                                        Script.Plutus _ ->
+                                            Dict.empty
+                            }
+                        )
+                        model
+                    , Cmd.none
+                    , Just <| CacheScriptInfo scriptInfo
+                    )
+
+
 
 -- Voter Step
 
@@ -1035,12 +1049,13 @@ updateVoterForm f ({ voterStep } as model) =
 
 type alias GovIdCheck =
     { govId : Gov.Id
-    , scriptInfo : WebData ScriptInfo
+    , scriptInfo : RemoteData ConcurrentTask.Http.Error ScriptInfo
     , expectedSigners : Dict String { expected : Bool, key : Bytes CredentialHash }
     , poolInfo : WebData PoolInfo
     , drepInfo : WebData DrepInfo
     , ccInfo : WebData CcInfo
     , cmd : Cmd Msg
+    , msgToParent : Maybe MsgToParent
     }
 
 
@@ -1060,6 +1075,7 @@ checkGovId ctx str =
                     , drepInfo = RemoteData.NotAsked
                     , ccInfo = RemoteData.NotAsked
                     , cmd = Cmd.none
+                    , msgToParent = Nothing
                     }
             in
             case govId of
@@ -1109,12 +1125,22 @@ checkGovId ctx str =
                 -- Using a script voter will require some extra information to be fetched
                 Gov.CcHotCredId ((ScriptHash scriptHash) as cred) ->
                     let
-                        ( scriptInfo, expectedSigners, fetchScriptInfo ) =
+                        ( scriptInfo, expectedSigners, fetchScriptInfoMsgToParent ) =
                             case Dict.get (Bytes.toHex scriptHash) ctx.scriptsInfo of
                                 Nothing ->
                                     ( RemoteData.Loading
                                     , Dict.empty
-                                    , Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
+                                    , Api.defaultApiProvider.getScriptInfo scriptHash
+                                        |> Storage.cacheWrap
+                                            { db = ctx.db, storeName = "scriptInfo" }
+                                            ScriptInfo.storageDecoder
+                                            ScriptInfo.storageEncode
+                                            { key = Bytes.toHex scriptHash }
+                                        |> ConcurrentTask.onJsException (\{ message } -> ConcurrentTask.fail <| ConcurrentTask.Http.BadUrl <| "Uncaught JS exception: " ++ message)
+                                        |> ConcurrentTask.Extra.toResult
+                                        |> ConcurrentTask.map GotScriptInfoTask
+                                        |> RunTask
+                                        |> Just
                                     )
 
                                 Just info ->
@@ -1126,7 +1152,7 @@ checkGovId ctx str =
 
                                         Script.Plutus _ ->
                                             Dict.empty
-                                    , Cmd.none
+                                    , Nothing
                                     )
 
                         ( ccInfo, fetchCcInfo ) =
@@ -1142,17 +1168,28 @@ checkGovId ctx str =
                             | scriptInfo = scriptInfo
                             , expectedSigners = expectedSigners
                             , ccInfo = ccInfo
-                            , cmd = Cmd.batch [ fetchScriptInfo, fetchCcInfo ]
+                            , cmd = fetchCcInfo
+                            , msgToParent = fetchScriptInfoMsgToParent
                         }
 
                 Gov.DrepId ((ScriptHash scriptHash) as cred) ->
                     let
-                        ( scriptInfo, expectedSigners, fetchScriptInfo ) =
+                        ( scriptInfo, expectedSigners, fetchScriptInfoMsgToParent ) =
                             case Dict.get (Bytes.toHex scriptHash) ctx.scriptsInfo of
                                 Nothing ->
                                     ( RemoteData.Loading
                                     , Dict.empty
-                                    , Api.defaultApiProvider.getScriptInfo scriptHash GotScriptInfo
+                                    , Api.defaultApiProvider.getScriptInfo scriptHash
+                                        |> Storage.cacheWrap
+                                            { db = ctx.db, storeName = "scriptInfo" }
+                                            ScriptInfo.storageDecoder
+                                            ScriptInfo.storageEncode
+                                            { key = Bytes.toHex scriptHash }
+                                        |> ConcurrentTask.onJsException (\{ message } -> ConcurrentTask.fail <| ConcurrentTask.Http.BadUrl <| "Uncaught JS exception: " ++ message)
+                                        |> ConcurrentTask.Extra.toResult
+                                        |> ConcurrentTask.map GotScriptInfoTask
+                                        |> RunTask
+                                        |> Just
                                     )
 
                                 Just info ->
@@ -1164,7 +1201,7 @@ checkGovId ctx str =
 
                                         Script.Plutus _ ->
                                             Dict.empty
-                                    , Cmd.none
+                                    , Nothing
                                     )
 
                         ( drepInfo, fetchDrepInfo ) =
@@ -1180,16 +1217,18 @@ checkGovId ctx str =
                             | scriptInfo = scriptInfo
                             , expectedSigners = expectedSigners
                             , drepInfo = drepInfo
-                            , cmd = Cmd.batch [ fetchScriptInfo, fetchDrepInfo ]
+                            , cmd = fetchDrepInfo
+                            , msgToParent = fetchScriptInfoMsgToParent
                         }
 
 
-confirmVoter : VoterPreparationForm -> Utxo.RefDict Output -> ( Step VoterPreparationForm VoterWitness VoterWitness, Cmd Msg )
-confirmVoter form loadedRefUtxos =
+confirmVoter : UpdateContext msg -> VoterPreparationForm -> Utxo.RefDict Output -> ( Step VoterPreparationForm VoterWitness VoterWitness, Cmd Msg, Maybe MsgToParent )
+confirmVoter ctx form loadedRefUtxos =
     let
         justError errorMsg =
             ( Preparing { form | error = Just errorMsg }
             , Cmd.none
+            , Nothing
             )
     in
     case form.govId of
@@ -1205,16 +1244,19 @@ confirmVoter form loadedRefUtxos =
         Just (PoolId poolId) ->
             ( Done form <| WithPoolCred poolId
             , Cmd.none
+            , Nothing
             )
 
         Just (DrepId (VKeyHash keyHash)) ->
             ( Done form <| WithDrepCred (WithKey keyHash)
             , Cmd.none
+            , Nothing
             )
 
         Just (CcHotCredId (VKeyHash keyHash)) ->
             ( Done form <| WithCommitteeHotCred (WithKey keyHash)
             , Cmd.none
+            , Nothing
             )
 
         Just (DrepId (ScriptHash _)) ->
@@ -1229,18 +1271,19 @@ confirmVoter form loadedRefUtxos =
                     justError <| "There was an error loading the script info. Are you sure you registered? " ++ Debug.toString error
 
                 RemoteData.Success scriptInfo ->
-                    validateScriptVoter form loadedRefUtxos WithDrepCred scriptInfo
+                    validateScriptVoter ctx form loadedRefUtxos WithDrepCred scriptInfo
 
         _ ->
             Debug.todo ""
 
 
-validateScriptVoter : VoterPreparationForm -> Utxo.RefDict Output -> (CredentialWitness -> VoterWitness) -> ScriptInfo -> ( Step VoterPreparationForm VoterWitness VoterWitness, Cmd Msg )
-validateScriptVoter form loadedRefUtxos toVoter scriptInfo =
+validateScriptVoter : UpdateContext msg -> VoterPreparationForm -> Utxo.RefDict Output -> (CredentialWitness -> VoterWitness) -> ScriptInfo -> ( Step VoterPreparationForm VoterWitness VoterWitness, Cmd Msg, Maybe MsgToParent )
+validateScriptVoter ctx form loadedRefUtxos toVoter scriptInfo =
     let
         justError errorMsg =
             ( Preparing { form | error = Just errorMsg }
             , Cmd.none
+            , Nothing
             )
     in
     case ( form.utxoRef, utxoRefFromStr form.utxoRef ) of
@@ -1256,8 +1299,9 @@ validateScriptVoter form loadedRefUtxos toVoter scriptInfo =
                                 , expectedSigners = keepOnlyExpectedSigners form.expectedSigners
                                 }
                         in
-                        ( Done form <| toVoter <| WithScript scriptInfo.scriptHash <| NativeWitness witness
+                        ( Done { form | error = Nothing } <| toVoter <| WithScript scriptInfo.scriptHash <| NativeWitness witness
                         , Cmd.none
+                        , Nothing
                         )
 
                     else
@@ -1272,8 +1316,9 @@ validateScriptVoter form loadedRefUtxos toVoter scriptInfo =
                             , requiredSigners = Debug.todo "Add a required signers form for Plutus"
                             }
                     in
-                    ( Done form <| toVoter <| WithScript scriptInfo.scriptHash <| PlutusWitness witness
+                    ( Done { form | error = Nothing } <| toVoter <| WithScript scriptInfo.scriptHash <| PlutusWitness witness
                     , Cmd.none
+                    , Nothing
                     )
 
         ( _, Err error ) ->
@@ -1293,13 +1338,25 @@ validateScriptVoter form loadedRefUtxos toVoter scriptInfo =
                             toVoter <| WithScript scriptInfo.scriptHash <| NativeWitness witness
                     in
                     if Dict.Any.member outputRef loadedRefUtxos then
-                        ( Done form voter
+                        ( Done { form | error = Nothing } voter
                         , Cmd.none
+                        , Nothing
                         )
 
                     else
                         ( Validating form voter
-                        , Api.defaultApiProvider.retrieveTxs [ outputRef.transactionId ] (GotRefUtxoTx outputRef)
+                        , Cmd.none
+                        , Api.defaultApiProvider.retrieveTx outputRef.transactionId
+                            |> Storage.cacheWrap
+                                { db = ctx.db, storeName = "tx" }
+                                Bytes.jsonDecoder
+                                Bytes.jsonEncode
+                                { key = Bytes.toHex outputRef.transactionId }
+                            |> ConcurrentTask.onJsException (\{ message } -> ConcurrentTask.fail <| ConcurrentTask.Http.BadUrl <| "Uncaught JS exception: " ++ message)
+                            |> ConcurrentTask.Extra.toResult
+                            |> ConcurrentTask.map (GotRefUtxoTxBytes outputRef)
+                            |> RunTask
+                            |> Just
                         )
 
                 Script.Plutus _ ->

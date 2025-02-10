@@ -1,16 +1,14 @@
-module Api exposing (ActiveProposal, ApiProvider, CcInfo, DrepInfo, IpfsAnswer(..), IpfsFile, PoolInfo, ProtocolParams, ScriptInfo, defaultApiProvider)
+module Api exposing (ActiveProposal, ApiProvider, CcInfo, DrepInfo, IpfsAnswer(..), IpfsFile, PoolInfo, ProtocolParams, defaultApiProvider)
 
 import Bytes as ElmBytes
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Address exposing (Credential(..), CredentialHash)
 import Cardano.Gov exposing (ActionId, CostModels)
 import Cardano.Pool as Pool
-import Cardano.Script as Script exposing (PlutusVersion(..), Script)
-import Cardano.Transaction as Transaction exposing (Transaction)
+import Cardano.Transaction exposing (Transaction)
 import Cardano.Utxo exposing (TransactionId)
 import ConcurrentTask exposing (ConcurrentTask)
 import ConcurrentTask.Http
-import Dict exposing (Dict)
 import File exposing (File)
 import Http
 import Json.Decode as JD exposing (Decoder)
@@ -19,14 +17,15 @@ import List.Extra
 import Natural exposing (Natural)
 import ProposalMetadata exposing (ProposalMetadata)
 import RemoteData exposing (RemoteData)
+import ScriptInfo exposing (ScriptInfo)
 
 
 type alias ApiProvider msg =
     { loadProtocolParams : (Result Http.Error ProtocolParams -> msg) -> Cmd msg
     , loadGovProposals : (Result Http.Error (List ActiveProposal) -> msg) -> Cmd msg
     , loadProposalMetadata : String -> ConcurrentTask String ProposalMetadata
-    , retrieveTxs : List (Bytes TransactionId) -> (Result Http.Error (Dict String Transaction) -> msg) -> Cmd msg
-    , getScriptInfo : Bytes CredentialHash -> (Result Http.Error ScriptInfo -> msg) -> Cmd msg
+    , retrieveTx : Bytes TransactionId -> ConcurrentTask ConcurrentTask.Http.Error (Bytes Transaction)
+    , getScriptInfo : Bytes CredentialHash -> ConcurrentTask ConcurrentTask.Http.Error ScriptInfo
     , getDrepInfo : Credential -> (Result Http.Error DrepInfo -> msg) -> Cmd msg
     , getCcInfo : Credential -> (Result Http.Error CcInfo -> msg) -> Cmd msg
     , getPoolLiveStake : Bytes Pool.Id -> (Result Http.Error PoolInfo -> msg) -> Cmd msg
@@ -96,116 +95,26 @@ proposalsDecoder =
 -- Retrieve Txs
 
 
-koiosTxCborDecoder : Decoder (Dict String Transaction)
-koiosTxCborDecoder =
+koiosFirstTxBytesDecoder : Decoder { txId : Bytes TransactionId, txCbor : Bytes a }
+koiosFirstTxBytesDecoder =
     let
-        singleTxDecoder : Decoder ( String, Transaction )
-        singleTxDecoder =
-            JD.map2 Tuple.pair
-                (JD.field "tx_hash" JD.string)
-                (JD.field "cbor" JD.string)
-                |> JD.andThen
-                    (\( hashHex, cborHex ) ->
-                        case Bytes.fromHex cborHex |> Maybe.andThen Transaction.deserialize of
-                            Just tx ->
-                                JD.succeed ( hashHex, tx )
-
-                            Nothing ->
-                                JD.fail <| "Failed to deserialize Tx: " ++ cborHex
-                    )
+        oneTxBytesDecoder =
+            JD.map2 (\txId cbor -> { txId = txId, txCbor = cbor })
+                (JD.field "tx_hash" Bytes.jsonDecoder)
+                (JD.field "cbor" Bytes.jsonDecoder)
     in
-    JD.list singleTxDecoder
-        |> JD.map Dict.fromList
-
-
-
--- Script Info
-
-
-type alias ScriptInfo =
-    { scriptHash : Bytes CredentialHash
-    , script : Script
-    , nativeCborEncodingMatchesHash : Maybe Bool
-    }
-
-
-koiosFirstScriptInfoDecoder : Decoder ScriptInfo
-koiosFirstScriptInfoDecoder =
-    JD.list koiosScriptInfoDecoder
+    JD.list oneTxBytesDecoder
         |> JD.andThen
-            (\list ->
-                case list of
+            (\txs ->
+                case txs of
                     [] ->
-                        JD.fail "No script info found"
+                        JD.fail "The Tx was not found. Maybe the request was done for the wrong network?"
 
-                    first :: _ ->
-                        JD.succeed first
-            )
+                    [ tx ] ->
+                        JD.succeed tx
 
-
-koiosScriptInfoDecoder : Decoder ScriptInfo
-koiosScriptInfoDecoder =
-    JD.map4
-        (\hashHex scriptType maybeNative maybePlutusBytes ->
-            case Bytes.fromHex hashHex of
-                Nothing ->
-                    Err <| "Unable to decode the script hash: " ++ hashHex
-
-                Just hash ->
-                    if List.member scriptType [ "multisig", "timelock" ] then
-                        case maybeNative of
-                            Nothing ->
-                                Err "Missing native script in Koios response"
-
-                            Just script ->
-                                Ok
-                                    { scriptHash = hash
-                                    , script = Script.Native script
-                                    , nativeCborEncodingMatchesHash = Just <| Script.hash (Script.Native script) == hash
-                                    }
-
-                    else
-                        let
-                            plutusVersion =
-                                case scriptType of
-                                    "plutusV1" ->
-                                        Ok PlutusV1
-
-                                    "plutusV2" ->
-                                        Ok PlutusV2
-
-                                    "plutusV3" ->
-                                        Ok PlutusV3
-
-                                    _ ->
-                                        Err <| "Unknown script type: " ++ scriptType
-                        in
-                        case ( plutusVersion, maybePlutusBytes |> Maybe.andThen Bytes.fromHex ) of
-                            ( Ok version, Just bytes ) ->
-                                Ok
-                                    { scriptHash = hash
-                                    , script = Script.Plutus { version = version, script = bytes }
-                                    , nativeCborEncodingMatchesHash = Nothing
-                                    }
-
-                            ( Err error, _ ) ->
-                                Err error
-
-                            ( _, Nothing ) ->
-                                Err <| "Missing (or invalid) script CBOR bytes: " ++ Debug.toString maybePlutusBytes
-        )
-        (JD.field "script_hash" JD.string)
-        (JD.field "type" JD.string)
-        (JD.field "value" <| JD.maybe Script.jsonDecodeNativeScript)
-        (JD.field "bytes" <| JD.maybe JD.string)
-        |> JD.andThen
-            (\result ->
-                case result of
-                    Err error ->
-                        JD.fail error
-
-                    Ok info ->
-                        JD.succeed info
+                    _ ->
+                        JD.fail "The server unexpectedly returned more than 1 transaction."
             )
 
 
@@ -460,37 +369,10 @@ defaultApiProvider =
     , loadProposalMetadata = taskLoadProposalMetadata
 
     -- Retrieve transactions via Koios by proxying with the server (to avoid CORS errors)
-    , retrieveTxs =
-        \txIds toMsg ->
-            Http.post
-                { url = "/proxy/json"
-                , body =
-                    Http.jsonBody
-                        (JE.object
-                            [ ( "url", JE.string "https://preview.koios.rest/api/v1/tx_cbor" )
-                            , ( "method", JE.string "POST" )
-                            , ( "body", JE.object [ ( "_tx_hashes", JE.list (JE.string << Bytes.toHex) txIds ) ] )
-                            ]
-                        )
-                , expect = Http.expectJson toMsg koiosTxCborDecoder
-                }
+    , retrieveTx = taskRetrieveTx
 
     -- Retrieve script info via Koios by proxying with the server (to avoid CORS errors)
-    , getScriptInfo =
-        \scriptHash toMsg ->
-            Http.post
-                { url = "/proxy/json"
-                , body =
-                    Http.jsonBody
-                        (JE.object
-                            -- [ ( "url", JE.string "https://api.koios.rest/api/v1/script_info" )
-                            [ ( "url", JE.string "https://preview.koios.rest/api/v1/script_info" )
-                            , ( "method", JE.string "POST" )
-                            , ( "body", JE.object [ ( "_script_hashes", JE.list (JE.string << Bytes.toHex) [ scriptHash ] ) ] )
-                            ]
-                        )
-                , expect = Http.expectJson toMsg koiosFirstScriptInfoDecoder
-                }
+    , getScriptInfo = taskGetScriptInfo
 
     -- Retrieve DRep info via Koios using an Ogmios endpoint
     , getDrepInfo =
@@ -653,3 +535,52 @@ taskLoadProposalMetadata url =
                         Err (Debug.toString httpError)
                             |> ConcurrentTask.fromResult
             )
+
+
+taskRetrieveTx : Bytes TransactionId -> ConcurrentTask ConcurrentTask.Http.Error (Bytes a)
+taskRetrieveTx txId =
+    let
+        thisTxDecoder : Decoder (Bytes a)
+        thisTxDecoder =
+            koiosFirstTxBytesDecoder
+                |> JD.andThen
+                    (\tx ->
+                        if tx.txId == txId then
+                            JD.succeed tx.txCbor
+
+                        else
+                            JD.fail <| "The retrieved Tx (" ++ Bytes.toHex tx.txId ++ ") does not correspond to the expected one (" ++ Bytes.toHex txId ++ ")"
+                    )
+    in
+    ConcurrentTask.Http.post
+        { url = "/proxy/json"
+        , headers = []
+        , body =
+            ConcurrentTask.Http.jsonBody
+                (JE.object
+                    [ ( "url", JE.string "https://preview.koios.rest/api/v1/tx_cbor" )
+                    , ( "method", JE.string "POST" )
+                    , ( "body", JE.object [ ( "_tx_hashes", JE.list (JE.string << Bytes.toHex) [ txId ] ) ] )
+                    ]
+                )
+        , expect = ConcurrentTask.Http.expectJson thisTxDecoder
+        , timeout = Nothing
+        }
+
+
+taskGetScriptInfo : Bytes CredentialHash -> ConcurrentTask ConcurrentTask.Http.Error ScriptInfo
+taskGetScriptInfo scriptHash =
+    ConcurrentTask.Http.post
+        { url = "/proxy/json"
+        , headers = []
+        , body =
+            ConcurrentTask.Http.jsonBody
+                (JE.object
+                    [ ( "url", JE.string "https://preview.koios.rest/api/v1/script_info" )
+                    , ( "method", JE.string "POST" )
+                    , ( "body", JE.object [ ( "_script_hashes", JE.list (JE.string << Bytes.toHex) [ scriptHash ] ) ] )
+                    ]
+                )
+        , expect = ConcurrentTask.Http.expectJson ScriptInfo.koiosFirstScriptInfoDecoder
+        , timeout = Nothing
+        }

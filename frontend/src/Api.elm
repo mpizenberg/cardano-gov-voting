@@ -6,11 +6,10 @@ import Cardano.Address exposing (Credential(..), CredentialHash)
 import Cardano.Gov exposing (ActionId, CostModels)
 import Cardano.Pool as Pool
 import Cardano.Script as Script exposing (PlutusVersion(..), Script)
-import Cardano.Transaction as Transaction exposing (Transaction)
+import Cardano.Transaction exposing (Transaction)
 import Cardano.Utxo exposing (TransactionId)
 import ConcurrentTask exposing (ConcurrentTask)
 import ConcurrentTask.Http
-import Dict exposing (Dict)
 import File exposing (File)
 import Http
 import Json.Decode as JD exposing (Decoder)
@@ -25,7 +24,7 @@ type alias ApiProvider msg =
     { loadProtocolParams : (Result Http.Error ProtocolParams -> msg) -> Cmd msg
     , loadGovProposals : (Result Http.Error (List ActiveProposal) -> msg) -> Cmd msg
     , loadProposalMetadata : String -> ConcurrentTask String ProposalMetadata
-    , retrieveTxs : List (Bytes TransactionId) -> (Result Http.Error (Dict String Transaction) -> msg) -> Cmd msg
+    , retrieveTx : Bytes TransactionId -> ConcurrentTask String (Bytes Transaction)
     , getScriptInfo : Bytes CredentialHash -> (Result Http.Error ScriptInfo -> msg) -> Cmd msg
     , getDrepInfo : Credential -> (Result Http.Error DrepInfo -> msg) -> Cmd msg
     , getCcInfo : Credential -> (Result Http.Error CcInfo -> msg) -> Cmd msg
@@ -96,26 +95,27 @@ proposalsDecoder =
 -- Retrieve Txs
 
 
-koiosTxCborDecoder : Decoder (Dict String Transaction)
-koiosTxCborDecoder =
+koiosFirstTxBytesDecoder : Decoder { txId : Bytes TransactionId, txCbor : Bytes a }
+koiosFirstTxBytesDecoder =
     let
-        singleTxDecoder : Decoder ( String, Transaction )
-        singleTxDecoder =
-            JD.map2 Tuple.pair
-                (JD.field "tx_hash" JD.string)
-                (JD.field "cbor" JD.string)
-                |> JD.andThen
-                    (\( hashHex, cborHex ) ->
-                        case Bytes.fromHex cborHex |> Maybe.andThen Transaction.deserialize of
-                            Just tx ->
-                                JD.succeed ( hashHex, tx )
-
-                            Nothing ->
-                                JD.fail <| "Failed to deserialize Tx: " ++ cborHex
-                    )
+        oneTxBytesDecoder =
+            JD.map2 (\txId cbor -> { txId = txId, txCbor = cbor })
+                (JD.field "tx_hash" Bytes.jsonDecoder)
+                (JD.field "cbor" Bytes.jsonDecoder)
     in
-    JD.list singleTxDecoder
-        |> JD.map Dict.fromList
+    JD.list oneTxBytesDecoder
+        |> JD.andThen
+            (\txs ->
+                case txs of
+                    [] ->
+                        JD.fail "The Tx was not found. Maybe the request was done for the wrong network?"
+
+                    [ tx ] ->
+                        JD.succeed tx
+
+                    _ ->
+                        JD.fail "The server unexpectedly returned more than 1 transaction."
+            )
 
 
 
@@ -460,20 +460,7 @@ defaultApiProvider =
     , loadProposalMetadata = taskLoadProposalMetadata
 
     -- Retrieve transactions via Koios by proxying with the server (to avoid CORS errors)
-    , retrieveTxs =
-        \txIds toMsg ->
-            Http.post
-                { url = "/proxy/json"
-                , body =
-                    Http.jsonBody
-                        (JE.object
-                            [ ( "url", JE.string "https://preview.koios.rest/api/v1/tx_cbor" )
-                            , ( "method", JE.string "POST" )
-                            , ( "body", JE.object [ ( "_tx_hashes", JE.list (JE.string << Bytes.toHex) txIds ) ] )
-                            ]
-                        )
-                , expect = Http.expectJson toMsg koiosTxCborDecoder
-                }
+    , retrieveTx = taskRetrieveTx
 
     -- Retrieve script info via Koios by proxying with the server (to avoid CORS errors)
     , getScriptInfo =
@@ -653,3 +640,35 @@ taskLoadProposalMetadata url =
                         Err (Debug.toString httpError)
                             |> ConcurrentTask.fromResult
             )
+
+
+taskRetrieveTx : Bytes TransactionId -> ConcurrentTask String (Bytes a)
+taskRetrieveTx txId =
+    let
+        thisTxDecoder : Decoder (Bytes a)
+        thisTxDecoder =
+            koiosFirstTxBytesDecoder
+                |> JD.andThen
+                    (\tx ->
+                        if tx.txId == txId then
+                            JD.succeed tx.txCbor
+
+                        else
+                            JD.fail <| "The retrieved Tx (" ++ Bytes.toHex tx.txId ++ ") does not correspond to the expected one (" ++ Bytes.toHex txId ++ ")"
+                    )
+    in
+    ConcurrentTask.mapError Debug.toString <|
+        ConcurrentTask.Http.post
+            { url = "/proxy/json"
+            , headers = []
+            , body =
+                ConcurrentTask.Http.jsonBody
+                    (JE.object
+                        [ ( "url", JE.string "https://preview.koios.rest/api/v1/tx_cbor" )
+                        , ( "method", JE.string "POST" )
+                        , ( "body", JE.object [ ( "_tx_hashes", JE.list (JE.string << Bytes.toHex) [ txId ] ) ] )
+                        ]
+                    )
+            , expect = ConcurrentTask.Http.expectJson thisTxDecoder
+            , timeout = Nothing
+            }

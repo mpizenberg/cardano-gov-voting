@@ -117,6 +117,7 @@ type Page
 
 type TaskCompleted
     = GotProposalMetadataTask String (Result String ProposalMetadata)
+    | PreparationTaskCompleted Page.Preparation.TaskCompleted
 
 
 init : { url : String, jsonLdContexts : JsonLdContexts, db : Value } -> ( Model, Cmd Msg )
@@ -323,6 +324,7 @@ update msg model =
 
                         ctx =
                             { wrapMsg = PreparationPageMsg
+                            , db = model.db
                             , proposals = model.proposals
                             , scriptsInfo = model.scriptsInfo
                             , drepsInfo = model.drepsInfo
@@ -346,9 +348,8 @@ update msg model =
                         ( newPageModel, cmds, msgToParent ) =
                             Page.Preparation.update ctx pageMsg pageModel
                     in
-                    ( updateModelWithPrepToParentMsg msgToParent { model | page = PreparationPage newPageModel }
-                    , cmds
-                    )
+                    updateModelWithPrepToParentMsg msgToParent { model | page = PreparationPage newPageModel }
+                        |> Tuple.mapSecond (\cmd -> Cmd.batch [ cmd, cmds ])
 
                 _ ->
                     ( model, Cmd.none )
@@ -612,23 +613,36 @@ handleWalletResponse response model =
             )
 
 
-updateModelWithPrepToParentMsg : Maybe Page.Preparation.MsgToParent -> Model -> Model
+updateModelWithPrepToParentMsg : Maybe Page.Preparation.MsgToParent -> Model -> ( Model, Cmd Msg )
 updateModelWithPrepToParentMsg msgToParent model =
     case msgToParent of
         Nothing ->
-            model
+            ( model, Cmd.none )
 
         Just (Page.Preparation.CacheScriptInfo scriptInfo) ->
-            { model | scriptsInfo = Dict.insert (Bytes.toHex scriptInfo.scriptHash) scriptInfo model.scriptsInfo }
+            ( { model | scriptsInfo = Dict.insert (Bytes.toHex scriptInfo.scriptHash) scriptInfo model.scriptsInfo }
+            , Cmd.none
+            )
 
         Just (Page.Preparation.CacheDrepInfo drepInfo) ->
-            { model | drepsInfo = Dict.insert (Bytes.toHex <| Address.extractCredentialHash drepInfo.credential) drepInfo model.drepsInfo }
+            ( { model | drepsInfo = Dict.insert (Bytes.toHex <| Address.extractCredentialHash drepInfo.credential) drepInfo model.drepsInfo }
+            , Cmd.none
+            )
 
         Just (Page.Preparation.CacheCcInfo ccInfo) ->
-            { model | ccsInfo = Dict.insert (Bytes.toHex <| Address.extractCredentialHash ccInfo.hotCred) ccInfo model.ccsInfo }
+            ( { model | ccsInfo = Dict.insert (Bytes.toHex <| Address.extractCredentialHash ccInfo.hotCred) ccInfo model.ccsInfo }
+            , Cmd.none
+            )
 
         Just (Page.Preparation.CachePoolInfo poolInfo) ->
-            { model | poolsInfo = Dict.insert (Bytes.toHex poolInfo.pool) poolInfo model.poolsInfo }
+            ( { model | poolsInfo = Dict.insert (Bytes.toHex poolInfo.pool) poolInfo model.poolsInfo }
+            , Cmd.none
+            )
+
+        Just (Page.Preparation.RunTask task) ->
+            ConcurrentTask.attempt { pool = model.taskPool, send = sendTask, onComplete = OnTaskComplete }
+                (ConcurrentTask.map PreparationTaskCompleted task)
+                |> Tuple.mapFirst (\newTaskPool -> { model | taskPool = newTaskPool })
 
 
 {-| Helper function to reset the signing step of the Preparation.
@@ -645,14 +659,14 @@ resetSigningStep error page =
 
 handleCompletedTask : ConcurrentTask.Response String TaskCompleted -> Model -> ( Model, Cmd Msg )
 handleCompletedTask response model =
-    case response of
-        ConcurrentTask.Error error ->
+    case ( response, model.page ) of
+        ( ConcurrentTask.Error error, _ ) ->
             ( { model | errors = error :: model.errors }, Cmd.none )
 
-        ConcurrentTask.UnexpectedError error ->
+        ( ConcurrentTask.UnexpectedError error, _ ) ->
             ( { model | errors = Debug.toString error :: model.errors }, Cmd.none )
 
-        ConcurrentTask.Success (GotProposalMetadataTask id result) ->
+        ( ConcurrentTask.Success (GotProposalMetadataTask id result), _ ) ->
             let
                 updateMetadata maybeProposal =
                     case ( maybeProposal, result ) of
@@ -668,6 +682,17 @@ handleCompletedTask response model =
             ( { model | proposals = RemoteData.map (\ps -> Dict.update id updateMetadata ps) model.proposals }
             , Cmd.none
             )
+
+        ( ConcurrentTask.Success (PreparationTaskCompleted taskCompleted), PreparationPage pageModel ) ->
+            let
+                ( newPageModel, cmds, msgToParent ) =
+                    Page.Preparation.handleTaskCompleted taskCompleted pageModel
+            in
+            updateModelWithPrepToParentMsg msgToParent { model | page = PreparationPage newPageModel }
+                |> Tuple.mapSecond (\cmd -> Cmd.batch [ cmd, Cmd.map PreparationPageMsg cmds ])
+
+        ( ConcurrentTask.Success (PreparationTaskCompleted _), _ ) ->
+            ( model, Cmd.none )
 
 
 

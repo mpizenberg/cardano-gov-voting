@@ -1,6 +1,6 @@
 port module Main exposing (main)
 
-import Api exposing (ActiveProposal, CcInfo, DrepInfo, PoolInfo, ProtocolParams, ScriptInfo)
+import Api exposing (ActiveProposal, CcInfo, DrepInfo, PoolInfo, ProtocolParams)
 import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
@@ -25,6 +25,7 @@ import Page.Signing
 import Platform.Cmd as Cmd
 import ProposalMetadata exposing (ProposalMetadata)
 import RemoteData exposing (WebData)
+import ScriptInfo exposing (ScriptInfo)
 import Storage
 import Url
 

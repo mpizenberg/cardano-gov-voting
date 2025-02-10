@@ -60,7 +60,7 @@ write { db, storeName } encode { key } data =
         }
 
 
-cacheWrap : { db : Value, storeName : String } -> Decoder data -> (data -> Value) -> { key : String } -> ConcurrentTask String data -> ConcurrentTask String data
+cacheWrap : { db : Value, storeName : String } -> Decoder data -> (data -> Value) -> { key : String } -> ConcurrentTask x data -> ConcurrentTask x data
 cacheWrap store decoder encode key task =
     read store decoder key
         |> ConcurrentTask.onError

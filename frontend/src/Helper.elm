@@ -1,5 +1,9 @@
 module Helper exposing (prettyAdaLovelace, prettyAddr, shortenedHex, viewNumberInput)
 
+{-| Helper module for miscellaneous functions that didn’t fit elsewhere,
+and are potentially useful in multiple places.
+-}
+
 import Bytes.Comparable as Bytes
 import Cardano.Address as Address exposing (Address)
 import Html exposing (Html, text)
@@ -13,17 +17,16 @@ import Numeral
 -- String formatting
 
 
+{-| Display the Hex form of an address with only the first and last few characters.
+-}
 prettyAddr : Address -> String
 prettyAddr address =
-    let
-        addrHex =
-            Bytes.toHex (Address.toBytes address)
-    in
-    String.slice 0 8 addrHex
-        ++ "..."
-        ++ String.slice -8 (String.length addrHex) addrHex
+    Bytes.toHex (Address.toBytes address)
+        |> shortenedHex 8
 
 
+{-| Shorten some string, by only keeping the first and last few characters.
+-}
 shortenedHex : Int -> String -> String
 shortenedHex width bytesHex =
     String.slice 0 width bytesHex
@@ -31,6 +34,16 @@ shortenedHex width bytesHex =
         ++ String.slice -width (String.length bytesHex) bytesHex
 
 
+{-| Display a Lovelace amount as a pretty Ada (₳) amount.
+
+  - `42000 -> "₳0.042"`
+  - `69427000000 -> "₳69.43k"`
+
+The number is formatted to automatically use the most adequate unit (k, m, ...).
+For amounts below 1₳, the number is formatted with 3 decimals.
+For amounts over 1₳, the number is formatted with 2 decimals.
+
+-}
 prettyAdaLovelace : Natural -> String
 prettyAdaLovelace n =
     Natural.divBy (Natural.fromSafeInt 1000) n
@@ -54,6 +67,8 @@ prettyAdaLovelace n =
 -- View
 
 
+{-| Helper view function for a simple number input.
+-}
 viewNumberInput : String -> Int -> (String -> msg) -> Html msg
 viewNumberInput label n msgOnInput =
     Html.p []

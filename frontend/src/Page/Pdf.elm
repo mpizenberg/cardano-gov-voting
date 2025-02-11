@@ -1,5 +1,17 @@
 module Page.Pdf exposing (GovMetadataFile(..), Model, Msg(..), UpdateContext, ViewContext, initialModel, update, view)
 
+{-| This module handles the conversion of governance metadata JSON-LD files to PDF format.
+It specifically supports CIP-136 vote rationale documents, with potential for extension
+to other governance metadata types in the future.
+
+Key Features
+
+  - Loads and validates JSON-LD files according to CIP standards
+  - Converts valid governance metadata to formatted PDF documents
+  - Provides immediate download of generated PDFs
+
+-}
+
 import Api
 import Bytes as ElmBytes
 import File exposing (File)
@@ -21,6 +33,13 @@ import Task
 -- ###################################################################
 
 
+{-| The application state, tracking:
+
+  - The loaded JSON file content and its decoded representation
+  - The generated PDF bytes (if conversion has occurred)
+  - Any error messages that need to be displayed
+
+-}
 type alias Model =
     { fileContent : Maybe { raw : String, name : String, decoded : GovMetadataFile }
     , pdfBytes : Maybe ElmBytes.Bytes
@@ -36,6 +55,10 @@ initialModel =
     }
 
 
+{-| Represents the different types of governance metadata files that can be processed.
+Currently only supports CIP-136 Vote Rationales, but designed to be extensible for
+future governance metadata types.
+-}
 type GovMetadataFile
     = VoteRationale Rationale -- CIP-136
 
@@ -119,6 +142,10 @@ handleJsonFileJustRead filename result =
             LoadedJson filename jsonFileContent
 
 
+{-| Handles JSON validation and decoding for different metadata types.
+Currently implements validation for CIP-136 vote rationales, with a structure
+that allows for easy addition of other metadata types.
+-}
 checkJsonMetadataType : String -> Result String GovMetadataFile
 checkJsonMetadataType fileContent =
     -- Attempt to decode the file content into
@@ -138,6 +165,10 @@ checkJsonMetadataType fileContent =
             Err (JD.errorToString error)
 
 
+{-| Decodes a Rationale according to the CIP-136 specification.
+Includes required fields (summary, rationaleStatement) and optional fields
+(precedentDiscussion, counterargumentDiscussion, conclusion, internalVote, references).
+-}
 decodeRationale : Decoder Rationale
 decodeRationale =
     JD.map7 Rationale

@@ -1,5 +1,51 @@
 port module Main exposing (main)
 
+{-| Main application module for the Cardano Governance Voting web app.
+
+
+# Architecture Overview
+
+This app follows a single-page application (SPA) architecture with client-side routing.
+The main components are:
+
+  - Wallet integration via CIP-30 ports for connecting to Cardano wallets
+  - Multiple pages for different governance actions (vote preparation, signing, DRep registration)
+  - Concurrent task handling for asynchronous operations
+  - In-browser caching of proposal metadata
+  - PDF generation capabilities
+
+
+# Key Design Decisions
+
+  - Uses ports for all wallet interactions to maintain type safety while talking to JS
+  - Implements client-side routing to enable sharing direct links to specific actions
+  - Caches proposal metadata locally to improve performance and reduce API load
+  - Uses a "task port"-like pattern from elm-concurrent-task for advanced task composition
+  - Maintains separation between pages while sharing common wallet state
+
+
+# Data Flow
+
+1.  App initializes with protocol parameters and wallet discovery
+2.  User connects wallet to enable transaction signing
+3.  Pages can request wallet operations via ports
+4.  Task system handles advanced operations like metadata fetching with caching
+
+
+# State Management
+
+The main model contains:
+
+  - Global application state (wallet connection, protocol params)
+  - Page-specific state
+  - Cached governance data (proposals, DReps, etc)
+  - Task pool for elm-concurrent-task operations
+  - Error tracking
+
+Each page maintains its own state and can communicate up through MsgToParent patterns.
+
+-}
+
 import Api exposing (ActiveProposal, CcInfo, DrepInfo, PoolInfo, ProtocolParams)
 import AppUrl exposing (AppUrl)
 import Browser
@@ -336,14 +382,6 @@ update msg model =
                             , jsonLdContexts = model.jsonLdContexts
                             , jsonRationaleToFile = jsonRationaleToFile
                             , costModels = Maybe.map .costModels model.protocolParams
-                            , walletSignTx =
-                                \tx ->
-                                    case model.wallet of
-                                        Nothing ->
-                                            Cmd.none
-
-                                        Just wallet ->
-                                            toWallet (Cip30.encodeRequest (Cip30.signTx wallet { partialSign = True } tx))
                             }
 
                         ( newPageModel, cmds, msgToParent ) =

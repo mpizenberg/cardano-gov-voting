@@ -1,5 +1,25 @@
 module Page.MultisigRegistration exposing (LoadedWallet, Model, Msg(..), RegisterTxSummary, UnregisterTxSummary, UpdateContext, ViewContext, initialModel, update, view)
 
+{-| This module handles the registration and unregistration of multisig DReps (Delegated Representatives)
+in the Cardano governance system.
+
+A multisig DRep is represented by a native script that requires M-of-N signatures from a set of public keys
+to take governance actions. This module helps users:
+
+1.  Configure the multisig parameters (required signature count and public key hashes)
+2.  Register the multisig as a DRep by paying the registration deposit
+3.  Optionally create a script reference output to optimize transaction fees
+4.  Unregister the multisig DRep and reclaim the deposit
+
+Key design considerations:
+
+  - Uses native scripts for maximum compatibility with wallets
+  - Enforces deterministic script creation by sorting credential hashes
+  - Optimizes for M-of-N scenarios by using ScriptAny/ScriptAll when possible
+  - Supports script references to reduce fees for large multisigs (5+ keys)
+
+-}
+
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CertificateIntent(..), CredentialWitness(..), ScriptWitness(..), SpendSource(..), TxFinalized, TxIntent(..), WitnessSource(..))
 import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash, NetworkId(..))
@@ -27,6 +47,14 @@ import Natural
 -- ###################################################################
 
 
+{-| Core configuration for a multisig DRep:
+
+  - minCount: Minimum number of required signatures (M in M-of-N)
+  - hashes: List of public key hashes that can sign (N total keys)
+  - register: Whether to register as DRep in this transaction
+  - createOutputRef: Whether to create a reference script output
+
+-}
 type alias Model =
     { minCount : Int
     , hashes : List String
@@ -38,6 +66,14 @@ type alias Model =
     }
 
 
+{-| Important information produced when building a registration transaction:
+
+  - Expected signatures needed from the multisig participants
+  - The native script and its hash for future reference
+  - Location of the script reference output if created
+  - The DRep ID that will represent this multisig in governance
+
+-}
 type alias RegisterTxSummary =
     { tx : Transaction
     , expectedSignatures : List (Bytes CredentialHash)
@@ -271,6 +307,16 @@ type alias MultisigConfig =
     }
 
 
+{-| Creates the native script configuration from a list of credentials and minimum signature count.
+Key aspects:
+
+  - Sorts credentials for deterministic script creation
+  - Optimizes script type based on required signatures:
+      - Uses ScriptAny for 1-of-N
+      - Uses ScriptAll for N-of-N
+      - Uses ScriptNofK for M-of-N
+
+-}
 nativeMultisig : List (Bytes CredentialHash) -> Model -> MultisigConfig
 nativeMultisig unsortedCreds model =
     let

@@ -1,5 +1,29 @@
 module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, MsgToParent(..), Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType(..), Step, StorageForm, TaskCompleted, UpdateContext, ViewContext, VoterPreparationForm, handleTaskCompleted, init, noInternalVote, pinRationaleFile, update, view)
 
+{-| This module handles the complete vote preparation workflow, from identifying
+the voter to signing the transaction, which is handled by another page.
+
+The workflow is split into the following sequential steps:
+
+1.  Voter identification - Who is voting (DRep/SPO/CC)
+2.  Proposal selection - What proposal to vote on
+3.  Rationale creation - The reasoning behind the vote
+4.  Rationale signing - Optional signatures from multiple authors
+5.  Permanent storage - Storing rationale on IPFS
+6.  Fee handling - How transaction fees will be paid
+7.  Transaction building - Creating the vote transaction
+8.  Transaction signing - Redirect to the signing page
+
+Each step follows a common pattern using the Step type:
+
+  - Preparing: Initial form state
+  - Validating: Checking inputs
+  - Done: Step is complete
+
+The steps are sequential but allow going back to modify previous steps.
+
+-}
+
 import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), PoolInfo)
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
@@ -49,6 +73,9 @@ import Url
 -- ###################################################################
 
 
+{-| Main model containing the state for all preparation steps.
+Each step uses the Step type to track its progress.
+-}
 type alias Model =
     { someRefUtxos : Utxo.RefDict Output
     , voterStep : Step VoterPreparationForm VoterWitness VoterWitness
@@ -62,6 +89,15 @@ type alias Model =
     }
 
 
+{-| Represents the three possible states of any workflow step:
+
+1.  Preparing - User is filling out form data
+2.  Validating - Form data is being validated/processed
+3.  Done - Step is complete with validated data
+
+This allows a consistent pattern across all the preparation steps.
+
+-}
 type Step prep validating done
     = Preparing prep
     | Validating prep validating
@@ -349,6 +385,12 @@ type alias SignedTx =
 -- ###################################################################
 
 
+{-| Messages that can be sent to the parent component to:
+
+  - Cache loaded data for reuse
+  - Execute concurrent tasks
+
+-}
 type MsgToParent
     = CacheScriptInfo ScriptInfo
     | CacheDrepInfo DrepInfo
@@ -357,6 +399,12 @@ type MsgToParent
     | RunTask (ConcurrentTask String TaskCompleted)
 
 
+{-| Results from asynchronous tasks:
+
+  - Loading reference transaction bytes
+  - Loading script info
+
+-}
 type TaskCompleted
     = GotRefUtxoTxBytes OutputReference (Result ConcurrentTask.Http.Error (Bytes Transaction))
     | GotScriptInfoTask (Result ConcurrentTask.Http.Error ScriptInfo)
@@ -422,6 +470,16 @@ type Msg
     | ChangeVoteButtonClicked
 
 
+{-| Configuration required by the update function.
+Provides access to:
+
+  - External data (proposals, script info, etc.)
+  - Cardano network cost models (for script execution)
+  - Wallet integration
+  - In-browser storage connection
+  - Governance metadata JSON LD format
+
+-}
 type alias UpdateContext msg =
     { wrapMsg : Msg -> msg
     , db : JD.Value
@@ -435,7 +493,6 @@ type alias UpdateContext msg =
     , jsonLdContexts : JsonLdContexts
     , jsonRationaleToFile : { fileContent : String, fileName : String } -> Cmd msg
     , costModels : Maybe CostModels
-    , walletSignTx : Transaction -> Cmd msg
     }
 
 
@@ -1059,6 +1116,16 @@ type alias GovIdCheck =
     }
 
 
+{-| Validates if a governance ID is valid and loads associated information:
+
+  - For scripts: loads script info and extracts expected signers
+  - For DReps: loads voting power
+  - For CCs: loads committee member info
+  - For SPOs: loads stake pool info
+
+Returns information needed for voting or an error message.
+
+-}
 checkGovId : UpdateContext msg -> String -> Result String GovIdCheck
 checkGovId ctx str =
     case Gov.idFromBech32 str of
@@ -1551,6 +1618,14 @@ validateRationaleRefs references =
             )
 
 
+{-| Converts a RationaleForm into a final Rationale by:
+
+  - Trimming whitespace
+  - Converting empty strings to Nothing for optional fields
+  - Preserving internal vote counts
+  - Keeping all references
+
+-}
 rationaleFromForm : RationaleForm -> Rationale
 rationaleFromForm form =
     let
@@ -2015,6 +2090,15 @@ validateFeeProviderForm maybeWallet feeProviderForm =
 -- Build Tx Step
 
 
+{-| Requirements needed to build a valid voting transaction:
+
+  - Voter witness (key or script)
+  - Proposal being voted on
+  - Rationale anchor (metadata hash)
+  - UTXOs for fee payment and scripts
+  - Protocol parameters for cost calculation
+
+-}
 type alias TxRequirements =
     { voter : VoterWitness
     , actionId : ActionId
@@ -2058,6 +2142,16 @@ allPrepSteps maybeCostModels m =
 -- ###################################################################
 
 
+{-| Configuration needed by the view:
+
+  - Message wrapper for parent component
+  - Wallet connectivity status
+  - Available proposals to vote on
+  - JSON-LD metadata context for rationale
+  - Protocol parameters
+  - Link to transaction signing page
+
+-}
 type alias ViewContext msg =
     { wrapMsg : Msg -> msg
     , walletChangeAddress : Maybe Address
@@ -2934,6 +3028,14 @@ viewRationaleSignatureForm jsonLdContexts ({ authors } as form) =
         ]
 
 
+{-| Creates a JSON-LD document for the rationale that follows CIP-0136.
+Includes:
+
+  - Core rationale content
+  - Authors and their signatures if present
+  - Standard context and hash algorithm
+
+-}
 createJsonRationale : JsonLdContexts -> Rationale -> List AuthorWitness -> JE.Value
 createJsonRationale jsonLdContexts rationale authors =
     JE.object <|

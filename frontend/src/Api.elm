@@ -1,5 +1,8 @@
 module Api exposing (ActiveProposal, ApiProvider, CcInfo, DrepInfo, IpfsAnswer(..), IpfsFile, PoolInfo, ProtocolParams, defaultApiProvider)
 
+{-| Module gathering all the remote HTTP calls made by the app.
+-}
+
 import Bytes as ElmBytes
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Address exposing (Credential(..), CredentialHash)
@@ -20,6 +23,18 @@ import RemoteData exposing (RemoteData)
 import ScriptInfo exposing (ScriptInfo)
 
 
+{-| Overview of all the requests that the app may do.
+
+We could get rid of this type entirely and instead just expose individual functions.
+However I think it is a nice overview for anyone looking at the code.
+A default implementation of all these requests is also provided in this module.
+
+Initially, requests were exclusively built using the elm/http package.
+However, we later introduced the elm-concurrent-task package, enable more composable requests,
+with caching (in a browser DB) behavior possible.
+So this is how there is a mix of regular `(...) -> Cmd msg` and `ConcurrentTask ...`.
+
+-}
 type alias ApiProvider msg =
     { loadProtocolParams : (Result Http.Error ProtocolParams -> msg) -> Cmd msg
     , loadGovProposals : (Result Http.Error (List ActiveProposal) -> msg) -> Cmd msg
@@ -38,6 +53,8 @@ type alias ApiProvider msg =
 -- Protocol Parameters
 
 
+{-| Relevant protocol parameters for this app.
+-}
 type alias ProtocolParams =
     { costModels : CostModels
     , drepDeposit : Natural
@@ -62,6 +79,11 @@ protocolParamsDecoder =
 -- Governance Proposals
 
 
+{-| Information for currently active proposals.
+
+Proposals metadata are not stored onchain, and need extra remote calls to be fetched.
+
+-}
 type alias ActiveProposal =
     { id : ActionId
     , actionType : String
@@ -71,8 +93,8 @@ type alias ActiveProposal =
     }
 
 
-proposalsDecoder : Decoder (List ActiveProposal)
-proposalsDecoder =
+ogmiosGovProposalsDecoder : Decoder (List ActiveProposal)
+ogmiosGovProposalsDecoder =
     JD.field "result" <|
         JD.list <|
             JD.map5 ActiveProposal
@@ -122,12 +144,21 @@ koiosFirstTxBytesDecoder =
 -- DRep Info
 
 
+{-| DRep can be "Abstain", "NoConfidence" or an actual DRep.
+-}
 type AnyDrepInfo
     = Abstain
     | NoConfidence
     | Registered DrepInfo
 
 
+{-| DRep information needed for this app.
+
+For technichal reasons, voting power is in `Int` and not `Natural`,
+which may cause imprecisions if a DRep accumulates more than 2^53 Lovelace of voting power,
+which is around ₳9B.
+
+-}
 type alias DrepInfo =
     { credential : Credential
 
@@ -212,6 +243,8 @@ ogmiosCredDecoder =
 -- CC Info
 
 
+{-| Relevant information for this app, about a Constitutional Committee (CC) member.
+-}
 type alias CcInfo =
     { coldCred : Credential
     , hotCred : Credential
@@ -249,6 +282,8 @@ ogmiosCcInfoDecoder =
 -- Pool Live Stake
 
 
+{-| Pool stake information as of last epoch snapshot.
+-}
 type alias PoolInfo =
     { pool : Bytes Pool.Id
     , stake : Int
@@ -265,11 +300,15 @@ poolStakeDecoder poolId =
 -- IPFS
 
 
+{-| Response from an IPFS server to a request to store a file.
+-}
 type IpfsAnswer
     = IpfsError String
     | IpfsAddSuccessful IpfsFile
 
 
+{-| Relevant IPFS file information.
+-}
 type alias IpfsFile =
     { name : String
     , cid : String
@@ -333,6 +372,9 @@ ipfsAnswerDecoder =
 -- Default API Provider
 
 
+{-| Default implementation for each remote request that this app requires.
+Most of them are relying on Koios infrastructure.
+-}
 defaultApiProvider : ApiProvider msg
 defaultApiProvider =
     -- Get protocol parameters via Koios
@@ -362,7 +404,7 @@ defaultApiProvider =
                             , ( "method", JE.string "queryLedgerState/governanceProposals" )
                             ]
                         )
-                , expect = Http.expectJson toMsg proposalsDecoder
+                , expect = Http.expectJson toMsg ogmiosGovProposalsDecoder
                 }
 
     -- Load the metadata associated with a governance proposal
@@ -484,6 +526,16 @@ bytesResponseToResult response =
 -- Task port requests
 
 
+{-| Task to retrieve a proposal metadata.
+
+If the metadata URL is pointing to an IPFS resource ("ipfs://")
+the URL is automatically converted into a call to the main IPFS gateway ("<https://ipfs.io/ipfs/">).
+
+Some metadata URLs point to servers that do not accept cross-origin requests (CORS).
+For this reason, if a request task fails with potentially a CORS error,
+we redo the request by proxying it through this app server.
+
+-}
 taskLoadProposalMetadata : String -> ConcurrentTask String ProposalMetadata
 taskLoadProposalMetadata url =
     let
@@ -537,6 +589,9 @@ taskLoadProposalMetadata url =
             )
 
 
+{-| Task to retrieve the raw CBOR of a given Tx.
+It uses the Koios API, proxied through the app server (because CORS).
+-}
 taskRetrieveTx : Bytes TransactionId -> ConcurrentTask ConcurrentTask.Http.Error (Bytes a)
 taskRetrieveTx txId =
     let
@@ -568,6 +623,9 @@ taskRetrieveTx txId =
         }
 
 
+{-| Task to retrieve relevant script info for the app.
+It uses the Koios API, proxied through the app server (because CORS).
+-}
 taskGetScriptInfo : Bytes CredentialHash -> ConcurrentTask ConcurrentTask.Http.Error ScriptInfo
 taskGetScriptInfo scriptHash =
     ConcurrentTask.Http.post

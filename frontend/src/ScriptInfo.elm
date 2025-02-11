@@ -1,5 +1,8 @@
 module ScriptInfo exposing (ScriptInfo, koiosFirstScriptInfoDecoder, storageDecoder, storageEncode)
 
+{-| Helper module to handle script information from remote sources.
+-}
+
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Address exposing (CredentialHash)
 import Cardano.Script as Script exposing (PlutusVersion(..), Script)
@@ -9,6 +12,14 @@ import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
 
 
+{-| Script accompanied with its original hash when published onchain.
+
+If the script is a Native script, we also check if re-encoding it
+with elm-cardano would yield the same hash or not.
+This is important because it informs us if we can use the script inline with elm-cardano Tx builder
+or if we will be forced to use it with a reference input due to encoding differences.
+
+-}
 type alias ScriptInfo =
     { scriptHash : Bytes CredentialHash
     , script : Script
@@ -16,6 +27,8 @@ type alias ScriptInfo =
     }
 
 
+{-| Encoder to store the script info in the browser DB.
+-}
 storageEncode : ScriptInfo -> Value
 storageEncode { scriptHash, script } =
     JE.object
@@ -24,6 +37,8 @@ storageEncode { scriptHash, script } =
         ]
 
 
+{-| Decoder to retrieve the script info from the browser DB.
+-}
 storageDecoder : Decoder ScriptInfo
 storageDecoder =
     let
@@ -56,6 +71,11 @@ storageDecoder =
         )
 
 
+{-| Decoder for a request to Koios "script\_info" endpoint.
+
+The corresponding request must have been made with a single script hash to be retrieved.
+
+-}
 koiosFirstScriptInfoDecoder : Decoder ScriptInfo
 koiosFirstScriptInfoDecoder =
     JD.list koiosScriptInfoDecoder

@@ -1,5 +1,17 @@
 module Page.Signing exposing (LoadedTxModel, Model(..), Msg(..), UpdateContext, ViewContext, addWalletSignatures, initialModel, recordSubmittedTx, resetSubmission, update, view)
 
+{-| This module handles the signing process for Cardano transactions, particularly
+focusing on complex scenarios like Native or Plutus script multi-signatures.
+
+Key design features:
+
+  - Supports both connected wallet signing and file-based signature collection
+  - Tracks expected signers
+  - Allows transaction submission even with partial signatures (useful for M-of-N schemes)
+  - Handles signature deduplication and verification against expected signers
+
+-}
+
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Address exposing (CredentialHash)
 import Cardano.Cip30 as Cip30
@@ -25,11 +37,21 @@ import Url
 -- ###################################################################
 
 
+{-| Represents the two possible states of the signing page:
+
+  - MissingTx: No transaction loaded yet
+  - LoadedTx: Active transaction being processed for signatures
+
+-}
 type Model
     = MissingTx
     | LoadedTx LoadedTxModel
 
 
+{-| Core model for an active signing session.
+Tracks the transaction, expected signers, collected signatures,
+submission status and any errors that occur.
+-}
 type alias LoadedTxModel =
     { tx : Transaction
     , txId : Bytes TransactionId
@@ -149,6 +171,13 @@ handleSignedTxFileRead result =
             LoadedSignedTxJson signedTxJson
 
 
+{-| Extracts VKey witnesses from a serialized transaction JSON, performing several validations:
+
+1.  Ensures the transaction can be properly decoded
+2.  Verifies the transaction ID matches the expected one
+3.  Returns the list of witnesses if all checks pass
+
+-}
 extractVkeyWitnesses : Bytes TransactionId -> String -> Result String (List VKeyWitness)
 extractVkeyWitnesses txId rawJson =
     let
@@ -180,6 +209,13 @@ extractVkeyWitnesses txId rawJson =
             Err <| "Error while decoding the Tx: " ++ JD.errorToString error
 
 
+{-| Adds new signatures to the model, with important filtering logic:
+
+  - Only accepts signatures from expected signers
+  - Handles cases where wallets might provide more signatures than needed
+  - Updates existing signatures for the same key hash
+
+-}
 addWalletSignatures : List VKeyWitness -> Model -> Model
 addWalletSignatures newVkeyWitnesses model =
     case model of

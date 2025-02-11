@@ -1,5 +1,8 @@
 module Storage exposing (cacheWrap)
 
+{-| Helper module to store and retrieve data from an in-browser database.
+-}
+
 import ConcurrentTask exposing (ConcurrentTask)
 import Json.Decode exposing (Decoder)
 import Json.Encode as JE exposing (Value)
@@ -28,6 +31,16 @@ import Json.Encode as JE exposing (Value)
 --         }
 
 
+{-| Read data in the browser database.
+
+You need to provide:
+
+  - the DB connection, which was obtained at initialization
+  - the name of the store containing that data
+  - a JSON decoder for that data
+  - the key for the data (its unique identifier)
+
+-}
 read : { db : Value, storeName : String } -> Decoder data -> { key : String } -> ConcurrentTask String data
 read { db, storeName } decoder { key } =
     ConcurrentTask.define
@@ -44,6 +57,17 @@ read { db, storeName } decoder { key } =
         |> ConcurrentTask.onResponseDecoderFailure (\_ -> ConcurrentTask.fail "not in storage")
 
 
+{-| Write data to the browser database.
+
+You need to provide:
+
+  - the DB connection, which was obtained at initialization
+  - the name of the store where to put that data
+  - a JSON encoder for that data
+  - the key for the data (its unique identifier)
+  - the data itself!
+
+-}
 write : { db : Value, storeName : String } -> (data -> Value) -> { key : String } -> data -> ConcurrentTask x ()
 write { db, storeName } encode { key } data =
     ConcurrentTask.define
@@ -60,6 +84,20 @@ write { db, storeName } encode { key } data =
         }
 
 
+{-| Cache a task producing data.
+It will first try to retrieve the data from the browser DB,
+then if not found it will run the task,
+and finally store the task result in the DB for fast future access.
+
+You need to provide:
+
+  - the DB connection, which was obtained at initialization
+  - the name of the store where that data should be located
+  - a JSON decoder for that data
+  - a JSON encoder for that data
+  - the key for the data (its unique identifier)
+
+-}
 cacheWrap : { db : Value, storeName : String } -> Decoder data -> (data -> Value) -> { key : String } -> ConcurrentTask x data -> ConcurrentTask x data
 cacheWrap store decoder encode key task =
     read store decoder key

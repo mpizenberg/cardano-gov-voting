@@ -382,14 +382,6 @@ update msg model =
                             , jsonLdContexts = model.jsonLdContexts
                             , jsonRationaleToFile = jsonRationaleToFile
                             , costModels = Maybe.map .costModels model.protocolParams
-                            , walletSignTx =
-                                \tx ->
-                                    case model.wallet of
-                                        Nothing ->
-                                            Cmd.none
-
-                                        Just wallet ->
-                                            toWallet (Cip30.encodeRequest (Cip30.signTx wallet { partialSign = True } tx))
                             }
 
                         ( newPageModel, cmds, msgToParent ) =

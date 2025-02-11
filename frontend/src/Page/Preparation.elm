@@ -385,6 +385,12 @@ type alias SignedTx =
 -- ###################################################################
 
 
+{-| Messages that can be sent to the parent component to:
+
+  - Cache loaded data for reuse
+  - Execute concurrent tasks
+
+-}
 type MsgToParent
     = CacheScriptInfo ScriptInfo
     | CacheDrepInfo DrepInfo
@@ -393,6 +399,12 @@ type MsgToParent
     | RunTask (ConcurrentTask String TaskCompleted)
 
 
+{-| Results from asynchronous tasks:
+
+  - Loading reference transaction bytes
+  - Loading script info
+
+-}
 type TaskCompleted
     = GotRefUtxoTxBytes OutputReference (Result ConcurrentTask.Http.Error (Bytes Transaction))
     | GotScriptInfoTask (Result ConcurrentTask.Http.Error ScriptInfo)
@@ -1104,6 +1116,16 @@ type alias GovIdCheck =
     }
 
 
+{-| Validates if a governance ID is valid and loads associated information:
+
+  - For scripts: loads script info and extracts expected signers
+  - For DReps: loads voting power
+  - For CCs: loads committee member info
+  - For SPOs: loads stake pool info
+
+Returns information needed for voting or an error message.
+
+-}
 checkGovId : UpdateContext msg -> String -> Result String GovIdCheck
 checkGovId ctx str =
     case Gov.idFromBech32 str of
@@ -1596,6 +1618,14 @@ validateRationaleRefs references =
             )
 
 
+{-| Converts a RationaleForm into a final Rationale by:
+
+  - Trimming whitespace
+  - Converting empty strings to Nothing for optional fields
+  - Preserving internal vote counts
+  - Keeping all references
+
+-}
 rationaleFromForm : RationaleForm -> Rationale
 rationaleFromForm form =
     let
@@ -2060,6 +2090,15 @@ validateFeeProviderForm maybeWallet feeProviderForm =
 -- Build Tx Step
 
 
+{-| Requirements needed to build a valid voting transaction:
+
+  - Voter witness (key or script)
+  - Proposal being voted on
+  - Rationale anchor (metadata hash)
+  - UTXOs for fee payment and scripts
+  - Protocol parameters for cost calculation
+
+-}
 type alias TxRequirements =
     { voter : VoterWitness
     , actionId : ActionId
@@ -2103,6 +2142,16 @@ allPrepSteps maybeCostModels m =
 -- ###################################################################
 
 
+{-| Configuration needed by the view:
+
+  - Message wrapper for parent component
+  - Wallet connectivity status
+  - Available proposals to vote on
+  - JSON-LD metadata context for rationale
+  - Protocol parameters
+  - Link to transaction signing page
+
+-}
 type alias ViewContext msg =
     { wrapMsg : Msg -> msg
     , walletChangeAddress : Maybe Address
@@ -2979,6 +3028,14 @@ viewRationaleSignatureForm jsonLdContexts ({ authors } as form) =
         ]
 
 
+{-| Creates a JSON-LD document for the rationale that follows CIP-0136.
+Includes:
+
+  - Core rationale content
+  - Authors and their signatures if present
+  - Standard context and hash algorithm
+
+-}
 createJsonRationale : JsonLdContexts -> Rationale -> List AuthorWitness -> JE.Value
 createJsonRationale jsonLdContexts rationale authors =
     JE.object <|

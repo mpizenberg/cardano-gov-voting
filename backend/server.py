@@ -267,8 +267,33 @@ async def proxy_request(request: ProxyRequest):
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
+class CompressedStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        """
+        Serve pre-compressed `.gz` or `.br` files if available and the client supports it.
+        """
+        accept_encoding = ""
+        for header, value in scope["headers"]:
+            if header == b"accept-encoding":
+                accept_encoding = value.decode()
+                break
+
+        full_path = os.path.join(self.directory, path)  # pyright: ignore
+
+        # Serve Brotli (.br) if supported and available
+        if "br" in accept_encoding and os.path.exists(full_path + ".br"):
+            return FileResponse(full_path + ".br", headers={"Content-Encoding": "br"})
+
+        # Serve Gzip (.gz) if supported and available
+        if "gzip" in accept_encoding and os.path.exists(full_path + ".gz"):
+            return FileResponse(full_path + ".gz", headers={"Content-Encoding": "gzip"})
+
+        # Default to the uncompressed version
+        return await super().get_response(path, scope)
+
+
 # Mount static files from static directory
-app.mount("/", StaticFiles(directory=static_dir), name="static")
+app.mount("/", CompressedStaticFiles(directory=static_dir), name="static")
 
 
 if __name__ == "__main__":

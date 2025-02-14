@@ -15,6 +15,7 @@ from fastapi import Body, FastAPI, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+from brotli_asgi import BrotliMiddleware
 
 TIMEOUT_SECONDS = 10
 MAX_CONCURRENT_REQUESTS = 100
@@ -46,6 +47,9 @@ async def lifespan(app: FastAPI):
 
 # Initialize FastAPI app
 app = FastAPI(title="Cardano Gov Voting Server", lifespan=lifespan)
+
+# Add BrotliMiddleware to compress responses
+app.add_middleware(BrotliMiddleware)
 
 # Statically served directory (contains the frontend build)
 static_dir = Path("../frontend/static")

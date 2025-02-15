@@ -46,6 +46,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Use a Node image with npm pre-installed to build the frontend Elm app
 FROM node:lts AS frontend-builder
 
+# Install brotli to compress static files
+RUN apt update && apt install -y brotli
+
 # Install the dev dependencies, Elm, etc.
 WORKDIR /frontend
 RUN --mount=type=bind,source=frontend/package.json,target=package.json \
@@ -55,6 +58,7 @@ RUN --mount=type=bind,source=frontend/package.json,target=package.json \
 # Then add the code and build the frontend app
 ADD frontend .
 RUN npm run make
+RUN npm run compress
 
 # ---------------------------------------------------------
 

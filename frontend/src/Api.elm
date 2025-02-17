@@ -23,6 +23,14 @@ import RemoteData exposing (RemoteData)
 import ScriptInfo exposing (ScriptInfo)
 
 
+{-| Free Tier Koios API token.
+Expiration date: 2026-02-17.
+-}
+koiosApiToken : String
+koiosApiToken =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZGRyIjoic3Rha2UxdTl5dG5rMnB4dTlobHJnM2Rqc2t2ODhraG1uOTBsZGowMHE0Z3o4YTJycXN1NGc0NHB6Mm0iLCJleHAiOjE3NzEzMjA0MzQsInRpZXIiOjEsInByb2pJRCI6Imdvdi12b3RpbmcifQ.8PiNPWnc9j5mjL4e7pbGA3cXEB0GepXnxWjXn0mYocY"
+
+
 {-| Overview of all the requests that the app may do.
 
 We could get rid of this type entirely and instead just expose individual functions.
@@ -380,8 +388,10 @@ defaultApiProvider =
     -- Get protocol parameters via Koios
     { loadProtocolParams =
         \toMsg ->
-            Http.post
-                { url = "https://preview.koios.rest/api/v1/ogmios"
+            Http.request
+                { method = "POST"
+                , url = "https://preview.koios.rest/api/v1/ogmios"
+                , headers = [ Http.header "Authorization" <| "Bearer " ++ koiosApiToken ]
                 , body =
                     Http.jsonBody
                         (JE.object
@@ -390,13 +400,17 @@ defaultApiProvider =
                             ]
                         )
                 , expect = Http.expectJson toMsg protocolParamsDecoder
+                , timeout = Nothing
+                , tracker = Nothing
                 }
 
     -- Get governance proposals via Koios
     , loadGovProposals =
         \toMsg ->
-            Http.post
-                { url = "https://preview.koios.rest/api/v1/ogmios"
+            Http.request
+                { method = "POST"
+                , url = "https://preview.koios.rest/api/v1/ogmios"
+                , headers = [ Http.header "Authorization" <| "Bearer " ++ koiosApiToken ]
                 , body =
                     Http.jsonBody
                         (JE.object
@@ -405,6 +419,8 @@ defaultApiProvider =
                             ]
                         )
                 , expect = Http.expectJson toMsg ogmiosGovProposalsDecoder
+                , timeout = Nothing
+                , tracker = Nothing
                 }
 
     -- Load the metadata associated with a governance proposal
@@ -419,8 +435,10 @@ defaultApiProvider =
     -- Retrieve DRep info via Koios using an Ogmios endpoint
     , getDrepInfo =
         \cred toMsg ->
-            Http.post
-                { url = "https://preview.koios.rest/api/v1/ogmios"
+            Http.request
+                { method = "POST"
+                , url = "https://preview.koios.rest/api/v1/ogmios"
+                , headers = [ Http.header "Authorization" <| "Bearer " ++ koiosApiToken ]
                 , body =
                     Http.jsonBody
                         (JE.object
@@ -437,13 +455,17 @@ defaultApiProvider =
                             ]
                         )
                 , expect = Http.expectJson toMsg (ogmiosSpecificDrepInfoDecoder cred)
+                , timeout = Nothing
+                , tracker = Nothing
                 }
 
     -- Retrieve CC member info
     , getCcInfo =
         \cred toMsg ->
-            Http.post
-                { url = "https://preview.koios.rest/api/v1/ogmios"
+            Http.request
+                { method = "POST"
+                , url = "https://preview.koios.rest/api/v1/ogmios"
+                , headers = [ Http.header "Authorization" <| "Bearer " ++ koiosApiToken ]
                 , body =
                     Http.jsonBody
                         (JE.object
@@ -452,13 +474,17 @@ defaultApiProvider =
                             ]
                         )
                 , expect = Http.expectJson toMsg (ogmiosSpecificCcInfoDecoder cred)
+                , timeout = Nothing
+                , tracker = Nothing
                 }
 
     -- Retrieve Pool live stake (end of previous epoch)
     , getPoolLiveStake =
         \poolId toMsg ->
-            Http.post
-                { url = "https://preview.koios.rest/api/v1/ogmios"
+            Http.request
+                { method = "POST"
+                , url = "https://preview.koios.rest/api/v1/ogmios"
+                , headers = [ Http.header "Authorization" <| "Bearer " ++ koiosApiToken ]
                 , body =
                     Http.jsonBody
                         (JE.object
@@ -477,6 +503,8 @@ defaultApiProvider =
                             ]
                         )
                 , expect = Http.expectJson toMsg (poolStakeDecoder poolId)
+                , timeout = Nothing
+                , tracker = Nothing
                 }
 
     -- Make a request to an IPFS RPC
@@ -607,6 +635,7 @@ taskRetrieveTx txId =
                             JD.fail <| "The retrieved Tx (" ++ Bytes.toHex tx.txId ++ ") does not correspond to the expected one (" ++ Bytes.toHex txId ++ ")"
                     )
     in
+    -- TODO: change to authenticated free tier Koios request
     ConcurrentTask.Http.post
         { url = "/proxy/json"
         , headers = []
@@ -628,6 +657,7 @@ It uses the Koios API, proxied through the app server (because CORS).
 -}
 taskGetScriptInfo : Bytes CredentialHash -> ConcurrentTask ConcurrentTask.Http.Error ScriptInfo
 taskGetScriptInfo scriptHash =
+    -- TODO: change to authenticated free tier Koios request
     ConcurrentTask.Http.post
         { url = "/proxy/json"
         , headers = []

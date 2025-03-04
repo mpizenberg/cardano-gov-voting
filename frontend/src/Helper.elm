@@ -71,12 +71,17 @@ prettyAdaLovelace n =
 -}
 viewNumberInput : String -> Int -> (String -> msg) -> Html msg
 viewNumberInput label n msgOnInput =
-    Html.p []
-        [ text label
+    Html.div []
+        [ Html.label [ HA.style "display" "block"] [ text label ]
         , Html.input
             [ HA.type_ "number"
             , HA.value (String.fromInt n)
             , Html.Events.onInput msgOnInput
+            , HA.style "background-color" "#C6C6C6"
+            , HA.style "width" "30%"
+            , HA.style "padding" "10px"
+            , HA.style "border-radius" "1px"
+            , HA.style "border" "1px solid #ccc"
             ]
             []
         ]

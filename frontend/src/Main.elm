@@ -1,4 +1,4 @@
-port module Main exposing (main)
+port module Main exposing (Msg(..), Route(..), link, main, init, update, view)
 
 {-| Main application module for the Cardano Governance Voting web app.
 
@@ -64,10 +64,13 @@ import Html.Attributes as HA exposing (height, src)
 import Html.Events exposing (onClick, preventDefaultOn)
 import Http
 import Json.Decode as JD exposing (Decoder, Value)
+import Navigation exposing (NavState)
 import Page.MultisigRegistration
 import Page.Pdf
 import Page.Preparation exposing (JsonLdContexts)
 import Page.Signing
+import Page.Disclaimer
+import Footer
 import Platform.Cmd as Cmd
 import ProposalMetadata exposing (ProposalMetadata)
 import RemoteData exposing (WebData)
@@ -151,6 +154,7 @@ type alias Model =
     , taskPool : ConcurrentTask.Pool Msg String TaskCompleted
     , db : Value
     , errors : List String
+    , navigationState : Navigation.NavState
     }
 
 
@@ -160,6 +164,7 @@ type Page
     | SigningPage Page.Signing.Model
     | MultisigRegistrationPage Page.MultisigRegistration.Model
     | PdfPage Page.Pdf.Model
+    | DisclaimerPage Page.Disclaimer.Model
 
 
 type TaskCompleted
@@ -185,6 +190,7 @@ init { url, jsonLdContexts, db } =
         , taskPool = ConcurrentTask.pool
         , db = db
         , errors = []
+        , navigationState = Navigation.init
         }
         |> (\( model, cmd ) ->
                 ( model
@@ -220,6 +226,10 @@ type Msg
     | MultisigPageMsg Page.MultisigRegistration.Msg
       -- PDF page
     | PdfPageMsg Page.Pdf.Msg
+      -- Disclaimer page
+    | DisclaimerPageMsg Page.Disclaimer.Msg
+      -- Navigation
+    | NavigationMsg Navigation.Msg
       -- Task port
     | OnTaskProgress ( ConcurrentTask.Pool Msg String TaskCompleted, Cmd Msg )
     | OnTaskComplete (ConcurrentTask.Response String TaskCompleted)
@@ -231,6 +241,7 @@ type Route
     | RouteSigning { expectedSigners : List (Bytes CredentialHash), tx : Maybe Transaction }
     | RouteMultisigRegistration
     | RoutePdf
+    | RouteDisclaimer
     | Route404
 
 
@@ -292,6 +303,9 @@ locationHrefToRoute locationHref =
 
                 [ "page", "pdf" ] ->
                     RoutePdf
+                    
+                [ "page", "disclaimer" ] ->
+                    RouteDisclaimer
 
                 _ ->
                     Route404
@@ -317,9 +331,12 @@ routeToAppUrl route =
 
         RouteMultisigRegistration ->
             AppUrl.fromPath [ "page", "registration" ]
-
         RoutePdf ->
             AppUrl.fromPath [ "page", "pdf" ]
+            
+        RouteDisclaimer ->
+            AppUrl.fromPath [ "page", "disclaimer" ]
+
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -469,6 +486,20 @@ update msg model =
                     ( model, Cmd.none )
 
         -- Result Http.Error (List Page.Preparation.ActiveProposal)
+        ( DisclaimerPageMsg subMsg, { page } ) ->
+            case page of
+                DisclaimerPage disclaimerModel ->
+                    let
+                        (updatedDisclaimerModel, disclaimerCmd) =
+                            Page.Disclaimer.update subMsg disclaimerModel
+                    in
+                    ( { model | page = DisclaimerPage updatedDisclaimerModel }
+                    , Cmd.map DisclaimerPageMsg disclaimerCmd
+                    )
+                    
+                _ ->
+                    ( model, Cmd.none )
+
         ( GotProposals result, _ ) ->
             case result of
                 Err httpError ->
@@ -509,6 +540,15 @@ update msg model =
 
         ( OnTaskComplete taskCompleted, _ ) ->
             handleCompletedTask taskCompleted model
+
+        ( NavigationMsg navMsg, _ ) ->
+            let
+                ( newNavState, navCmd ) =
+                    Navigation.update navMsg model.navigationState
+            in
+            ( { model | navigationState = newNavState }
+            , Cmd.map NavigationMsg navCmd
+            )
 
 
 handleUrlChange : Route -> Model -> ( Model, Cmd Msg )
@@ -564,6 +604,14 @@ handleUrlChange route model =
             ( { model
                 | errors = []
                 , page = PdfPage Page.Pdf.initialModel
+              }
+            , pushUrl <| AppUrl.toString <| routeToAppUrl route
+            )
+            
+        RouteDisclaimer ->
+            ( { model
+                | errors = []
+                , page = DisclaimerPage Page.Disclaimer.initialModel
               }
             , pushUrl <| AppUrl.toString <| routeToAppUrl route
             )
@@ -747,18 +795,41 @@ view model =
         , viewContent model
         , viewErrors model.errors
         , Html.hr [] []
-        , Html.p [] [ text "Built with <3 by the CF, using elm-cardano, data provided by Koios" ]
+        , Footer.view
+            { copyright = "© 2025 Cardano Stiftung"
+            , disclaimerLink = "#/page/disclaimer"
+            }
         ]
-
 
 viewHeader : Model -> Html Msg
 viewHeader model =
     div []
-        [ Html.h1 [] [ text "Cardano Governance Voting" ]
-        , Html.p [] (text "Pages: " :: viewPagesLinks)
+        [ Navigation.view 
+            { state = model.navigationState
+            , toMsg = NavigationMsg
+            , brand = "Cardano Governance Voting"
+            , items =
+                [ { label = "Home", url = AppUrl.toString <| routeToAppUrl RouteLanding, isActive = model.page == LandingPage }
+                , { label = "Vote Preparation", url = AppUrl.toString <| routeToAppUrl RoutePreparation, isActive = case model.page of
+                    PreparationPage _ -> True
+                    _ -> False
+                  }
+                , { label = "Multisig Registration", url = AppUrl.toString <| routeToAppUrl RouteMultisigRegistration, isActive = case model.page of
+                    MultisigRegistrationPage _ -> True
+                    _ -> False
+                  }
+                , { label = "PDFs", url = AppUrl.toString <| routeToAppUrl RoutePdf, isActive = case model.page of
+                    PdfPage _ -> True
+                    _ -> False
+                  }
+                , { label = "Disclaimer", url = AppUrl.toString <| routeToAppUrl RouteDisclaimer, isActive = case model.page of
+                    DisclaimerPage _ -> True
+                    _ -> False
+                  }
+                ]
+            }
         , viewWalletSection model
         ]
-
 
 viewPagesLinks : List (Html Msg)
 viewPagesLinks =
@@ -802,6 +873,9 @@ viewContent model =
         LandingPage ->
             viewLandingPage
 
+        DisclaimerPage disclaimerModel ->
+            Html.map DisclaimerPageMsg (Page.Disclaimer.view disclaimerModel)
+
         PreparationPage prepModel ->
             Page.Preparation.view
                 { wrapMsg = PreparationPageMsg
@@ -842,7 +916,7 @@ viewContent model =
 viewLandingPage : Html Msg
 viewLandingPage =
     div []
-        [ Html.h2 [] [ text "Welcome to the Voting App" ]
+        [ Html.h2 [ HA.class "text-red-600 font-bold text-3xl" ] [ text "Welcome to the Voting App" ]
         , Html.p [] [ link RoutePreparation [] [ text "Start vote preparation" ] ]
         , Html.p [] [ link (RouteSigning { expectedSigners = [], tx = Nothing }) [] [ text "Sign an already prepared Tx" ] ]
         , Html.p [] [ link RouteMultisigRegistration [] [ text "Register as a Multisig DRep" ] ]

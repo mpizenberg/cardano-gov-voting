@@ -17,7 +17,7 @@ import Bytes as ElmBytes
 import File exposing (File)
 import File.Download
 import File.Select
-import Html exposing (Html, div, text)
+import Html exposing (Html, div, button, text)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
 import Http
@@ -25,6 +25,7 @@ import Json.Decode as JD exposing (Decoder)
 import Page.Preparation as Preparation exposing (InternalVote, Rationale, Reference, ReferenceType(..))
 import Platform.Cmd as Cmd
 import Task
+import Helper
 
 
 
@@ -246,7 +247,7 @@ view ctx model =
 
         fileStatusSection =
             div []
-                [ Html.h3 [] [ text "File Status" ]
+                [ Html.h3 [ HA.class "text-xl font-bold py-4" ] [ text "File Status" ]
                 , case model.fileContent of
                     Nothing ->
                         Html.p [] [ text "No file loaded yet" ]
@@ -267,15 +268,15 @@ view ctx model =
                         VoteRationale _ ->
                             div []
                                 [ Html.h3 [] [ text "PDF conversion" ]
-                                , Html.button [ onClick <| ConvertToPdfButtonClicked raw ] [ text "Convert to PDF" ]
+                                , Html.p [] [ Helper.viewButton "Convert to PDF" <| ConvertToPdfButtonClicked raw ]
                                 ]
 
                 _ ->
                     text ""
     in
     Html.map ctx.wrapMsg <|
-        div []
-            [ Html.h2 [] [ text "Generate pretty PDFs for governance metadata" ]
+       div [ HA.class "container mx-auto " ]
+        [ Html.h2 [ HA.class "text-2xl font-bold py-4" ] [ text "Generate pretty PDFs for governance metadata" ]
             , Html.p []
                 [ text "This page aims to help generate pretty PDFs for different kinds of governance metadata JSON files."
                 , text " These are metadata documents following and extending the "
@@ -285,7 +286,7 @@ view ctx model =
                 , extLink "https://github.com/cardano-foundation/CIPs/tree/master/CIP-0136" "CIP-136 standard"
                 , text "."
                 ]
-            , Html.button [ onClick LoadJsonButtonClicked ] [ text "Load JSONLD file" ]
+            , Html.p [HA.class "mt-4"] [ Helper.viewButton "Load JSONLD file" LoadJsonButtonClicked ]
             , fileStatusSection
             , pdfConversionSection
             , viewError model.error

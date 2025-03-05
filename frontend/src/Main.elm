@@ -64,7 +64,7 @@ import Html.Attributes as HA exposing (height, src)
 import Html.Events exposing (onClick, preventDefaultOn)
 import Http
 import Json.Decode as JD exposing (Decoder, Value)
-import Navigation exposing (NavState)
+import Navigation exposing (NavState, Msg(..), Route(..), routeToAppUrl, locationHrefToRoute, link)
 import Page.MultisigRegistration
 import Page.Pdf
 import Page.Preparation exposing (JsonLdContexts)
@@ -542,13 +542,27 @@ update msg model =
             handleCompletedTask taskCompleted model
 
         ( NavigationMsg navMsg, _ ) ->
-            let
-                ( newNavState, navCmd ) =
-                    Navigation.update navMsg model.navigationState
-            in
-            ( { model | navigationState = newNavState }
-            , Cmd.map NavigationMsg navCmd
-            )
+            case navMsg of
+                Navigation.ConnectWalletClicked { id } ->
+                    -- Reuse your existing wallet connection code
+                    ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = [] })) )
+                
+                Navigation.DisconnectWalletClicked ->
+                    -- Reuse your existing disconnect code
+                    ( { model | wallet = Nothing, walletChangeAddress = Nothing, walletUtxos = Nothing }
+                    , Cmd.none
+                    )
+                
+                _ ->
+                    -- Handle other navigation messages
+                    let
+                        ( newNavState, navCmd ) =
+                            Navigation.update navMsg model.navigationState
+                    in
+                    ( { model | navigationState = newNavState }
+                    , Cmd.map NavigationMsg navCmd
+                    )
+    
 
 
 handleUrlChange : Route -> Model -> ( Model, Cmd Msg )
@@ -790,46 +804,79 @@ handleCompletedTask response model =
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ viewHeader model
+    div [ 
+        HA.style "min-height" "100vh",
+        HA.style "position" "relative",
+        HA.style "padding-bottom" "100px"
+    ]
+        [ -- Gradient circles
+          div [ 
+              HA.style "position" "absolute",
+              HA.style "right" "0",
+              HA.style "top" "0",
+              HA.style "z-index" "-1" 
+          ]
+          [ -- Blue gradient circle
+            div [ 
+                HA.style "width" "75vw",
+                HA.style "height" "75vh",
+                HA.style "border-radius" "75rem",
+                HA.style "background" "linear-gradient(270deg, #00e0ff, #0084ff 100%)",
+                HA.style "filter" "blur(128px)",
+                HA.style "transform-origin" "center center",
+                HA.style "position" "absolute",
+                HA.style "right" "-7.5vw",
+                HA.style "top" "-30vh",
+                HA.class "blue-gradient-animation"
+            ] []
+            -- Red-Yellow gradient circle
+          , div [
+                HA.style "width" "22rem",
+                HA.style "height" "22rem",
+                HA.style "border-radius" "22rem",
+                HA.style "background" "linear-gradient(90deg, #d1085c -0.01%, #ffad0f 55.09%)",
+                HA.style "filter" "blur(4rem)",
+                HA.style "transform-origin" "center center",
+                HA.style "position" "absolute",
+                HA.style "right" "0vh",
+                HA.style "top" "5vh",
+                HA.class "red-yellow-gradient-animation"
+            ] []
+          ]
+        , viewHeader model
         , viewContent model
         , viewErrors model.errors
-        , Html.hr [] []
         , Footer.view
             { copyright = "© 2025 Cardano Stiftung"
-            , disclaimerLink = "#/page/disclaimer"
+            , disclaimerLink = "/page/disclaimer"
             }
         ]
 
 viewHeader : Model -> Html Msg
 viewHeader model =
-    div []
-        [ Navigation.view 
-            { state = model.navigationState
-            , toMsg = NavigationMsg
-            , brand = "Cardano Governance Voting"
-            , items =
-                [ { label = "Home", url = AppUrl.toString <| routeToAppUrl RouteLanding, isActive = model.page == LandingPage }
-                , { label = "Vote Preparation", url = AppUrl.toString <| routeToAppUrl RoutePreparation, isActive = case model.page of
-                    PreparationPage _ -> True
-                    _ -> False
-                  }
-                , { label = "Multisig Registration", url = AppUrl.toString <| routeToAppUrl RouteMultisigRegistration, isActive = case model.page of
-                    MultisigRegistrationPage _ -> True
-                    _ -> False
-                  }
-                , { label = "PDFs", url = AppUrl.toString <| routeToAppUrl RoutePdf, isActive = case model.page of
-                    PdfPage _ -> True
-                    _ -> False
-                  }
-                , { label = "Disclaimer", url = AppUrl.toString <| routeToAppUrl RouteDisclaimer, isActive = case model.page of
-                    DisclaimerPage _ -> True
-                    _ -> False
-                  }
-                ]
-            }
-        , viewWalletSection model
-        ]
+    Navigation.view 
+        { state = model.navigationState
+        , toMsg = NavigationMsg
+        , brand = ""
+        , items =
+            [ { label = "Home", url = AppUrl.toString <| routeToAppUrl RouteLanding, isActive = model.page == LandingPage }
+            , { label = "Vote Preparation", url = AppUrl.toString <| routeToAppUrl RoutePreparation, isActive = case model.page of
+                PreparationPage _ -> True
+                _ -> False
+              }
+            , { label = "Multisig Registration", url = AppUrl.toString <| routeToAppUrl RouteMultisigRegistration, isActive = case model.page of
+                MultisigRegistrationPage _ -> True
+                _ -> False
+              }
+            , { label = "PDFs", url = AppUrl.toString <| routeToAppUrl RoutePdf, isActive = case model.page of
+                PdfPage _ -> True
+                _ -> False
+              }
+            ]
+        , wallet = model.wallet
+        , walletsDiscovered = model.walletsDiscovered
+        , walletChangeAddress = model.walletChangeAddress
+        }
 
 viewPagesLinks : List (Html Msg)
 viewPagesLinks =
@@ -841,32 +888,6 @@ viewPagesLinks =
     , text " | "
     , link RoutePdf [] [ text "PDFs" ]
     ]
-
-
-viewWalletSection : Model -> Html Msg
-viewWalletSection model =
-    case model.wallet of
-        Nothing ->
-            viewAvailableWallets model.walletsDiscovered
-
-        Just wallet ->
-            viewConnectedWallet wallet model.walletChangeAddress
-
-
-viewConnectedWallet : Cip30.Wallet -> Maybe Address -> Html Msg
-viewConnectedWallet wallet maybeChangeAddress =
-    div []
-        [ text <| "Connected Wallet: " ++ (Cip30.walletDescriptor wallet).name
-        , case maybeChangeAddress of
-            Just addr ->
-                text <| " (" ++ prettyAddr addr ++ ") "
-
-            Nothing ->
-                text " "
-        , button [ onClick DisconnectWalletButtonClicked ] [ text "Disconnect" ]
-        ]
-
-
 viewContent : Model -> Html Msg
 viewContent model =
     case model.page of
@@ -915,16 +936,17 @@ viewContent model =
 
 viewLandingPage : Html Msg
 viewLandingPage =
-    div []
-        [ Html.h2 [ HA.class "text-red-600 font-bold text-3xl" ] [ text "Welcome to the Voting App" ]
-        , Html.p [] [ link RoutePreparation [] [ text "Start vote preparation" ] ]
-        , Html.p [] [ link (RouteSigning { expectedSigners = [], tx = Nothing }) [] [ text "Sign an already prepared Tx" ] ]
-        , Html.p [] [ link RouteMultisigRegistration [] [ text "Register as a Multisig DRep" ] ]
-        , Html.p [] [ link RoutePdf [] [ text "Generate PDFs for governance metadata" ] ]
+    div [ HA.class "container mx-auto" ]
+        [ Html.h2 [ HA.style "font-size" "5.5rem", HA.style "line-height" "normal", HA.style "max-width" "50rem", HA.style "margin-top" "4rem" ] 
+            [ text "Welcome to Cardano Governance Voting" ]
+        , Html.p [ HA.style "font-size" "1.3rem", HA.style "max-width" "45rem", HA.class "mb-2" ]
+            [ text "Leverage blockchain to build future-proof solutions. This page aims to help generate pretty PDFs for different kinds of governance metadata JSON files."
+            ]
+        , Html.p [ HA.class "mt-4" ] 
+            [ link RoutePreparation [ HA.class "inline-block" ]
+                [ Helper.viewButton "Get Started" NoMsg ]
+            ]
         ]
-
-
-
 -- Helpers
 
 
@@ -938,27 +960,3 @@ viewErrors errors =
             [ Html.h3 [] [ text "Errors" ]
             , Html.ul [] (List.map (\err -> Html.li [] [ Html.pre [] [ text err ] ]) errors)
             ]
-
-
-viewAvailableWallets : List Cip30.WalletDescriptor -> Html Msg
-viewAvailableWallets wallets =
-    if List.isEmpty wallets then
-        Html.p [] [ text "It seems like you don’t have any CIP30 wallet?" ]
-
-    else
-        let
-            walletDescription : Cip30.WalletDescriptor -> String
-            walletDescription w =
-                "id: " ++ w.id ++ ", name: " ++ w.name
-
-            walletIcon : Cip30.WalletDescriptor -> Html Msg
-            walletIcon { icon } =
-                Html.img [ src icon, height 32 ] []
-
-            connectButton { id } =
-                Html.button [ onClick (ConnectButtonClicked { id = id }) ] [ text "connect" ]
-
-            walletRow w =
-                div [] [ walletIcon w, text (walletDescription w), text " ", connectButton w ]
-        in
-        div [] (List.map walletRow wallets)

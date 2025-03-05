@@ -498,8 +498,8 @@ type alias ViewContext msg =
 
 view : ViewContext msg -> Model -> Html msg
 view ctx model =
-    div []
-        [ Html.h2 [] [ text "Registering a multisig DRep" ]
+     div [ HA.class "container mx-auto " ]
+        [ Html.h2 [ HA.class "text-2xl font-bold py-4" ] [ text "Registering a multisig DRep" ]
         , Html.p []
             [ text "This page aims to facilitate registration of multisig DReps."
             , text " The goal is to build a Tx that can both"
@@ -508,11 +508,9 @@ view ctx model =
             , text " For multisigs with 5 keys or more, it’s starting to be interesting to use a script reference"
             , text " instead of an inline script to pay less fees."
             ]
-        , Html.hr [] []
-        , Html.h3 [] [ text "Multisig Configuration" ]
+        , Html.h3 [ HA.class "text-xl font-bold py-4" ] [ text "Multisig Configuration" ]
         , Html.map ctx.wrapMsg <| viewMultisigConfigForm model
-        , Html.hr [] []
-        , Html.h3 [] [ text "DRep Registration" ]
+        , Html.h3 [ HA.class "text-xl font-bold py-4" ] [ text "DRep Registration" ]
         , Html.map ctx.wrapMsg <| viewRegisterForm model
         , case model.registerTxSummary of
             Nothing ->
@@ -525,11 +523,10 @@ view ctx model =
                     , Html.pre [] [ text <| prettyTx summary.tx ]
                     , viewImportantSummaryTx summary
                     , ctx.signingLink summary.tx summary.expectedSignatures [ text "Sign & submit the Tx on the signing page" ]
-                    ]
-        , Html.hr [] []
-        , Html.h3 [] [ text "DRep Unregistration" ]
+                    ]   
+        , Html.h3 [ HA.class "text-xl font-bold py-4" ] [ text "DRep Unregistration" ]
         , Html.map ctx.wrapMsg <|
-            Html.p [] [ button [ onClick BuildUnregistrationTxButtonClicked ] [ text "Build Unregistration Tx" ] ]
+            Html.p [] [ Helper.viewButton "Build Unregistration Tx" BuildUnregistrationTxButtonClicked ]
         , case model.unregisterTxSummary of
             Nothing ->
                 text ""
@@ -547,8 +544,7 @@ view ctx model =
 
             Just err ->
                 div []
-                    [ Html.hr [] []
-                    , Html.p []
+                    [ Html.h3 [ HA.class "" ]
                         [ text "Error:"
                         , Html.pre [] [ text err ]
                         ]
@@ -559,14 +555,16 @@ view ctx model =
 viewMultisigConfigForm : Model -> Html Msg
 viewMultisigConfigForm { minCount, hashes } =
     Html.div []
-        [ Helper.viewNumberInput "Minimum number of required signatures: " minCount MinCountChange
-        , Html.p []
+        [ Html.p [ HA.class "py-4 flex items-center" ]
+            [ text "Minimum number of required signatures: "
+            , Helper.viewNumberInputInline minCount MinCountChange
+            ]
+        , Html.p [ HA.class "py-4" ]
             [ text "List of public key hashes: "
-            , button [ onClick AddKeyButtonClicked ] [ text "Add a key" ]
+            , Helper.viewButton "Add a key" AddKeyButtonClicked
             ]
         , div [] (List.indexedMap viewOneKeyForm hashes)
         ]
-
 
 viewRegisterForm : Model -> Html Msg
 viewRegisterForm { register, createOutputRef } =
@@ -593,23 +591,17 @@ viewRegisterForm { register, createOutputRef } =
                 []
             , Html.label [ HA.for "refOutput" ] [ text " Create an output reference" ]
             ]
-        , Html.p [] [ button [ onClick BuildRegistrationTxButtonClicked ] [ text "Build Registration Tx" ] ]
+        , Html.p [HA.class "mt-4"] [ Helper.viewButton "Build Registration Tx" BuildRegistrationTxButtonClicked ]
         ]
 
 
 viewOneKeyForm : Int -> String -> Html Msg
 viewOneKeyForm n hash =
-    Html.p []
-        [ button [ onClick (DeleteKeyButtonClicked n) ] [ text "Delete" ]
-        , Html.text " key hash: "
-        , Html.input
-            [ HA.type_ "text"
-            , HA.value hash
-            , Html.Events.onInput (KeyHashChange n)
-            ]
-            []
+    Html.p [ HA.class "flex items-center py-2" ]
+        [ Html.text "Key hash: "
+        , Helper.textFieldInline "" hash (KeyHashChange n)
+        , Helper.viewButton "Delete" (DeleteKeyButtonClicked n)
         ]
-
 
 viewImportantSummaryTx : RegisterTxSummary -> Html msg
 viewImportantSummaryTx { nativeScript, scriptHash, scriptRefInput, drepId } =

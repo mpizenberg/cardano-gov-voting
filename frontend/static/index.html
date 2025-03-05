@@ -1,71 +1,155 @@
 <!doctype html>
 <html>
-    <head>
-        <meta charset="UTF-8" />
-        <title>elm-cardano</title>
-        <link rel="stylesheet" href="/css/output.css">
-    </head>
 
-    <body>
-        <div id="main-app"></div>
-        <script type="module">
-            import * as ElmCardano from "/elm-cardano.js";
-            import { jsonLdContexts } from "/json-ld-contexts.js";
-            import * as ConcurrentTask from "/elm-concurrent-task.js";
-            import * as Storage from "/storage.js";
+<head>
+    <meta charset="UTF-8" />
+    <title>Cardano Governance Voting Tool</title>
+    <link rel="stylesheet" href="/css/output.css">
+    <link rel="icon" href="/logo/icon-light.png" type="image/png">
+    <!-- Add this in the head section of your HTML file -->
+    <style>
+        /* Blue gradient animation */
+        @keyframes upAndDown {
 
-            // Load the Main.elm file compiled into the main.js bundle
-            await ElmCardano.loadMain("/main.js");
+            0%,
+            100% {
+                transform: translateY(0);
+            }
 
-            // Initialize the main Elm app
-            const db = await Storage.init({
-                version: 2,
-                storeNames: ["proposalMetadata", "tx", "scriptInfo"],
+            50% {
+                transform: translateY(-40px);
+            }
+        }
+
+        @keyframes leftAndRight {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            50% {
+                transform: translateX(-20px);
+            }
+        }
+
+        /* Red-Yellow gradient animation */
+        @keyframes moveInCircle {
+            0% {
+                transform: rotate(0deg) translateX(20px) rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg) translateX(20px) rotate(-360deg);
+            }
+        }
+
+        @keyframes leftAndRightLearnCircle {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            50% {
+                transform: translateX(-30px);
+            }
+        }
+
+        .blue-gradient-animation {
+            animation: upAndDown 24s ease infinite, leftAndRight 28s ease-in-out infinite;
+        }
+
+        .red-yellow-gradient-animation {
+            animation: moveInCircle 24s reverse infinite, upAndDown 28s ease infinite, leftAndRightLearnCircle 24s ease infinite;
+        }
+
+        /* Media query for larger screens */
+        @media (min-width: 1280px) {
+            .blue-gradient-animation {
+                width: 60vw !important;
+                height: 60vh !important;
+                border-radius: 38rem !important;
+                filter: blur(8rem) !important;
+                right: 0vw !important;
+                top: 0vw !important;
+            }
+
+            .red-yellow-gradient-animation {
+                right: 15vw !important;
+                top: 15vh !important;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .multisig-hero-desktop-gradient {
+                display: block !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="main-app"></div>
+    <script type="module">
+        import * as ElmCardano from "/elm-cardano.js";
+        import { jsonLdContexts } from "/json-ld-contexts.js";
+        import * as ConcurrentTask from "/elm-concurrent-task.js";
+        import * as Storage from "/storage.js";
+
+        // Load the Main.elm file compiled into the main.js bundle
+        await ElmCardano.loadMain("/main.js");
+
+        // Initialize the main Elm app
+        const db = await Storage.init({
+            version: 2,
+            storeNames: ["proposalMetadata", "tx", "scriptInfo"],
+        });
+        var mainApp = Elm.Main.init({
+            node: document.getElementById("main-app"),
+            flags: { url: window.location.href, jsonLdContexts, db },
+        });
+        ElmCardano.init({
+            portFromElmToWallet: mainApp.ports.toWallet,
+            portFromWalletToElm: mainApp.ports.fromWallet,
+        });
+
+        // Task Port (andrewMacmurray/elm-concurrent-task)
+
+        ConcurrentTask.register({
+            tasks: {
+                // "storage:init": async (args) => await Storage.init(args),
+                "storage:read": async (args) => await Storage.read(args),
+                "storage:write": async (args) => await Storage.write(args),
+            },
+            ports: {
+                send: mainApp.ports.sendTask,
+                receive: mainApp.ports.receiveTask,
+            },
+        });
+
+        // Navigation
+
+        // Inform app of browser navigation (the BACK and FORWARD buttons)
+        window.addEventListener("popstate", function () {
+            mainApp.ports.onUrlChange.send(location.href);
+        });
+
+        // Change the URL upon request
+        // Do (// not) inform app of the change
+        mainApp.ports.pushUrl.subscribe(function (url) {
+            history.pushState({}, "", url);
+            // mainApp.ports.onUrlChange.send(location.href);
+        });
+
+        // JSON rationale conversion from String to File
+        mainApp.ports.jsonRationaleToFile.subscribe(async function (data) {
+            const file = new File([data.fileContent], data.fileName, {
+                type: "text/plain",
             });
-            var mainApp = Elm.Main.init({
-                node: document.getElementById("main-app"),
-                flags: { url: window.location.href, jsonLdContexts, db },
-            });
-            ElmCardano.init({
-                portFromElmToWallet: mainApp.ports.toWallet,
-                portFromWalletToElm: mainApp.ports.fromWallet,
-            });
+            mainApp.ports.gotRationaleAsFile.send(file);
+        });
+    </script>
+</body>
 
-            // Task Port (andrewMacmurray/elm-concurrent-task)
-
-            ConcurrentTask.register({
-                tasks: {
-                    // "storage:init": async (args) => await Storage.init(args),
-                    "storage:read": async (args) => await Storage.read(args),
-                    "storage:write": async (args) => await Storage.write(args),
-                },
-                ports: {
-                    send: mainApp.ports.sendTask,
-                    receive: mainApp.ports.receiveTask,
-                },
-            });
-
-            // Navigation
-
-            // Inform app of browser navigation (the BACK and FORWARD buttons)
-            window.addEventListener("popstate", function () {
-                mainApp.ports.onUrlChange.send(location.href);
-            });
-
-            // Change the URL upon request
-            // Do (// not) inform app of the change
-            mainApp.ports.pushUrl.subscribe(function (url) {
-                history.pushState({}, "", url);
-                // mainApp.ports.onUrlChange.send(location.href);
-            });
-
-            // JSON rationale conversion from String to File
-            mainApp.ports.jsonRationaleToFile.subscribe(async function (data) {
-                const file = new File([data.fileContent], data.fileName, {
-                    type: "text/plain",
-                });
-                mainApp.ports.gotRationaleAsFile.send(file);
-            });
-        </script>
-    </body>
 </html>

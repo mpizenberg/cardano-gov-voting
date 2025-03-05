@@ -60,7 +60,7 @@ update msg model =
 -}
 view : Model -> Html Msg
 view _ =
-    div [ class "disclaimer-container" ]
+    div [ class "disclaimer-container container mx-auto" ]
         [ h2 [ class "text-2xl font-bold mb-6" ] [ text "Disclaimer" ]
         , div [ class "disclaimer-content" ]
             [ h3 [ class "text-xl font-semibold mb-4" ] [ text "Cardano Signature Verification" ]

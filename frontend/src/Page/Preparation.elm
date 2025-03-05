@@ -2164,7 +2164,7 @@ type alias ViewContext msg =
 
 view : ViewContext msg -> Model -> Html msg
 view ctx model =
-    div [ HA.class "container mx-auto p-4" ]
+    div [ HA.class "container mx-auto " ]
         [ Html.h2 [ HA.class "text-2xl font-bold" ] [ text "Vote Preparation" ]
         , viewVoterIdentificationStep ctx model.voterStep
         , viewProposalSelectionStep ctx model
@@ -2187,9 +2187,9 @@ viewVoterIdentificationStep ctx step =
         Preparing form ->
             Html.map ctx.wrapMsg <|
                 div []
-                    [ Html.p [] [ textField "Voter governance ID (drep/pool/cc_hot)" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
+                    [ Html.p [] [ Helper.firstTextField "Voter governance ID (drep/pool/cc_hot)" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
                     , Html.Lazy.lazy viewValidGovIdForm form
-                    , Html.p [ HA.class "my-4"] [ viewButton "Confirm Voter" ValidateVoterFormButtonClicked ]
+                    , Html.p [ HA.class "my-4"] [ Helper.viewButton "Confirm Voter" ValidateVoterFormButtonClicked ]
                     , viewError form.error
                     ]
 
@@ -2305,7 +2305,7 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
         RemoteData.Success { scriptHash, script, nativeCborEncodingMatchesHash } ->
             let
                 utxoRefForm =
-                    Html.p [] [ textField "Reference UTxO" utxoRef UtxoRefChange ]
+                    Html.p [] [ Helper.textField "Reference UTxO" utxoRef UtxoRefChange ]
 
                 refScriptFeeSavings =
                     Transaction.estimateRefScriptFeeSavings script
@@ -2439,7 +2439,7 @@ viewIdentifiedVoter form voter =
 
             WithScript _ (PlutusWitness _) ->
                 Html.p [] [ text "TODO: display Plutus script witness" ]
-        , Html.p [] [ viewButton "Change Voter" ChangeVoterButtonClicked ]
+        , Html.p [] [ Helper.viewButton "Change Voter" ChangeVoterButtonClicked ]
         ]
 
 
@@ -2475,7 +2475,7 @@ viewProposalSelectionStep ctx model =
                                     |> List.map (Html.map ctx.wrapMsg)
                         in
                         div []
-                            [ viewSelect
+                            [ Helper.viewSelect
                                 [ Html.Events.onInput (PickProposalButtonClicked >> ctx.wrapMsg) ]
                                 (Html.option [ HA.value "" ] [ text "Choose a proposal to vote on..." ] :: proposalOptions)
                             ]
@@ -2483,7 +2483,7 @@ viewProposalSelectionStep ctx model =
 
         Validating _ _ ->
             div []
-                [ Html.h3 [] [ text "Pick a Proposal" ]
+                [ Html.h2 [ HA.class "text-2xl font-bold" ] [ text "Pick a Proposal" ]
                 , Html.p [] [ text "Validating the picked proposal ..." ]
                 ]
 
@@ -2514,7 +2514,7 @@ viewProposalSelectionStep ctx model =
                             )
             in
             div []
-                [ Html.h3 [] [ text "Pick a Proposal" ]
+                [ Html.h2 [ HA.class "text-2xl font-bold" ] [ text "Pick a Proposal" ]
                 , div []
                     [ Html.p [] [ text "Picked: ", cardanoScanActionLink id ]
                     , Html.p [] [ text <| "Type: " ++ actionType ]
@@ -2612,7 +2612,7 @@ viewRationaleStep ctx step =
     Html.map ctx.wrapMsg <|
         case step of
             Preparing form ->
-                 div [ HA.class "container mx-auto p-4", HA.style "padding-top" "8px", HA.style "padding-bottom" "8px"]
+                 div [ HA.class "container mx-auto", HA.style "padding-top" "8px", HA.style "padding-bottom" "8px"]
                     [ Html.h2 [ HA.class "text-2xl font-bold my-4" ] [ text "Vote Rationale" ]
                     , viewSummaryForm form.summary
                     , viewStatementForm form.rationaleStatement
@@ -2621,7 +2621,7 @@ viewRationaleStep ctx step =
                     , viewConclusionForm form.conclusion
                     , viewInternalVoteForm form.internalVote
                     , viewReferencesForm form.references
-                    , Html.p [] [ viewButton "Confirm rationale" ValidateRationaleButtonClicked ]
+                    , Html.p [] [ Helper.viewButton "Confirm rationale" ValidateRationaleButtonClicked ]
                     , viewError form.error
                     ]
 
@@ -2629,7 +2629,7 @@ viewRationaleStep ctx step =
                 div []
                     [ Html.h3 [] [ text "Vote Rationale" ]
                     , Html.p [] [ text "validating rationale data ..." ]
-                    , Html.p [] [ viewButton "Edit rationale" EditRationaleButtonClicked ]
+                    , Html.p [] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
                     ]
 
             Done _ rationale ->
@@ -2642,67 +2642,67 @@ viewRationaleStep ctx step =
                     , viewConclusion rationale.conclusion
                     , viewInternalVote rationale.internalVote
                     , viewReferences rationale.references
-                    , Html.p [] [ viewButton "Edit rationale" EditRationaleButtonClicked ]
+                    , Html.p [] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
                     ]
 
 
 viewSummaryForm : MarkdownForm -> Html Msg
 viewSummaryForm form =
-    div [ HA.class "container mx-auto p-4" ]
+    div [ HA.class "container mx-auto" ]
         [ Html.h2 [ HA.class "text-xl font-bold" ] [ text "Summary" ]
         , Html.h1 [ HA.class "text-md mb-2" ] [ text "Compulsory." ]
         , Html.p [ HA.class "text-sm" ] [ text "Clearly state your stance, summarize your rationale with your main argument." ]
         , Html.p [ HA.class "text-sm" ] [ text "Limited to 300 characters, does NOT support markdown." ]
         , div []
-            [ viewTextarea form RationaleSummaryChange ]
+            [ Helper.viewTextarea form RationaleSummaryChange ]
         ]
 
 viewStatementForm : MarkdownForm -> Html Msg
 viewStatementForm form =
-    div [ HA.class "container mx-auto p-4 mb-4" ]
+    div [ HA.class "container mx-auto mb-4" ]
         [ Html.h4 [ HA.class "text-xl font-bold" ] [ text "Rationale Statement" ]
         , Html.p [ HA.class "text-sm" ] [ text "Compulsory." ]
         , Html.p [ HA.class "text-sm" ] [ text "Fully describe your rationale, with your arguments in full details." ]
         , Html.p [ HA.class "text-sm" ] [ text "No size limit and markdown is supported (preview below)." ]
         , div []
-            [ viewTextarea form RationaleStatementChange ]
+            [ Helper.viewTextarea form RationaleStatementChange ]
         ]
 
 viewPrecedentDiscussionForm : MarkdownForm -> Html Msg
 viewPrecedentDiscussionForm form =
-    div [ HA.class "container mx-auto p-4 mb-4" ]
+    div [ HA.class "container mx-auto mb-4" ]
         [ Html.h4 [ HA.class "text-xl font-bold" ] [ text "Precedent Discussion" ]
         , Html.p [ HA.class "text-sm" ] [ text "Optional." ]
         , Html.p [ HA.class "text-sm" ] [ text "Discuss what you feel is relevant precedent." ]
         , Html.p [ HA.class "text-sm" ] [ text "No size limit and markdown is supported (preview below)." ]
         , div []
-            [ viewTextarea form PrecedentDiscussionChange ]
+            [ Helper.viewTextarea form PrecedentDiscussionChange ]
         ]
 
 viewCounterArgumentForm : MarkdownForm -> Html Msg
 viewCounterArgumentForm form =
-    div [ HA.class "container mx-auto p-4 mb-4" ]
+    div [ HA.class "container mx-auto mb-4" ]
         [ Html.h4 [ HA.class "text-xl font-bold" ] [ text "Counter Argument Discussion" ]
         , Html.p [ HA.class "text-sm" ] [ text "Optional." ]
         , Html.p [ HA.class "text-sm" ] [ text "Discuss significant counter arguments to your position." ]
         , Html.p [ HA.class "text-sm" ] [ text "No size limit and markdown is supported (preview below)." ]
         , div []
-            [ viewTextarea form CounterArgumentChange ]
+            [ Helper.viewTextarea form CounterArgumentChange ]
         ]
 
 viewConclusionForm : MarkdownForm -> Html Msg
 viewConclusionForm form =
-    div [ HA.class "container mx-auto p-4 mb-4" ]
+    div [ HA.class "container mx-auto mb-4" ]
         [ Html.h4 [ HA.class "text-xl font-bold" ] [ text "Conclusion" ]
         , Html.p [ HA.class "text-sm" ] [ text "Optional." ]
         , Html.p [ HA.class "text-sm" ] [ text "No size limit, does NOT support markdown." ]
         , div []
-            [ viewTextarea form ConclusionChange ]
+            [ Helper.viewTextarea form ConclusionChange ]
         ]
 
 viewInternalVoteForm : InternalVote -> Html Msg
 viewInternalVoteForm { constitutional, unconstitutional, abstain, didNotVote } =
-    div [ HA.class "container mx-auto p-4 mb-4" ]
+    div [ HA.class "container mx-auto mb-4" ]
         [ Html.h4 [ HA.class "text-xl font-bold" ] [ text "Internal Vote" ]
         , Html.p [] [ text "If you vote as a group, you can report the group internal votes." ]
         , Helper.viewNumberInput "Constitutional: " constitutional InternalConstitutionalVoteChange
@@ -2713,17 +2713,17 @@ viewInternalVoteForm { constitutional, unconstitutional, abstain, didNotVote } =
 
 viewReferencesForm : List Reference -> Html Msg
 viewReferencesForm references =
-    div [ HA.class "container mx-auto p-4 mb-4" ]
+    div [ HA.class "container mx-auto mb-4" ]
         [ Html.h4 [ HA.class "text-xl font-bold" ][ text "References" ]
         , div [] (List.indexedMap viewOneRefForm references)
-        , Html.p [] [ viewButton "Add a reference" AddRefButtonClicked ]
+        , Html.p [] [ Helper.viewButton "Add a reference" AddRefButtonClicked ]
         ]
 
 viewOneRefForm : Int -> Reference -> Html Msg
 viewOneRefForm n reference =
     div [ HA.class "flex items-center mb-4" ]
         [ Html.label [ HA.for "ref-type", HA.class "mr-2", HA.style "padding-right" "10px" ] [ text "Reference type:" ]
-        , viewSelect
+        , Helper.viewSelect
             [ HA.id "ref-type"
             , HA.value (refTypeToString reference.type_)
             , Html.Events.onInput (ReferenceTypeChange n)
@@ -2735,7 +2735,7 @@ viewOneRefForm n reference =
         , textFieldInline "Label" reference.label (ReferenceLabelChange n)
         , Html.label [ HA.for "ref-uri", HA.class "mr-2", HA.style "padding-right" "10px" ] [ text "URI:" ]
         , textFieldInline "URI" reference.uri (ReferenceUriChange n)
-        , div [ HA.class "ml-auto", HA.style "padding-left" "10px" ] [ viewButton "Delete" (DeleteRefButtonClicked n) ]
+        , div [ HA.class "ml-auto", HA.style "padding-left" "10px" ] [ Helper.viewButton "Delete" (DeleteRefButtonClicked n) ]
         ]
 
 viewRefOption : ReferenceType -> Html Msg
@@ -2909,7 +2909,7 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                         [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode ratSig.signedJson
                         , HA.download "rationale-signed.json"
                         ]
-                        [ viewButton "Download signed JSON rationale" NoMsg ]
+                        [ Helper.viewButton "Download signed JSON rationale" NoMsg ]
             in
             if List.isEmpty ratSig.authors then
                 Html.map ctx.wrapMsg <|
@@ -2917,7 +2917,7 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                         [ Html.h4 [ HA.class "text-xl font-bold" ][ text "Rationale Signature" ]
                         , Html.p [] [ downloadButton ]
                         , Html.p [] [ text "No registered author." ]
-                        , Html.p [] [ viewButton "Update autohorss" ChangeAuthorsButtonClicked ]
+                        , Html.p [] [ Helper.viewButton "Update autohorss" ChangeAuthorsButtonClicked ]
                         ]
 
             else
@@ -2926,7 +2926,7 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                         [ Html.h4 [ HA.class "text-xl font-bold" ][ text "Rationale Signature" ]
                         , Html.p [] [ downloadButton ]
                         , Html.ul [] (List.map viewSigner ratSig.authors)
-                        , Html.p [] [ viewButton "Update autohorss" ChangeAuthorsButtonClicked ]
+                        , Html.p [] [ Helper.viewButton "Update autohorss" ChangeAuthorsButtonClicked ]
                         ]
 
 
@@ -2943,7 +2943,7 @@ viewRationaleSignatureForm jsonLdContexts ({ authors } as form) =
                 [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode jsonRationale
                 , HA.download "rationale.json"
                 ]
-                [ viewButton "Download JSON rationale" NoMsg ]
+                [ Helper.viewButton "Download JSON rationale" NoMsg ]
             ]
         , Html.h4 [] [ text "Authors" ]
         , Html.p []
@@ -2962,7 +2962,7 @@ viewRationaleSignatureForm jsonLdContexts ({ authors } as form) =
             [ text "Add individual authors that contributed to this rationale."
             , text " Provide each author signature or skip all signatures."
             ]
-        , Html.p [] [ viewButton "Add an author" AddAuthorButtonClicked ]
+        , Html.p [] [ Helper.viewButton "Add an author" AddAuthorButtonClicked ]
         , div [] (List.indexedMap viewOneAuthorForm authors)
         ]
 
@@ -3019,7 +3019,7 @@ viewOneAuthorForm n author =
             Nothing ->
                 Html.span []
                     [ Html.text " signature: "
-                    , viewButton "Load signature" (LoadJsonSignatureButtonClicked n author.name)
+                    , Helper.viewButton "Load signature" (LoadJsonSignatureButtonClicked n author.name)
                     ]
 
             Just sig ->
@@ -3030,7 +3030,7 @@ viewOneAuthorForm n author =
                     , Html.text author.publicKey
                     , Html.text ", signature: "
                     , text <| sig ++ " "
-                    , viewButton "Change signature" (LoadJsonSignatureButtonClicked n author.name)
+                    , Helper.viewButton "Change signature" (LoadJsonSignatureButtonClicked n author.name)
                     ]
         ]
 
@@ -3085,10 +3085,10 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                         ]
                     , Html.p []
                         [ text "Request headers: "
-                        , viewButton "add" AddHeaderButtonClicked
+                        , Helper.viewButton "add" AddHeaderButtonClicked
                         ]
                     , Html.ul [] (List.indexedMap viewHeader form.headers)
-                    , Html.p [] [ viewButton "Skip IPFS storage" PinJsonIpfsButtonClicked ]
+                    , Html.p [] [ Helper.viewButton "Skip IPFS storage" PinJsonIpfsButtonClicked ]
                     , viewError form.error
                     ]
 
@@ -3122,7 +3122,7 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                         , Html.li [] [ text <| "size: " ++ storage.jsonFile.size ++ " Bytes" ]
                         , Html.li [] [ text <| "file hash: " ++ Bytes.toHex dataHash ]
                         ]
-                    , Html.p [] [viewButton "Add another storage" AddOtherStorageButtonCLicked]
+                    , Html.p [] [Helper.viewButton "Add another storage" AddOtherStorageButtonCLicked]
                     ]
 
         _ ->
@@ -3135,7 +3135,7 @@ viewPermanentStorageStep ctx rationaleSigStep step =
 viewHeader : Int -> ( String, String ) -> Html Msg
 viewHeader n ( field, value ) =
     Html.li []
-        [ viewButton "Delete" (DeleteHeaderButtonClicked n)
+        [ Helper.viewButton "Delete" (DeleteHeaderButtonClicked n)
         , text " "
         , Html.input
             [ HA.type_ "text"
@@ -3163,10 +3163,10 @@ viewFeeProviderStep : ViewContext msg -> Step FeeProviderForm FeeProviderTemp Fe
 viewFeeProviderStep ctx step =
     case step of
         Preparing form ->
-            div [ HA.class "container mx-auto p-4 mb-4" ]
+            div [ HA.class "container mx-auto mb-4" ]
                 [ Html.h4 [ HA.class "text-xl font-bold" ] [ text "Fee Provider" ]
                 , Html.map ctx.wrapMsg <| viewFeeProviderForm form
-                , Html.p [] [ viewButton "Confirm Fee Provider" (ctx.wrapMsg ValidateFeeProviderFormButtonClicked) ]
+                , Html.p [] [ Helper.viewButton "Confirm Fee Provider" (ctx.wrapMsg ValidateFeeProviderFormButtonClicked) ]
                 , let
                     maybeError =
                         case form of
@@ -3185,17 +3185,17 @@ viewFeeProviderStep ctx step =
                 ]
 
         Validating _ _ ->
-            div [ HA.class "container mx-auto p-4 mb-4" ]
+            div [ HA.class "container mx-auto mb-4" ]
                 [ Html.h4 [ HA.class "text-xl font-bold" ] [ text "Fee Provider" ]
                 , Html.p [] [ text "validating fee provider information ..." ]
                 ]
 
         Done _ { address, utxos } ->
-            div [ HA.class "container mx-auto p-4 mb-4" ]
+            div [ HA.class "container mx-auto mb-4" ]
                 [ Html.h4 [ HA.class "text-xl font-bold" ] [ text "Fee Provider" ]
                 , Html.p [] [ text <| "Address: " ++ prettyAddr address ]
                 , Html.p [] [ text <| "Available UTxO count: " ++ String.fromInt (Dict.Any.size utxos) ]
-                , Html.p [] [ viewButton "Change fee provider" (ctx.wrapMsg ChangeFeeProviderButtonClicked) ]
+                , Html.p [] [ Helper.viewButton "Change fee provider" (ctx.wrapMsg ChangeFeeProviderButtonClicked) ]
                 ]
 
 viewFeeProviderForm : FeeProviderForm -> Html Msg
@@ -3275,11 +3275,11 @@ viewBuildTxStep ctx model =
             div [HA.style "padding-top" "8px", HA.style "padding-bottom" "8px"] 
                 [ Html.h4 [ HA.class "text-xl font-bold" ] [ text "Tx Building" ]
                 , Html.p []
-                    [ viewButton "Vote YES" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteYes))
+                    [ Helper.viewButton "Vote YES" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteYes))
                     , text " "
-                    , viewButton "Vote NO" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteNo))
+                    , Helper.viewButton "Vote NO" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteNo))
                     , text " "
-                    , viewButton "Vote ABSTAIN" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteAbstain))
+                    , Helper.viewButton "Vote ABSTAIN" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteAbstain))
                     ]
                 , viewError error
                 ]
@@ -3295,7 +3295,7 @@ viewBuildTxStep ctx model =
                 [ Html.h4 [ HA.class "text-xl font-bold" ] [ text "Tx Building" ]
                 , Html.p [] [ text "The generated Tx (₳ displayed as lovelaces) :" ]
                 , Html.p [] [ Html.pre [] [ text <| prettyTx tx ] ]
-                , Html.p [] [ viewButton "Change vote" (ctx.wrapMsg ChangeVoteButtonClicked) ]
+                , Html.p [] [ Helper.viewButton "Change vote" (ctx.wrapMsg ChangeVoteButtonClicked) ]
                 ]
 
 --
@@ -3343,72 +3343,3 @@ viewError error =
                 [ text "Error:"
                 , Html.pre [] [ text err ]
                 ]
-
-viewButton : String -> msg -> Html msg
-viewButton label msg =
-    button
-        [ onClick msg
-        , HA.style "display" "inline-flex"
-        , HA.style "align-items" "center"
-        , HA.style "justify-content" "center"
-        , HA.style "white-space" "nowrap"
-        , HA.style "border-radius" "9999px"
-        , HA.style "font-size" "0.875rem"
-        , HA.style "font-weight" "500"
-        , HA.style "transition" "all 0.2s"
-        , HA.style "outline" "none"
-        , HA.style "ring-offset" "background"
-        , HA.style "focus-visible:ring" "2px"
-        , HA.style "focus-visible:ring-color" "ring"
-        , HA.style "focus-visible:ring-offset" "2px"
-        , HA.style "background-color" "#272727" 
-        , HA.style "color" "#f7fafc"  
-        , HA.style "hover:bg-color" "#f9fafb"  
-        , HA.style "hover:text-color" "#1a202c"
-        , HA.style "height" "4rem"
-        , HA.style "padding-left" "1.5rem"
-        , HA.style "padding-right" "1.5rem"
-        , HA.style "padding-top" "1.25rem"
-        , HA.style "padding-bottom" "1.25rem"
-        ]
-        [ text label ]
-
-viewTextarea : String -> (String -> msg) -> Html msg
-viewTextarea value onInputMsg =
-    Html.textarea
-        [ HA.value value
-        , Html.Events.onInput onInputMsg
-        , HA.style "background-color" "#C6C6C6"
-        , HA.style "padding" "10px"
-        , HA.style "height" "100px"
-        , HA.style "border-radius" "4px"
-        , HA.class "w-full rounded"
-        ]
-        []
-
-
-textField : String -> String -> (String -> msg) -> Html msg
-textField label value toMsg =
-    Html.span [ HA.style "display" "block", HA.style "margin-bottom" "0.5rem" ]
-        [ Html.label [] [ text <| label ++ " " ]
-        , Html.input
-            [ HA.type_ "text"
-            , HA.value value
-            , Html.Events.onInput toMsg
-            , HA.style "background-color" "#C6C6C6"
-            , HA.style "width" "100%"
-            , HA.style "padding" "0.5rem 0.75rem"
-            ]
-            []
-        ]
-
-viewSelect : List (Html.Attribute msg) -> List (Html msg) -> Html msg
-viewSelect attributes options =
-    Html.select
-        ([ HA.style "background-color" "#C6C6C6"
-         , HA.style "padding" "10px"
-         , HA.style "height" "40px"
-         , HA.style "border-radius" "4px"
-         , HA.class "w-full rounded"
-         ] ++ attributes)
-        options

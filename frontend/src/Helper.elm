@@ -1,4 +1,4 @@
-module Helper exposing (prettyAdaLovelace, prettyAddr, shortenedHex, viewNumberInput)
+module Helper exposing (prettyAdaLovelace, prettyAddr, shortenedHex, viewNumberInput, viewNumberInputInline, textFieldInline, viewButton, viewSelect, textField, viewTextarea, firstTextField)
 
 {-| Helper module for miscellaneous functions that didn’t fit elsewhere,
 and are potentially useful in multiple places.
@@ -6,8 +6,9 @@ and are potentially useful in multiple places.
 
 import Bytes.Comparable as Bytes
 import Cardano.Address as Address exposing (Address)
-import Html exposing (Html, text)
+import Html exposing (Html, text, button)
 import Html.Attributes as HA
+import Html.Events exposing (onClick)
 import Html.Events
 import Natural exposing (Natural)
 import Numeral
@@ -85,3 +86,128 @@ viewNumberInput label n msgOnInput =
             ]
             []
         ]
+
+viewNumberInputInline : Int -> (String -> msg) -> Html msg
+viewNumberInputInline value toMsg =
+    Html.span [ HA.class "inline-block ml-2" ]
+        [ Html.input
+            [ HA.type_ "number"
+            , HA.value (String.fromInt value)
+            , Html.Events.onInput toMsg
+            , HA.style "background-color" "#C6C6C6"
+            , HA.style "padding" "0.5rem 0.75rem"
+            , HA.style "border-radius" "4px"
+            , HA.style "border" "1px solid #ccc"
+            , HA.style "width" "80px"  -- This makes the input much shorter
+            ]
+            []
+        ]
+
+textFieldInline : String -> String -> (String -> msg) -> Html msg
+textFieldInline label value toMsg =
+    Html.span [ HA.class "inline-block mr-2" ]
+        [ Html.input
+            [ HA.type_ "text"
+            , HA.value value
+            , Html.Events.onInput toMsg
+            , HA.style "background-color" "#C6C6C6"
+            , HA.style "padding" "0.5rem 0.75rem"
+            , HA.style "border-radius" "4px"
+            , HA.style "border" "1px solid #ccc"
+            , HA.style "width" "200px"
+            ]
+            []
+        ]
+
+viewButton : String -> msg -> Html msg
+viewButton label msg =
+    button
+        [ onClick msg
+        , HA.style "display" "inline-flex"
+        , HA.style "align-items" "center"
+        , HA.style "justify-content" "center"
+        , HA.style "white-space" "nowrap"
+        , HA.style "border-radius" "9999px"
+        , HA.style "font-size" "0.875rem"
+        , HA.style "font-weight" "500"
+        , HA.style "transition" "all 0.2s"
+        , HA.style "outline" "none"
+        , HA.style "ring-offset" "background"
+        , HA.style "focus-visible:ring" "2px"
+        , HA.style "focus-visible:ring-color" "ring"
+        , HA.style "focus-visible:ring-offset" "2px"
+        , HA.style "background-color" "#272727" 
+        , HA.style "color" "#f7fafc"  
+        , HA.style "hover:bg-color" "#f9fafb"  
+        , HA.style "hover:text-color" "#1a202c"
+        , HA.style "height" "4rem"
+        , HA.style "padding-left" "1.5rem"
+        , HA.style "padding-right" "1.5rem"
+        , HA.style "padding-top" "1.25rem"
+        , HA.style "padding-bottom" "1.25rem"
+        ]
+        [ text label ]
+
+viewSelect : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+viewSelect attributes options =
+    Html.select
+        ([ HA.style "background-color" "transparent"
+         , HA.style "padding" "10px"
+         , HA.style "height" "40px"
+         , HA.style "border-top" "none"
+         , HA.style "border-left" "none"
+         , HA.style "border-right" "none"
+         , HA.style "border-bottom" "1px solid #7A7A7A"
+         , HA.style "border-radius" "0"  
+         , HA.style "outline" "none"     
+         , HA.style "box-shadow" "none"  
+         , HA.class "w-full"
+         ] ++ attributes)
+        options
+
+firstTextField : String -> String -> (String -> msg) -> Html msg
+firstTextField label value toMsg =
+    Html.span [ HA.style "display" "block", HA.style "margin-bottom" "0.5rem" ]
+        [ Html.label [] [ text <| label ++ " " ]
+        , Html.input
+            [ HA.type_ "text"
+            , HA.value value
+            , Html.Events.onInput toMsg
+            , HA.style "background-color" "transparent"
+            , HA.style "border-bottom" "1px solid #7A7A7A"
+            , HA.style "border-top" "none"
+            , HA.style "border-left" "none"
+            , HA.style "border-right" "none"
+            , HA.class "w-full"   
+            , HA.style "width" "100%"
+            , HA.style "padding" "0.5rem 0.75rem"
+            ]
+            []
+        ]
+textField : String -> String -> (String -> msg) -> Html msg
+textField label value toMsg =
+    Html.span [ HA.style "display" "block", HA.style "margin-bottom" "0.5rem" ]
+        [ Html.label [] [ text <| label ++ " " ]
+        , Html.input
+            [ HA.type_ "text"
+            , HA.value value
+            , Html.Events.onInput toMsg
+            , HA.style "background-color" "#C6C6C6"
+            , HA.style "width" "100%"
+            , HA.style "padding" "0.5rem 0.75rem"
+            ]
+            []
+        ]
+
+viewTextarea : String -> (String -> msg) -> Html msg
+viewTextarea value onInputMsg =
+    Html.textarea
+        [ HA.value value
+        , Html.Events.onInput onInputMsg
+        , HA.style "background-color" "#C6C6C6"
+        , HA.style "padding" "10px"
+        , HA.style "height" "100px"
+        , HA.style "border-radius" "4px"
+        , HA.class "w-full rounded"
+        ]
+        []

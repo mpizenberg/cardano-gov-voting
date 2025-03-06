@@ -2522,7 +2522,7 @@ viewProposalSelectionStep ctx model =
                     , content
                         |> Maybe.withDefault (text "")
                     ]
-                , Html.p [] [ button [ onClick <| ctx.wrapMsg ChangeProposalButtonClicked ] [ text "Change Proposal" ] ]
+                , Html.p [] [ Helper.viewButton "Change Proposal" (ctx.wrapMsg ChangeProposalButtonClicked) ]
                 ]
 
 viewProposalOption : ActiveProposal -> Html Msg
@@ -2612,7 +2612,7 @@ viewRationaleStep ctx step =
     Html.map ctx.wrapMsg <|
         case step of
             Preparing form ->
-                 div [ HA.class "container mx-auto", HA.style "padding-top" "8px", HA.style "padding-bottom" "8px"]
+                 div [ HA.class "container mx-auto", HA.style "padding-top" "8px"]
                     [ Html.h2 [ HA.class "text-2xl font-bold my-4" ] [ text "Vote Rationale" ]
                     , viewSummaryForm form.summary
                     , viewStatementForm form.rationaleStatement
@@ -2621,6 +2621,7 @@ viewRationaleStep ctx step =
                     , viewConclusionForm form.conclusion
                     , viewInternalVoteForm form.internalVote
                     , viewReferencesForm form.references
+                    , Html.hr [] []
                     , Html.p [] [ Helper.viewButton "Confirm rationale" ValidateRationaleButtonClicked ]
                     , viewError form.error
                     ]
@@ -2650,7 +2651,7 @@ viewSummaryForm : MarkdownForm -> Html Msg
 viewSummaryForm form =
     div [ HA.class "container mx-auto" ]
         [ Html.h2 [ HA.class "text-xl font-bold" ] [ text "Summary" ]
-        , Html.h1 [ HA.class "text-md mb-2" ] [ text "Compulsory." ]
+        , Html.p [ HA.class "text-md" ] [ text "Compulsory." ]
         , Html.p [ HA.class "text-sm" ] [ text "Clearly state your stance, summarize your rationale with your main argument." ]
         , Html.p [ HA.class "text-sm" ] [ text "Limited to 300 characters, does NOT support markdown." ]
         , div []
@@ -2713,7 +2714,7 @@ viewInternalVoteForm { constitutional, unconstitutional, abstain, didNotVote } =
 
 viewReferencesForm : List Reference -> Html Msg
 viewReferencesForm references =
-    div [ HA.class "container mx-auto mb-4" ]
+    div [ HA.class "container mx-auto" ]
         [ Html.h4 [ HA.class "text-xl font-bold" ][ text "References" ]
         , div [] (List.indexedMap viewOneRefForm references)
         , Html.p [] [ Helper.viewButton "Add a reference" AddRefButtonClicked ]
@@ -2735,7 +2736,7 @@ viewOneRefForm n reference =
         , textFieldInline "Label" reference.label (ReferenceLabelChange n)
         , Html.label [ HA.for "ref-uri", HA.class "mr-2", HA.style "padding-right" "10px" ] [ text "URI:" ]
         , textFieldInline "URI" reference.uri (ReferenceUriChange n)
-        , div [ HA.class "ml-auto", HA.style "padding-left" "10px" ] [ Helper.viewButton "Delete" (DeleteRefButtonClicked n) ]
+        , div [ HA.style "padding-left" "10px" ] [ Helper.viewButton "Delete" (DeleteRefButtonClicked n) ]
         ]
 
 viewRefOption : ReferenceType -> Html Msg
@@ -2887,12 +2888,13 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                 ]
 
         ( Done _ _, Preparing form ) ->
-            div [HA.style "padding-top" "8px", HA.style "padding-bottom" "8px"]               [ Html.h4 [ HA.class "text-xl font-bold" ][ text "Rationale Signature" ]
+            div [HA.style "padding-top" "8px", HA.style "padding-bottom" "8px"]
+                [ Html.h4 [ HA.class "text-xl font-bold" ][ text "Rationale Signature" ]
                 , Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts form
                 , Html.p []
-                    [ button [ onClick <| ctx.wrapMsg SkipRationaleSignaturesButtonClicked ] [ text "Skip rationale signing" ]
+                    [ Helper.viewButton "Skip rationale signing" (ctx.wrapMsg SkipRationaleSignaturesButtonClicked)
                     , text " or "
-                    , button [ onClick <| ctx.wrapMsg ValidateRationaleSignaturesButtonClicked ] [ text "Validate rationale signing" ]
+                    , Helper.viewButton "Validate rationale signing" (ctx.wrapMsg ValidateRationaleSignaturesButtonClicked)
                     ]
                 , viewError form.error
                 ]
@@ -2917,7 +2919,7 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                         [ Html.h4 [ HA.class "text-xl font-bold" ][ text "Rationale Signature" ]
                         , Html.p [] [ downloadButton ]
                         , Html.p [] [ text "No registered author." ]
-                        , Html.p [] [ Helper.viewButton "Update autohorss" ChangeAuthorsButtonClicked ]
+                        , Html.p [] [ Helper.viewButton "Update autohors" ChangeAuthorsButtonClicked ]
                         ]
 
             else
@@ -2926,7 +2928,7 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                         [ Html.h4 [ HA.class "text-xl font-bold" ][ text "Rationale Signature" ]
                         , Html.p [] [ downloadButton ]
                         , Html.ul [] (List.map viewSigner ratSig.authors)
-                        , Html.p [] [ Helper.viewButton "Update autohorss" ChangeAuthorsButtonClicked ]
+                        , Html.p [] [ Helper.viewButton "Update autohors" ChangeAuthorsButtonClicked ]
                         ]
 
 
@@ -3131,27 +3133,14 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                 , Html.p [] [ text "Please complete the rationale signature step first." ]
                 ]
 
-
 viewHeader : Int -> ( String, String ) -> Html Msg
 viewHeader n ( field, value ) =
-    Html.li []
-        [ Helper.viewButton "Delete" (DeleteHeaderButtonClicked n)
-        , text " "
-        , Html.input
-            [ HA.type_ "text"
-            , HA.placeholder "e.g. project_id"
-            , HA.value field
-            , Html.Events.onInput (StorageHeaderFieldChange n)
-            ]
-            []
-        , Html.text " : "
-        , Html.input
-            [ HA.type_ "text"
-            , HA.placeholder "e.g. ipfsEnrkKWDwlA9hV4IajI4ILrFdsHJpIqNC"
-            , HA.value value
-            , Html.Events.onInput (StorageHeaderValueChange n)
-            ]
-            []
+    Html.li [ HA.class "flex items-center py-2" ]
+        [ Html.text "Field: e.g. project_id "
+        , Helper.textFieldInline "" field (StorageHeaderFieldChange n)
+        , Html.text " Value: e.g. ipfsEnrkKWDwlA9hV4IajI4ILrFdsHJpIqNC "
+        , Helper.textFieldInline "" value (StorageHeaderValueChange n)
+        , Helper.viewButton "Delete" (DeleteHeaderButtonClicked n)
         ]
 
 --

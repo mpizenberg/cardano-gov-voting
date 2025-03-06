@@ -849,6 +849,7 @@ view model =
         , Footer.view
             { copyright = "© 2025 Cardano Stiftung"
             , disclaimerLink = "/page/disclaimer"
+            , githubLink = "https://github.com/mpizenberg/cardano-gov-voting"
             }
         ]
 

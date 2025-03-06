@@ -145,6 +145,8 @@ viewButton label msg =
         , HA.style "padding-right" "1.5rem"
         , HA.style "padding-top" "1.25rem"
         , HA.style "padding-bottom" "1.25rem"
+        , HA.style "margin-top" "0.5rem"
+        , HA.style "margin-bottom" "0.5em"
         ]
         [ text label ]
 

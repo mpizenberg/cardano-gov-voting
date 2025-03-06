@@ -9,21 +9,28 @@ The component takes a record with:
 - copyright: String - The copyright text to display
 - disclaimerLink: String - The URL to the disclaimer page
 -}
-view : { copyright : String, disclaimerLink : String } -> Html msg
-view { copyright, disclaimerLink } =
+view : { copyright : String, disclaimerLink : String, githubLink: String } -> Html msg
+view { copyright, disclaimerLink, githubLink } =
     footer [ 
         class "bg-transparent py-4 px-6 border-t border-gray-200",
         style "position" "absolute",
         style "bottom" "0",
         style "width" "100%"
     ]
-        [ div [ class "container mx-auto flex flex-col md:flex-row justify-between items-center" ]
-            [ p [ class "text-gray-700 text-sm mb-2 md:mb-0" ]
+        [ div [ class "container mx-auto flex justify-between items-center" ]
+            [ p [ class "text-gray-700 text-sm" ]
                 [ text copyright ]
-            , a 
-                [ href disclaimerLink
-                , class "text-sm transition-colors duration-200"
+            , div [ class "flex space-x-8" ]  -- Changed from space-x-4 to space-x-8 for more spacing
+                [ a 
+                    [ href disclaimerLink
+                    , class "text-sm transition-colors duration-200"
+                    ]
+                    [ text "Legal Disclaimer" ]
+                , a 
+                    [ href githubLink
+                    , class "text-sm transition-colors duration-200"
+                    ]
+                    [ text "Github" ]
                 ]
-                [ text "Legal Disclaimer" ]
             ]
         ]

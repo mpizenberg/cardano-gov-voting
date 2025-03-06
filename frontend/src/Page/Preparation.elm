@@ -28,7 +28,7 @@ import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), PoolInfo)
 import Blake2b exposing (blake2b256)
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..), TxFinalized, VoterWitness(..), WitnessSource(..))
-import Cardano.Address exposing (Address, Credential(..), CredentialHash)
+import Cardano.Address exposing (Address, Credential(..), CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
 import Cardano.Gov as Gov exposing (ActionId, Anchor, CostModels, Id(..), Vote)
@@ -47,7 +47,7 @@ import Dict.Any
 import File exposing (File)
 import File.Select
 import Helper exposing (prettyAdaLovelace, prettyAddr)
-import Html exposing (Html, button, div, text)
+import Html exposing (Html, b, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onCheck, onClick)
 import Html.Lazy
@@ -493,6 +493,7 @@ type alias UpdateContext msg =
     , jsonLdContexts : JsonLdContexts
     , jsonRationaleToFile : { fileContent : String, fileName : String } -> Cmd msg
     , costModels : Maybe CostModels
+    , networkId : NetworkId
     }
 
 
@@ -1158,7 +1159,7 @@ checkGovId ctx str =
                         ( ccInfo, fetchCcInfo ) =
                             case Dict.get (Bytes.toHex keyHash) ctx.ccsInfo of
                                 Nothing ->
-                                    ( RemoteData.Loading, Api.defaultApiProvider.getCcInfo cred GotCcInfo )
+                                    ( RemoteData.Loading, Api.defaultApiProvider.getCcInfo ctx.networkId cred GotCcInfo )
 
                                 Just info ->
                                     ( RemoteData.Success info, Cmd.none )
@@ -1170,7 +1171,7 @@ checkGovId ctx str =
                         ( drepInfo, fetchDrepInfo ) =
                             case Dict.get (Bytes.toHex keyHash) ctx.drepsInfo of
                                 Nothing ->
-                                    ( RemoteData.Loading, Api.defaultApiProvider.getDrepInfo cred GotDrepInfo )
+                                    ( RemoteData.Loading, Api.defaultApiProvider.getDrepInfo ctx.networkId cred GotDrepInfo )
 
                                 Just info ->
                                     ( RemoteData.Success info, Cmd.none )
@@ -1182,7 +1183,7 @@ checkGovId ctx str =
                         ( poolInfo, fetchPoolInfo ) =
                             case Dict.get (Bytes.toHex poolId) ctx.poolsInfo of
                                 Nothing ->
-                                    ( RemoteData.Loading, Api.defaultApiProvider.getPoolLiveStake poolId GotPoolInfo )
+                                    ( RemoteData.Loading, Api.defaultApiProvider.getPoolLiveStake ctx.networkId poolId GotPoolInfo )
 
                                 Just info ->
                                     ( RemoteData.Success info, Cmd.none )
@@ -1197,7 +1198,7 @@ checkGovId ctx str =
                                 Nothing ->
                                     ( RemoteData.Loading
                                     , Dict.empty
-                                    , Api.defaultApiProvider.getScriptInfo scriptHash
+                                    , Api.defaultApiProvider.getScriptInfo ctx.networkId scriptHash
                                         |> Storage.cacheWrap
                                             { db = ctx.db, storeName = "scriptInfo" }
                                             ScriptInfo.storageDecoder
@@ -1225,7 +1226,7 @@ checkGovId ctx str =
                         ( ccInfo, fetchCcInfo ) =
                             case Dict.get (Bytes.toHex scriptHash) ctx.ccsInfo of
                                 Nothing ->
-                                    ( RemoteData.Loading, Api.defaultApiProvider.getCcInfo cred GotCcInfo )
+                                    ( RemoteData.Loading, Api.defaultApiProvider.getCcInfo ctx.networkId cred GotCcInfo )
 
                                 Just info ->
                                     ( RemoteData.Success info, Cmd.none )
@@ -1246,7 +1247,7 @@ checkGovId ctx str =
                                 Nothing ->
                                     ( RemoteData.Loading
                                     , Dict.empty
-                                    , Api.defaultApiProvider.getScriptInfo scriptHash
+                                    , Api.defaultApiProvider.getScriptInfo ctx.networkId scriptHash
                                         |> Storage.cacheWrap
                                             { db = ctx.db, storeName = "scriptInfo" }
                                             ScriptInfo.storageDecoder
@@ -1274,7 +1275,7 @@ checkGovId ctx str =
                         ( drepInfo, fetchDrepInfo ) =
                             case Dict.get (Bytes.toHex scriptHash) ctx.drepsInfo of
                                 Nothing ->
-                                    ( RemoteData.Loading, Api.defaultApiProvider.getDrepInfo cred GotDrepInfo )
+                                    ( RemoteData.Loading, Api.defaultApiProvider.getDrepInfo ctx.networkId cred GotDrepInfo )
 
                                 Just info ->
                                     ( RemoteData.Success info, Cmd.none )
@@ -1413,7 +1414,7 @@ validateScriptVoter ctx form loadedRefUtxos toVoter scriptInfo =
                     else
                         ( Validating form voter
                         , Cmd.none
-                        , Api.defaultApiProvider.retrieveTx outputRef.transactionId
+                        , Api.defaultApiProvider.retrieveTx ctx.networkId outputRef.transactionId
                             |> Storage.cacheWrap
                                 { db = ctx.db, storeName = "tx" }
                                 Bytes.jsonDecoder
@@ -2023,6 +2024,7 @@ pinRationaleFile fileAsValue model =
 
         ( Ok file, Validating storageForm _ ) ->
             ( model
+              -- NetworkId doesn’t matter here for IPFS
             , Api.defaultApiProvider.ipfsAdd
                 { rpc = storageForm.ipfsServer
                 , headers = storageForm.headers
@@ -2158,6 +2160,7 @@ type alias ViewContext msg =
     , proposals : WebData (Dict String ActiveProposal)
     , jsonLdContexts : JsonLdContexts
     , costModels : Maybe CostModels
+    , networkId : NetworkId
     , signingLink : Transaction -> List (Bytes CredentialHash) -> List (Html msg) -> Html msg
     }
 
@@ -2495,7 +2498,7 @@ viewProposalSelectionStep ctx model =
                     RemoteData.Success proposalsDict ->
                         -- Sorted by ActionId for now
                         Dict.values proposalsDict
-                            |> List.map viewActiveProposal
+                            |> List.map (viewActiveProposal ctx.networkId)
                             |> div []
                             |> Html.map ctx.wrapMsg
                 ]
@@ -2535,7 +2538,7 @@ viewProposalSelectionStep ctx model =
             div []
                 [ Html.h3 [] [ text "Pick a Proposal" ]
                 , div []
-                    [ Html.p [] [ text "Picked: ", cardanoScanActionLink id ]
+                    [ Html.p [] [ text "Picked: ", cardanoScanActionLink ctx.networkId id ]
                     , Html.p [] [ text <| "Type: " ++ actionType ]
                     , Html.p [] [ Html.strong [] [ text <| "Title: " ++ title ] ]
                     , content
@@ -2545,12 +2548,12 @@ viewProposalSelectionStep ctx model =
                 ]
 
 
-viewActiveProposal : ActiveProposal -> Html Msg
-viewActiveProposal { id, actionType, metadata, metadataUrl } =
+viewActiveProposal : NetworkId -> ActiveProposal -> Html Msg
+viewActiveProposal networkId { id, actionType, metadata, metadataUrl } =
     Html.p []
         [ button [ onClick (PickProposalButtonClicked <| Gov.actionIdToString id) ] [ text "Pick this proposal" ]
         , text " "
-        , cardanoScanActionLink id
+        , cardanoScanActionLink networkId id
         , text <| ", type: " ++ actionType
         , text ", title: "
         , text <|
@@ -2570,11 +2573,20 @@ viewActiveProposal { id, actionType, metadata, metadataUrl } =
         ]
 
 
-cardanoScanActionLink : ActionId -> Html msg
-cardanoScanActionLink id =
+cardanoScanActionLink : NetworkId -> ActionId -> Html msg
+cardanoScanActionLink networkId id =
+    let
+        baseUrl =
+            case networkId of
+                Mainnet ->
+                    "https://cardanoscan.io/govAction/"
+
+                Testnet ->
+                    "https://preview.cardanoscan.io/govAction/"
+    in
     Html.a
         [ HA.href <|
-            "https://preview.cardanoscan.io/govAction/"
+            baseUrl
                 ++ (id.transactionId |> Bytes.toHex)
                 ++ (Bytes.toHex <| Bytes.fromBytes <| Cbor.Encode.encode (Cbor.Encode.int id.govActionIndex))
         , HA.target "_blank"

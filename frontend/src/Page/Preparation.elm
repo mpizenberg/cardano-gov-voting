@@ -47,7 +47,7 @@ import Dict.Any
 import File exposing (File)
 import File.Select
 import Helper exposing (prettyAdaLovelace, prettyAddr)
-import Html exposing (Html, b, button, div, text)
+import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onCheck, onClick)
 import Html.Lazy

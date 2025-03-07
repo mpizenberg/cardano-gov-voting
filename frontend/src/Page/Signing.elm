@@ -280,22 +280,23 @@ type alias ViewContext msg =
 
 view : ViewContext msg -> Model -> Html msg
 view ctx model =
-    div []
-        [ Html.h2 [] [ text "Signing the Tx" ]
-        , Html.p []
+    div [ HA.class "container mx-auto" ]
+        [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Signing the Transaction" ]
+        , Html.p [ HA.class "mb-4" ]
             [ text "This page aims to facilitate complex signatures, "
             , text "such as Native or Plutus scripts multi-sig."
             ]
         , case model of
             MissingTx ->
-                Html.p [] [ text "TODO: button to load the Tx from a file" ]
+                Helper.formContainer
+                    [ Html.p [] [ text "No transaction loaded. Please go back to the preparation page and create a transaction first." ] ]
 
             LoadedTx { tx, txId, expectedSigners, vkeyWitnesses, txSubmitted, error } ->
                 let
                     gatheredSignaturesSection =
-                        div []
-                            [ Html.div [] (viewExpectedSignatures expectedSigners vkeyWitnesses)
-                            , Html.p [] [ text "Remark that at least one of these is to pay the Tx fees." ]
+                        Helper.formContainer
+                            [ Html.div [ HA.class "mb-4" ] (viewExpectedSignatures expectedSigners vkeyWitnesses)
+                            , Html.p [ HA.class "text-gray-600 italic" ] [ text "At least one signature is required to pay the transaction fees." ]
                             ]
 
                     signSection =
@@ -304,8 +305,9 @@ view ctx model =
                                 Html.a
                                     [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode (txUnsignedJson description someTx)
                                     , HA.download fileName
+                                    , HA.class "inline-block"
                                     ]
-                                    [ Html.button [] [ text label ] ]
+                                    [ Helper.viewButton label (ctx.wrapMsg NoMsg) ]
 
                             txUnsignedJson description someTx =
                                 JE.encode 2 <|
@@ -315,75 +317,98 @@ view ctx model =
                                         , ( "cborHex", JE.string <| Bytes.toHex <| Transaction.serialize someTx )
                                         ]
                         in
-                        div []
+                        Helper.formContainer
                             [ if ctx.wallet == Nothing then
-                                Html.p [] [ text "If you want to sign with your web wallet, you need to connect it (see the page top)." ]
+                                Html.p [ HA.class "mb-4 text-amber-600" ] 
+                                    [ text "If you want to sign with your web wallet, you need to connect it (see the page top)." ]
 
                               else if Dict.isEmpty vkeyWitnesses then
-                                Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SignTxButtonClicked ] [ text "Sign Tx with connected wallet" ] ]
+                                Html.p [ HA.class "mb-4" ] 
+                                    [ Helper.viewButton "Sign with connected wallet" (ctx.wrapMsg SignTxButtonClicked) ]
 
                               else
                                 let
                                     signedTx =
                                         Transaction.updateSignatures (\_ -> Just <| Dict.values vkeyWitnesses) tx
                                 in
-                                Html.p []
-                                    [ Html.button [ onClick <| ctx.wrapMsg SignTxButtonClicked ] [ text "Sign Tx with connected wallet" ]
-                                    , text " "
+                                Html.p [ HA.class "mb-4 flex items-center gap-3" ]
+                                    [ Helper.viewButton "Sign with connected wallet" (ctx.wrapMsg SignTxButtonClicked)
                                     , downloadButton "Download partially signed Tx" "signed" "tx-signed.json" signedTx
                                     ]
-                            , Html.p []
-                                [ text <| "If additional signatures are required, please ask the relevant parties"
-                                , text <| " to partially sign the transaction,"
-                                , text <| " and use the button below to load their signatures in the app."
+                            , Html.p [ HA.class "mb-4" ]
+                                [ text "If additional signatures are required, please ask the relevant parties"
+                                , text " to partially sign the transaction,"
+                                , text " and use the button below to load their signatures."
                                 ]
-                            , Html.p []
+                            , Html.p [ HA.class "mb-4 flex items-center gap-3" ]
                                 [ downloadButton "Download unsigned Tx" "unsigned" "tx-unsigned.json" tx
-                                , text " "
-                                , Html.button [ onClick <| ctx.wrapMsg LoadSignedTxButtonClicked ] [ text "Load signed Tx file" ]
+                                , Helper.viewButton "Load signed Tx file" (ctx.wrapMsg LoadSignedTxButtonClicked)
                                 ]
                             ]
                 in
                 div []
-                    [ Html.p [] [ text <| "Tx ID: " ++ Bytes.toHex txId ]
-                    , Html.p [] [ Html.pre [] [ text <| prettyTx tx ] ]
+                    [ Helper.formContainer
+                        [ Html.p [ HA.class "mb-2" ] 
+                            [ Html.strong [] [ text "Transaction ID: " ]
+                            , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex txId ] 
+                            ]
+                        , Html.p [] [ text "Transaction details: (₳ amounts are in lovelaces)" ]
+                        , Html.pre [ 
+                            HA.class "bg-gray-50 p-4 rounded-md border border-gray-200 overflow-auto mt-2 text-sm",
+                            HA.style "max-height" "300px"
+                          ] 
+                          [ text <| prettyTx tx ] 
+                        ]
                     , if Dict.isEmpty expectedSigners then
                         div []
-                            [ Html.h3 [] [ text <| "Gathered Signatures" ]
+                            [ Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Gathered Signatures" ]
                             , gatheredSignaturesSection
                             , signSection
-                            , Html.h3 [] [ text "Tx Submission" ]
-                            , Html.p [] [ text "Expected signers are unknown so whenever you think it’s ready for submission, go for it!" ]
-                            , Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SubmitTxButtonClicked ] [ text "Submit Tx when ready!" ] ]
+                            , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Transaction Submission" ]
+                            , Helper.formContainer
+                                [ Html.p [ HA.class "mb-4" ] [ text "Expected signers are unknown. Submit when you believe the transaction is ready." ]
+                                , Html.p [] [ Helper.viewButton "Submit Transaction" (ctx.wrapMsg SubmitTxButtonClicked) ]
+                                ]
                             ]
 
                       else if Dict.isEmpty (Dict.diff expectedSigners vkeyWitnesses) then
                         div []
-                            [ Html.h3 [] [ text <| "Expected Signatures" ]
+                            [ Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Expected Signatures" ]
                             , gatheredSignaturesSection
-                            , Html.h3 [] [ text "Tx Submission" ]
-                            , Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SubmitTxButtonClicked ] [ text "Submit Tx" ] ]
+                            , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Transaction Submission" ]
+                            , Helper.formContainer
+                                [ Html.p [ HA.class "text-green-600 mb-4" ] [ text "All required signatures have been collected." ]
+                                , Helper.viewButton "Submit Transaction" (ctx.wrapMsg SubmitTxButtonClicked)
+                                ]
                             ]
 
                       else
                         div []
-                            [ Html.h3 [] [ text <| "Expected Signatures" ]
+                            [ Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Expected Signatures" ]
                             , gatheredSignaturesSection
                             , signSection
-                            , Html.h3 [] [ text "Tx Submission" ]
-                            , Html.p [] [ text "Not all expected signatures are gathered yet, but if you still think it’s ready, go for it!" ]
-                            , Html.p [] [ Html.button [ onClick <| ctx.wrapMsg SubmitTxButtonClicked ] [ text "Submit Tx anyway!" ] ]
+                            , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Transaction Submission" ]
+                            , Helper.formContainer
+                                [ Html.p [ HA.class "text-amber-600 mb-4" ] [ text "Not all expected signatures are gathered yet, but you can still submit if ready." ]
+                                , Helper.viewButton "Submit Transaction Anyway" (ctx.wrapMsg SubmitTxButtonClicked)
+                                ]
                             ]
                     , case txSubmitted of
                         Nothing ->
                             text ""
 
                         Just _ ->
-                            Html.p [] [ text <| "Tx submitted! Tx ID: " ++ Bytes.toHex txId ]
+                            Helper.formContainer
+                                [ Html.p [ HA.class "text-green-600 font-medium" ] 
+                                    [ text "Transaction submitted successfully!" ]
+                                , Html.p []
+                                    [ text "Transaction ID: "
+                                    , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex txId ]
+                                    ]
+                                ]
                     , viewError error
                     ]
         ]
-
 
 viewExpectedSignatures : Dict String { keyHash : Bytes CredentialHash } -> Dict String VKeyWitness -> List (Html msg)
 viewExpectedSignatures expectedSigners vkeyWitnesses =
@@ -391,23 +416,26 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
         viewExpectedSigner hash =
             case Dict.get hash vkeyWitnesses of
                 Just witness ->
-                    Html.pre []
-                        [ text <|
-                            "✅ vkey hash: "
-                                ++ shortenedHex 8 hash
-                                ++ " { vkey: "
-                                ++ shortenedHex 8 (Bytes.toHex witness.vkey)
-                                ++ ", signature: "
-                                ++ shortenedHex 8 (Bytes.toHex witness.signature)
-                                ++ " }"
+                    Html.div [ HA.class "bg-green-50 border border-green-200 p-3 rounded-md mb-2 flex items-center" ]
+                        [ Html.div [ HA.class "mr-2 text-green-600 font-bold" ] [ text "✓" ]
+                        , Html.div [ HA.class "font-mono text-sm" ]
+                            [ Html.div [] [ text <| "Key Hash: " ++ shortenedHex 8 hash ]
+                            , Html.div [ HA.class "text-gray-600" ] 
+                                [ text <| "VKey: " ++ shortenedHex 8 (Bytes.toHex witness.vkey) ]
+                            , Html.div [ HA.class "text-gray-600" ] 
+                                [ text <| "Signature: " ++ shortenedHex 8 (Bytes.toHex witness.signature) ]
+                            ]
                         ]
 
                 Nothing ->
-                    Html.pre [] [ text <| "[_] vkey hash: " ++ shortenedHex 8 hash ]
+                    Html.div [ HA.class "bg-gray-50 border border-gray-200 p-3 rounded-md mb-2 flex items-center" ]
+                        [ Html.div [ HA.class "mr-2 text-gray-600" ] [ text "□" ]
+                        , Html.div [ HA.class "font-mono text-sm" ]
+                            [ text <| "Key Hash: " ++ shortenedHex 8 hash ]
+                        ]
     in
     Dict.keys expectedSigners
         |> List.map viewExpectedSigner
-
 
 viewError : Maybe String -> Html msg
 viewError error =
@@ -416,7 +444,7 @@ viewError error =
             text ""
 
         Just err ->
-            Html.p []
-                [ text "Error:"
-                , Html.pre [] [ text err ]
+            Html.div [ HA.class "mt-4 p-4 bg-red-50 border border-red-200 rounded-md" ]
+                [ Html.p [ HA.class "text-red-600 font-medium mb-2" ] [ text "Error:" ]
+                , Html.pre [ HA.class "text-sm whitespace-pre-wrap" ] [ text err ]
                 ]

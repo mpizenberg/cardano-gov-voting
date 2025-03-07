@@ -498,116 +498,157 @@ type alias ViewContext msg =
 
 view : ViewContext msg -> Model -> Html msg
 view ctx model =
-     div [ HA.class "container mx-auto " ]
-        [ Html.h2 [ HA.class "text-2xl font-bold py-4" ] [ text "Registering a multisig DRep" ]
-        , Html.p []
-            [ text "This page aims to facilitate registration of multisig DReps."
-            , text " The goal is to build a Tx that can both"
-            , text " (1) register the multisig as a DRep,"
-            , text " and (2) save the multisig script into a reference output."
-            , text " For multisigs with 5 keys or more, it’s starting to be interesting to use a script reference"
-            , text " instead of an inline script to pay less fees."
+    div [ HA.class "container mx-auto" ]
+        [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Registering a multisig DRep" ]
+        , Helper.formContainer
+            [ Html.p [ HA.class "mb-4" ]
+                [ text "This page facilitates registration of multisig DReps. "
+                , text "You can build a transaction that either: "
+                , text "(1) registers the multisig as a DRep, "
+                , text "(2) saves the multisig script into a reference output, "
+                , text "or both. For multisigs with 5+ keys, using a script reference instead of an inline script can reduce fees."
+                ]
             ]
-        , Html.h3 [ HA.class "text-xl font-bold py-4" ] [ text "Multisig Configuration" ]
+        
+        , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Multisig Configuration" ]
         , Html.map ctx.wrapMsg <| viewMultisigConfigForm model
-        , Html.h3 [ HA.class "text-xl font-bold py-4" ] [ text "DRep Registration" ]
+        
+        , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "DRep Registration" ]
         , Html.map ctx.wrapMsg <| viewRegisterForm model
+        
         , case model.registerTxSummary of
             Nothing ->
                 text ""
 
             Just summary ->
-                div []
-                    [ Html.p [] [ text <| "Tx ID: " ++ (Bytes.toHex <| Transaction.computeTxId summary.tx) ]
-                    , Html.p [] [ text "Tx details: (₳ amounts are in lovelaces)" ]
-                    , Html.pre [] [ text <| prettyTx summary.tx ]
+                Helper.formContainer
+                    [ Html.p [ HA.class "mb-2" ] 
+                        [ Html.strong [ HA.class "font-medium" ] [ text "Transaction ID: " ]
+                        , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex <| Transaction.computeTxId summary.tx ] 
+                        ]
+                    , Html.p [ HA.class "mb-2" ] [ text "Transaction details: (₳ displayed as lovelaces)" ]
+                    , Html.pre [ 
+                        HA.class "bg-gray-50 p-4 rounded-md border border-gray-200 overflow-auto mt-2 text-sm whitespace-pre-wrap break-words",
+                        HA.style "max-height" "300px",
+                        HA.style "word-break" "break-all"
+                      ] 
+                      [ text <| prettyTx summary.tx ]
                     , viewImportantSummaryTx summary
-                    , ctx.signingLink summary.tx summary.expectedSignatures [ text "Sign & submit the Tx on the signing page" ]
-                    ]   
-        , Html.h3 [ HA.class "text-xl font-bold py-4" ] [ text "DRep Unregistration" ]
+                    , div [ HA.class "mt-4" ]
+                        [ ctx.signingLink summary.tx summary.expectedSignatures 
+                            [ Html.span [ HA.class "text-blue-600 hover:text-blue-800 underline" ] 
+                                [ text "Sign & submit the transaction on the signing page" ]
+                            ]
+                        ]
+                    ]
+                
+        , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "DRep Unregistration" ]
         , Html.map ctx.wrapMsg <|
-            Html.p [] [ Helper.viewButton "Build Unregistration Tx" BuildUnregistrationTxButtonClicked ]
+            Helper.formContainer
+                [ Html.p [] [ Helper.viewButton "Build Unregistration Tx" BuildUnregistrationTxButtonClicked ] ]
+        
         , case model.unregisterTxSummary of
             Nothing ->
                 text ""
 
             Just summary ->
-                div []
-                    [ Html.p [] [ text <| "Tx ID: " ++ (Bytes.toHex <| Transaction.computeTxId summary.tx) ]
-                    , Html.p [] [ text "Tx details: (₳ amounts are in lovelaces)" ]
-                    , Html.pre [] [ text <| prettyTx summary.tx ]
-                    , ctx.signingLink summary.tx summary.expectedSignatures [ text "Sign & submit the Tx on the signing page" ]
+                Helper.formContainer
+                    [ Html.p [ HA.class "mb-2" ] 
+                        [ Html.strong [ HA.class "font-medium" ] [ text "Transaction ID: " ]
+                        , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex <| Transaction.computeTxId summary.tx ] 
+                        ]
+                    , Html.p [ HA.class "mb-2" ] [ text "Transaction details: (₳ displayed as lovelaces)" ]
+                    , Html.pre [ 
+                        HA.class "bg-gray-50 p-4 rounded-md border border-gray-200 overflow-auto mt-2 text-sm whitespace-pre-wrap break-words",
+                        HA.style "max-height" "300px",
+                        HA.style "word-break" "break-all"
+                      ] 
+                      [ text <| prettyTx summary.tx ]
+                    , div [ HA.class "mt-4" ]
+                        [ ctx.signingLink summary.tx summary.expectedSignatures 
+                            [ Html.span [ HA.class "text-blue-600 hover:text-blue-800 underline" ] 
+                                [ text "Sign & submit the transaction on the signing page" ]
+                            ]
+                        ]
                     ]
+        
         , case model.error of
             Nothing ->
                 text ""
 
             Just err ->
-                div []
-                    [ Html.h3 [ HA.class "" ]
-                        [ text "Error:"
-                        , Html.pre [] [ text err ]
-                        ]
+                Html.div [ HA.class "mt-4 p-4 bg-red-50 border border-red-200 rounded-md" ]
+                    [ Html.p [ HA.class "text-red-600 font-medium mb-2" ] [ text "Error:" ]
+                    , Html.pre [ HA.class "text-sm whitespace-pre-wrap" ] [ text err ]
                     ]
         ]
 
-
 viewMultisigConfigForm : Model -> Html Msg
 viewMultisigConfigForm { minCount, hashes } =
-    Html.div []
-        [ Html.p [ HA.class "py-4 flex items-center" ]
-            [ text "Minimum number of required signatures: "
-            , Helper.viewNumberInputInline minCount MinCountChange
+    Helper.formContainer
+        [ Html.div [ HA.class "flex items-center mb-4" ]
+            [ Html.label [ HA.class "mr-3 font-medium" ] [ text "Minimum number of required signatures: " ]
+            , Html.input
+                [ HA.type_ "number"
+                , HA.class "border border-gray-300 rounded px-3 py-1 w-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                , HA.value (String.fromInt minCount)
+                , HA.min "1"
+                , Html.Events.onInput MinCountChange
+                ]
+                []
             ]
-        , Html.p [ HA.class "py-4" ]
-            [ text "List of public key hashes: "
-            , Helper.viewButton "Add a key" AddKeyButtonClicked
+        , Html.div [ HA.class "mb-4" ]
+            [ Html.div [ HA.class "flex items-center mb-2 mr-2" ]
+                [ Helper.viewButton "Add public key hash" AddKeyButtonClicked
+                ]
             ]
-        , div [] (List.indexedMap viewOneKeyForm hashes)
+        , div [ HA.class "space-y-2" ] (List.indexedMap viewOneKeyForm hashes)
         ]
-
 viewRegisterForm : Model -> Html Msg
 viewRegisterForm { register, createOutputRef } =
-    Html.div []
-        [ Html.p []
-            [ Html.input
-                [ HA.type_ "checkbox"
-                , HA.id "register"
-                , HA.name "register"
-                , HA.checked register
-                , onCheck ToggleRegister
+    Helper.formContainer
+        [ Html.div [ HA.class "space-y-3 mb-4" ]
+            [ Html.div [ HA.class "flex items-center" ]
+                [ Html.input
+                    [ HA.type_ "checkbox"
+                    , HA.id "register"
+                    , HA.name "register"
+                    , HA.checked register
+                    , HA.class "mr-2 h-4 w-4"
+                    , onCheck ToggleRegister
+                    ]
+                    []
+                , Html.label [ HA.for "register", HA.class "select-none" ] [ text "Register as DRep" ]
                 ]
-                []
-            , Html.label [ HA.for "register" ] [ text " Register as DRep" ]
-            ]
-        , Html.p []
-            [ Html.input
-                [ HA.type_ "checkbox"
-                , HA.id "refOutput"
-                , HA.name "refOutput"
-                , HA.checked createOutputRef
-                , onCheck ToggleCreateOutputRef
+            , Html.div [ HA.class "flex items-center" ]
+                [ Html.input
+                    [ HA.type_ "checkbox"
+                    , HA.id "refOutput"
+                    , HA.name "refOutput"
+                    , HA.checked createOutputRef
+                    , HA.class "mr-2 h-4 w-4"
+                    , onCheck ToggleCreateOutputRef
+                    ]
+                    []
+                , Html.label [ HA.for "refOutput", HA.class "select-none" ] [ text "Create an output reference" ]
                 ]
-                []
-            , Html.label [ HA.for "refOutput" ] [ text " Create an output reference" ]
             ]
-        , Html.p [HA.class "mt-4"] [ Helper.viewButton "Build Registration Tx" BuildRegistrationTxButtonClicked ]
+        , Html.div [ HA.class "mt-4" ] 
+            [ Helper.viewButton "Build Registration Tx" BuildRegistrationTxButtonClicked ]
         ]
-
 
 viewOneKeyForm : Int -> String -> Html Msg
 viewOneKeyForm n hash =
-    Html.p [ HA.class "flex items-center py-2" ]
-        [ Html.text "Key hash: "
-        , Helper.textFieldInline "" hash (KeyHashChange n)
+    Html.div [ HA.class "flex items-center gap-2" ]
+        [ Html.div [ HA.class "flex-1" ]
+            [ Html.label [ HA.class "text-sm text-gray-600 mr-2" ] [ text "Key hash: " ]
+            , Helper.textFieldInline "" hash (KeyHashChange n)
+            ]
         , Helper.viewButton "Delete" (DeleteKeyButtonClicked n)
         ]
 
 viewImportantSummaryTx : RegisterTxSummary -> Html msg
 viewImportantSummaryTx { nativeScript, scriptHash, scriptRefInput, drepId } =
-    -- Display:
-    --  * the script hash
-    --  * the reference input for the script, this needs compute the Tx ID
     let
         scriptBytes =
             Cbor.Encode.encode (Script.encodeNativeScript nativeScript)
@@ -621,10 +662,25 @@ viewImportantSummaryTx { nativeScript, scriptHash, scriptRefInput, drepId } =
                 Just { transactionId, outputIndex } ->
                     Bytes.toHex transactionId ++ "#" ++ String.fromInt outputIndex
     in
-    div []
-        [ Html.p [] [ Html.strong [] [ text "Important info to note as it will be useful to reuse the multisig:" ] ]
-        , Html.p [] [ text <| "DRep ID: " ++ Gov.idToBech32 drepId ]
-        , Html.p [] [ text <| "Native script hash: " ++ Bytes.toHex scriptHash ]
-        , Html.p [] [ text <| "Native script bytes: " ++ Bytes.toHex scriptBytes ]
-        , Html.p [] [ text <| "Script reference UTxO: " ++ scriptRef ]
+    div [ HA.class "mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md" ]
+        [ Html.p [ HA.class "text-blue-800 font-medium mb-3" ] 
+            [ text "Important information to save for future multisig operations:" ]
+        , Html.div [ HA.class "space-y-2" ]
+            [ Html.div [] 
+                [ Html.span [ HA.class "font-medium mr-2" ] [ text "DRep ID:" ]
+                , Html.span [ HA.class "font-mono" ] [ text (Gov.idToBech32 drepId) ]
+                ]
+            , Html.div [] 
+                [ Html.span [ HA.class "font-medium mr-2" ] [ text "Native script hash:" ]
+                , Html.span [ HA.class "font-mono" ] [ text (Bytes.toHex scriptHash) ]
+                ]
+            , Html.div [] 
+                [ Html.span [ HA.class "font-medium mr-2" ] [ text "Native script bytes:" ]
+                , Html.span [ HA.class "font-mono break-all" ] [ text (Bytes.toHex scriptBytes) ]
+                ]
+            , Html.div [] 
+                [ Html.span [ HA.class "font-medium mr-2" ] [ text "Script reference UTxO:" ]
+                , Html.span [ HA.class "font-mono" ] [ text scriptRef ]
+                ]
+            ]
         ]

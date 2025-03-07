@@ -242,56 +242,101 @@ view : ViewContext msg -> Model -> Html msg
 view ctx model =
     let
         extLink href content =
-            Html.a [ HA.href href, HA.target "_blank", HA.rel "noopener noreferrer" ]
+            Html.a 
+                [ HA.href href
+                , HA.target "_blank"
+                , HA.rel "noopener noreferrer"
+                , HA.class "text-blue-600 hover:text-blue-800 underline"
+                ] 
                 [ text content ]
 
         fileStatusSection =
-            div []
-                [ Html.h3 [ HA.class "text-xl font-bold py-4" ] [ text "File Status" ]
-                , case model.fileContent of
-                    Nothing ->
-                        Html.p [] [ text "No file loaded yet" ]
+            case model.fileContent of
+                Nothing ->
+                    Helper.formContainer
+                        [ Html.h3 [ HA.class "text-xl font-medium mb-2" ] [ text "File Status" ]
+                        , Html.p [ HA.class "text-gray-600 italic" ] [ text "No file loaded yet" ]
+                        ]
 
-                    Just { name, decoded } ->
-                        div []
-                            [ Html.p [] [ text <| "Loaded file: " ++ name ]
-                            , case decoded of
-                                VoteRationale rationale ->
-                                    Html.p [] [ text <| "Rationale with summary: " ++ rationale.summary ]
+                Just { name, decoded } ->
+                    Helper.formContainer
+                        [ Html.h3 [ HA.class "text-xl font-medium mb-2" ] [ text "File Status" ]
+                        , Html.div [ HA.class "mb-2" ]
+                            [ Html.span [ HA.class "font-medium mr-2" ] [ text "Loaded file:" ]
+                            , text name 
                             ]
-                ]
+                        , case decoded of
+                            VoteRationale rationale ->
+                                Html.div []
+                                    [ Html.div [ HA.class "p-4 bg-blue-50 border border-blue-200 rounded-md" ]
+                                        [ Html.h4 [ HA.class "font-medium mb-2" ] [ text "Vote Rationale" ]
+                                        , Html.div [ HA.class "space-y-1" ]
+                                            [ Html.div []
+                                                [ Html.span [ HA.class "font-medium mr-2" ] [ text "Summary:" ]
+                                                , text (String.left 80 rationale.summary ++ 
+                                                    if String.length rationale.summary > 80 then "..." else "")
+                                                ]
+                                            , if not (List.isEmpty rationale.references) then
+                                                Html.div []
+                                                    [ Html.span [ HA.class "font-medium mr-2" ] [ text "References:" ]
+                                                    , text (String.fromInt (List.length rationale.references) ++ " included")
+                                                    ]
+                                              else
+                                                text ""
+                                            ]
+                                        ]
+                                    ]
+                        ]
 
         pdfConversionSection =
             case model.fileContent of
                 Just { raw, decoded } ->
                     case decoded of
                         VoteRationale _ ->
-                            div []
-                                [ Html.h3 [] [ text "PDF conversion" ]
-                                , Html.p [] [ Helper.viewButton "Convert to PDF" <| ConvertToPdfButtonClicked raw ]
+                            Helper.formContainer
+                                [ Html.h3 [ HA.class "text-xl font-medium mb-2" ] [ text "PDF Conversion" ]
+                                , Html.p [ HA.class "mb-4" ] 
+                                    [ text "Convert the loaded JSON-LD metadata file to a nicely formatted PDF document." ]
+                                , Html.div [ HA.class "flex items-center" ]
+                                    [ Helper.viewButton "Generate PDF" (ConvertToPdfButtonClicked raw)
+                                    , if model.pdfBytes /= Nothing then
+                                        Html.span [ HA.class "ml-4 text-green-600" ] [ text "✓ PDF generated and downloaded" ]
+                                      else
+                                        text ""
+                                    ]
                                 ]
 
                 _ ->
                     text ""
     in
     Html.map ctx.wrapMsg <|
-       div [ HA.class "container mx-auto " ]
-        [ Html.h2 [ HA.class "text-2xl font-bold py-4" ] [ text "Generate pretty PDFs for governance metadata" ]
-            , Html.p []
-                [ text "This page aims to help generate pretty PDFs for different kinds of governance metadata JSON files."
-                , text " These are metadata documents following and extending the "
-                , extLink "https://github.com/cardano-foundation/CIPs/tree/master/CIP-0100" "CIP-100 standard"
-                , text "."
-                , text " In particular, it should work for vote rationales, following the "
-                , extLink "https://github.com/cardano-foundation/CIPs/tree/master/CIP-0136" "CIP-136 standard"
-                , text "."
+        div [ HA.class "container mx-auto" ]
+            [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Generate Pretty PDFs for Governance Metadata" ]
+            , Helper.formContainer
+                [ Html.p [ HA.class "mb-4" ]
+                    [ text "This page helps you generate well-formatted PDF documents from governance metadata JSON files. "
+                    , text "It supports metadata documents following the "
+                    , extLink "https://github.com/cardano-foundation/CIPs/tree/master/CIP-0100" "CIP-100 standard"
+                    , text ", particularly vote rationales that follow the "
+                    , extLink "https://github.com/cardano-foundation/CIPs/tree/master/CIP-0136" "CIP-136 standard"
+                    , text "."
+                    ]
+                , Html.div [ HA.class "mt-4 mb-2" ] 
+                    [ Helper.viewButton "Load JSON-LD File" LoadJsonButtonClicked ]
                 ]
-            , Html.p [HA.class "mt-4"] [ Helper.viewButton "Load JSONLD file" LoadJsonButtonClicked ]
             , fileStatusSection
             , pdfConversionSection
-            , viewError model.error
+            , case model.error of
+                Nothing ->
+                    text ""
+                    
+                Just err ->
+                    Html.div [ HA.class "mt-4 p-4 bg-red-50 border border-red-200 rounded-md" ]
+                        [ Html.p [ HA.class "text-red-600 font-medium mb-2" ] [ text "Error:" ]
+                        , Html.pre [ HA.class "text-sm whitespace-pre-wrap bg-white p-2 border border-red-100 rounded" ] 
+                            [ text err ]
+                        ]
             ]
-
 
 viewError : Maybe String -> Html msg
 viewError error =
@@ -300,7 +345,8 @@ viewError error =
             text ""
 
         Just err ->
-            Html.p []
-                [ text "Error:"
-                , Html.pre [] [ text err ]
+            Html.div [ HA.class "mt-4 p-4 bg-red-50 border border-red-200 rounded-md" ]
+                [ Html.p [ HA.class "text-red-600 font-medium mb-2" ] [ text "Error:" ]
+                , Html.pre [ HA.class "text-sm whitespace-pre-wrap bg-white p-2 border border-red-100 rounded" ] 
+                    [ text err ]
                 ]

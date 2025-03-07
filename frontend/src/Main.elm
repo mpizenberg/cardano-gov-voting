@@ -809,40 +809,11 @@ view model =
         HA.style "position" "relative",
         HA.style "padding-bottom" "100px"
     ]
-        [ -- Gradient circles
-          div [ 
-              HA.style "position" "absolute",
-              HA.style "right" "0",
-              HA.style "top" "0",
-              HA.style "z-index" "-1" 
-          ]
-          [ -- Blue gradient circle
-            div [ 
-                HA.style "width" "75vw",
-                HA.style "height" "75vh",
-                HA.style "border-radius" "75rem",
-                HA.style "background" "linear-gradient(270deg, #00e0ff, #0084ff 100%)",
-                HA.style "filter" "blur(128px)",
-                HA.style "transform-origin" "center center",
-                HA.style "position" "absolute",
-                HA.style "right" "-7.5vw",
-                HA.style "top" "-30vh",
-                HA.class "blue-gradient-animation"
-            ] []
-            -- Red-Yellow gradient circle
-          , div [
-                HA.style "width" "22rem",
-                HA.style "height" "22rem",
-                HA.style "border-radius" "22rem",
-                HA.style "background" "linear-gradient(90deg, #d1085c -0.01%, #ffad0f 55.09%)",
-                HA.style "filter" "blur(4rem)",
-                HA.style "transform-origin" "center center",
-                HA.style "position" "absolute",
-                HA.style "right" "0vh",
-                HA.style "top" "5vh",
-                HA.class "red-yellow-gradient-animation"
-            ] []
-          ]
+        [ -- Gradient circles (only on landing page)
+          if model.page == LandingPage then
+              viewGradientBackgrounds
+          else
+              text ""
         , viewHeader model
         , viewContent model
         , viewErrors model.errors
@@ -852,6 +823,43 @@ view model =
             , githubLink = "https://github.com/mpizenberg/cardano-gov-voting"
             }
         ]
+
+-- Separate function for gradient backgrounds
+viewGradientBackgrounds : Html Msg
+viewGradientBackgrounds =
+    div [ 
+        HA.style "position" "absolute",
+        HA.style "right" "0",
+        HA.style "top" "0",
+        HA.style "z-index" "-1" 
+    ]
+    [ -- Blue gradient circle
+      div [ 
+          HA.style "width" "75vw",
+          HA.style "height" "75vh",
+          HA.style "border-radius" "75rem",
+          HA.style "background" "linear-gradient(270deg, #00e0ff, #0084ff 100%)",
+          HA.style "filter" "blur(128px)",
+          HA.style "transform-origin" "center center",
+          HA.style "position" "absolute",
+          HA.style "right" "-7.5vw",
+          HA.style "top" "-30vh",
+          HA.class "blue-gradient-animation"
+      ] []
+      -- Red-Yellow gradient circle
+    , div [
+          HA.style "width" "22rem",
+          HA.style "height" "22rem",
+          HA.style "border-radius" "22rem",
+          HA.style "background" "linear-gradient(90deg, #d1085c -0.01%, #ffad0f 55.09%)",
+          HA.style "filter" "blur(4rem)",
+          HA.style "transform-origin" "center center",
+          HA.style "position" "absolute",
+          HA.style "right" "0vh",
+          HA.style "top" "5vh",
+          HA.class "red-yellow-gradient-animation"
+      ] []
+    ]
 
 viewHeader : Model -> Html Msg
 viewHeader model =

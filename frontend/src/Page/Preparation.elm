@@ -2164,16 +2164,78 @@ type alias ViewContext msg =
 
 view : ViewContext msg -> Model -> Html msg
 view ctx model =
-    div [ HA.class "container mx-auto" ]
-        [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Preparation" ]
-        , viewVoterIdentificationStep ctx model.voterStep
-        , viewProposalSelectionStep ctx model
-        , viewRationaleStep ctx model.rationaleCreationStep
-        , viewRationaleSignatureStep ctx model.rationaleCreationStep model.rationaleSignatureStep
-        , viewPermanentStorageStep ctx model.rationaleSignatureStep model.permanentStorageStep
-        , viewFeeProviderStep ctx model.feeProviderStep
-        , viewBuildTxStep ctx model
-        , viewSignTxStep ctx model.buildTxStep
+    div [ HA.style "max-width" "1440px", HA.style "margin" "0 auto" ]
+        [ -- Hero section component
+          div 
+            [ HA.style "position" "relative"
+            , HA.style "overflow" "hidden"
+            , HA.style "padding-top" "6rem"
+            , HA.style "padding-bottom" "6rem"
+            , HA.style "margin-bottom" "2rem"
+            ] 
+            [ -- Main hero content
+              div 
+                [ HA.style "position" "relative"
+                , HA.style "z-index" "10"
+                , HA.style "max-width" "840px"
+                , HA.style "margin" "0 auto"
+                , HA.style "padding" "0 1.5rem"
+                ]
+                [ Html.h1 
+                    [ HA.style "font-size" "3.5rem"
+                    , HA.style "font-weight" "600"
+                    , HA.style "line-height" "1.1"
+                    , HA.style "margin-bottom" "1.5rem"
+                    ] 
+                    [ text "Vote Preparation" ]
+                , Html.p 
+                    [ HA.style "font-size" "1.25rem"
+                    , HA.style "line-height" "1.6"
+                    , HA.style "max-width" "640px"
+                    , HA.style "margin-bottom" "2rem"
+                    ] 
+                    [ text "This page helps you prepare and submit votes for governance proposals. You can identify yourself as a voter, select a proposal, create a rationale for your vote, and build the transaction."
+                    ]
+                ]
+              
+              -- Desktop gradient (always visible since we can't do media queries easily in Elm)
+            , div 
+                [ HA.style "position" "absolute"
+                , HA.style "z-index" "1"
+                , HA.style "top" "-13rem"
+                , HA.style "right" "0"
+                , HA.style "left" "0"
+                , HA.style "overflow" "hidden"
+                , HA.style "transform" "translateZ(0)" -- gpu acceleration
+                , HA.style "filter" "blur(64px)"
+                ]
+                [ div 
+                    [ HA.style "position" "relative"
+                    , HA.style "width" "100%"
+                    , HA.style "padding-bottom" "58.7%" -- aspect ratio 1155/678
+                    , HA.style "background" "linear-gradient(90deg, #00E0FF, #0084FF)"
+                    , HA.style "opacity" "0.8"
+                    , HA.style "clip-path" "polygon(19% 5%, 36% 8%, 55% 15%, 76% 5%, 100% 16%, 100% 100%, 0 100%, 0 14%)"
+                    ]
+                    []
+                ]
+            ]
+          
+          -- Content container that wraps everything else with consistent padding
+        , div
+            [ HA.style "max-width" "840px"
+            , HA.style "margin" "0 auto" 
+            , HA.style "padding" "0 1.5rem"
+            ]
+            [ viewVoterIdentificationStep ctx model.voterStep
+            , viewProposalSelectionStep ctx model
+            , viewRationaleStep ctx model.rationaleCreationStep
+            , viewRationaleSignatureStep ctx model.rationaleCreationStep model.rationaleSignatureStep
+            , viewPermanentStorageStep ctx model.rationaleSignatureStep model.permanentStorageStep
+            , viewFeeProviderStep ctx model.feeProviderStep
+            , viewBuildTxStep ctx model
+            , viewSignTxStep ctx model.buildTxStep
+            ]
         ]
 
 --
@@ -2187,7 +2249,8 @@ viewVoterIdentificationStep ctx step =
         Preparing form ->
             Html.map ctx.wrapMsg <|
                 div []
-                    [ Html.p [] [ Helper.firstTextField "Voter governance ID (drep/pool/cc_hot)" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
+                    [ Html.h2 [ HA.class "text-3xl font-medium  mb-4" ] [ text "Vote Preparation" ]
+                    , Html.p [] [ Helper.firstTextField "Voter governance ID (drep/pool/cc_hot)" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
                     , Html.Lazy.lazy viewValidGovIdForm form
                     , Html.p [ HA.class "my-4"] [ Helper.viewButton "Confirm Voter" ValidateVoterFormButtonClicked ]
                     , viewError form.error
@@ -2424,7 +2487,7 @@ viewIdentifiedVoter form voter =
     in
     div []
         [ Html.h4 [ HA.class "text-xl font-medium mb-2" ] [ text "Voter Information" ]
-        , div [ HA.class "bg-blue-50 p-4 rounded-md border border-blue-200 mb-4" ]
+        , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
             [ Html.div [ HA.class "mb-2" ]
                 [ Html.span [ HA.class "font-medium" ] [ text voterTypeText ]
                 ]
@@ -2544,7 +2607,7 @@ viewProposalSelectionStep ctx model =
                 [ Html.p [ HA.class "mb-4" ]
                     [ Html.strong [ HA.class "font-medium" ] [ text "Selected proposal:" ]
                     ]
-                , div [ HA.class "bg-blue-50 p-4 rounded-md border border-blue-200 mb-4" ]
+                , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6"  ]
                     [ div [ HA.class "mb-2" ]
                         [ Html.span [ HA.class "font-bold mr-2" ] [ text "Proposal ID:" ]
                         , cardanoScanActionLink id
@@ -3005,7 +3068,7 @@ viewRationaleSignatureForm jsonLdContexts ({ authors } as form) =
                 , text "For now, the only supported method is to download this json file, and sign it with cardano-signer. "
                 , text "Later I plan to add the ability to sign directly with the web wallet (like Eternl)."
                 ]
-            , Html.pre [ HA.class "bg-gray-50 p-4 rounded-md border border-gray-200 overflow-auto text-sm mb-6" ]
+            , Html.pre [ HA.class "p-4 rounded-md border overflow-auto text-sm mb-6", HA.style "border-color" "#C6C6C6"  ]
                 [ text "cardano-signer.js sign --cip100 \\\n"
                 , text "   --data-file rationale.json \\\n"
                 , text "   --secret-key dummy.skey \\\n"
@@ -3098,7 +3161,7 @@ viewOneAuthorForm n author =
 
 viewSigner : AuthorWitness -> Html Msg
 viewSigner { name, witnessAlgorithm, publicKey, signature } =
-    Html.li [ HA.class "border-b border-gray-200 pb-2 last:border-b-0 last:pb-0" ]
+    Html.li [ HA.class "border-b pb-2 last:border-b-0 last:pb-0", HA.style "border-color" "#C6C6C6"  ]
         [ Html.div []
             [ Html.strong [ HA.class "font-medium" ] [ text "Name: " ]
             , text name
@@ -3185,7 +3248,7 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                     [ Html.p [ HA.class "mb-4" ]
                         [ Html.strong [ HA.class "font-medium" ] [ text "File uploaded successfully:" ]
                         ]
-                    , div [ HA.class "bg-blue-50 p-4 rounded-md border border-blue-200 mb-4" ]
+                    , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6"  ]
                         [ div [ HA.class "mb-2" ]
                             [ Html.span [ HA.class "font-medium mr-2" ] [ text "Link:" ]
                             , Html.a 
@@ -3281,7 +3344,7 @@ viewFeeProviderStep ctx step =
                     [ Html.p [ HA.class "mb-4" ]
                         [ Html.strong [ HA.class "font-medium" ] [ text "Fee provider configured successfully:" ]
                         ]
-                    , div [ HA.class "p-4 rounded-md border border-blue-200 mb-4" ]
+                    , div [ HA.class "p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6"  ]
                         [ Html.div [ HA.class "mb-2" ]
                             [ Html.span [ HA.class "font-bold mr-2" ] [ text "Address:" ]
                             , Html.span [ HA.class "font-mono break-all" ] [ text <| prettyAddr address ]
@@ -3399,7 +3462,8 @@ viewBuildTxStep ctx model =
                     [ Html.p [ HA.class "mb-2" ] [ text "Transaction generated successfully (₳ displayed as lovelaces):" ]
                     , div [ HA.class "relative" ]
                         [ Html.pre [ 
-                            HA.class "bg-gray-50 p-4 rounded-md border border-gray-200 overflow-x-auto overflow-y-auto mt-2 text-sm whitespace-pre-wrap break-words",
+                            HA.class "bg-gray-50 p-4 rounded-md border overflow-x-auto overflow-y-auto mt-2 text-sm whitespace-pre-wrap break-words",
+                            HA.style "border-color" "#C6C6C6",
                             HA.style "max-height" "300px",
                             HA.style "word-break" "break-all"
                           ] 
@@ -3418,10 +3482,10 @@ viewSignTxStep ctx buildTxStep =
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Signing" ]
                 , Helper.formContainer
                     [ Html.p [ HA.class "mb-4" ] [ text "Expecting signatures for the following public key hashes:" ]
-                    , div [ HA.class "bg-gray-50 p-4 rounded-md border border-gray-200 mb-4" ]
+                    , div [ HA.class "bg-gray-50 p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6"  ]
                         [ Html.ul [ HA.class "font-mono text-sm space-y-2" ] 
                             (List.map (\hash -> 
-                                Html.li [ HA.class "border-b border-gray-100 pb-2 last:border-b-0 last:pb-0" ] 
+                                Html.li [ HA.class "border-b pb-2 last:border-b-0 last:pb-0", HA.style "border-color" "#C6C6C6"  ] 
                                     [ text <| Bytes.toHex hash ]
                             ) expectedSignatures)
                         ]
@@ -3452,7 +3516,7 @@ viewError error =
             text ""
 
         Just err ->
-            Html.div [ HA.class "mt-4 p-4 bg-red-50 border border-red-200 rounded-md" ]
+            Html.div [ HA.class "mt-4 p-4 bg-red-50 border rounded-md", HA.style "border-color" "#C6C6C6" ]
                 [ Html.p [ HA.class "text-red-600 font-medium mb-2" ] [ text "Error:" ]
                 , Html.pre [ HA.class "text-sm whitespace-pre-wrap" ] [ text err ]
                 ]

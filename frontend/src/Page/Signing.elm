@@ -354,7 +354,8 @@ view ctx model =
                             ]
                         , Html.p [] [ text "Transaction details: (₳ amounts are in lovelaces)" ]
                         , Html.pre [ 
-                            HA.class "bg-gray-50 p-4 rounded-md border border-gray-200 overflow-auto mt-2 text-sm",
+                            HA.class "bg-gray-50 p-4 rounded-md border overflow-auto mt-2 text-sm",
+                            HA.style "border-color" "#C6C6C6",
                             HA.style "max-height" "300px"
                           ] 
                           [ text <| prettyTx tx ] 
@@ -416,8 +417,8 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
         viewExpectedSigner hash =
             case Dict.get hash vkeyWitnesses of
                 Just witness ->
-                    Html.div [ HA.class "bg-green-50 border border-green-200 p-3 rounded-md mb-2 flex items-center" ]
-                        [ Html.div [ HA.class "mr-2 text-green-600 font-bold" ] [ text "✓" ]
+                    Html.div [ HA.class "bg-green-50 border p-3 rounded-md mb-2 flex items-center", HA.style "border-color" "#C6C6C6" ]
+                        [ Html.div [ HA.class "mr-2 font-bold" ] [ text "✓" ]
                         , Html.div [ HA.class "font-mono text-sm" ]
                             [ Html.div [] [ text <| "Key Hash: " ++ shortenedHex 8 hash ]
                             , Html.div [ HA.class "text-gray-600" ] 
@@ -428,7 +429,7 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
                         ]
 
                 Nothing ->
-                    Html.div [ HA.class "bg-gray-50 border border-gray-200 p-3 rounded-md mb-2 flex items-center" ]
+                    Html.div [ HA.class "bg-gray-50 border p-3 rounded-md mb-2 flex items-center", HA.style "border-color" "#C6C6C6"  ]
                         [ Html.div [ HA.class "mr-2 text-gray-600" ] [ text "□" ]
                         , Html.div [ HA.class "font-mono text-sm" ]
                             [ text <| "Key Hash: " ++ shortenedHex 8 hash ]
@@ -444,7 +445,7 @@ viewError error =
             text ""
 
         Just err ->
-            Html.div [ HA.class "mt-4 p-4 bg-red-50 border border-red-200 rounded-md" ]
+            Html.div [ HA.class "mt-4 p-4 bg-red-50 border rounded-md", HA.style "border-color" "#C6C6C6" ]
                 [ Html.p [ HA.class "text-red-600 font-medium mb-2" ] [ text "Error:" ]
                 , Html.pre [ HA.class "text-sm whitespace-pre-wrap" ] [ text err ]
                 ]

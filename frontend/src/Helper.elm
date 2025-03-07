@@ -89,7 +89,7 @@ viewNumberInput label n msgOnInput =
             , HA.style "border-top" "none"
             , HA.style "border-left" "none"
             , HA.style "border-right" "none"
-            , HA.style "border-bottom" "1px solid #d1d5db"
+            , HA.style "border-bottom" "1px solid #C6C6C6"
             , HA.style "padding-left" "0.25rem"
             , HA.style "padding-right" "0.25rem"
             , HA.style "padding-top" "0.5rem"
@@ -156,7 +156,7 @@ formRow fields =
 -- Add a formContainer for each reference item
 formContainer : List (Html msg) -> Html msg
 formContainer content =
-    Html.div [ HA.class "py-4 border-b border-gray-200" ] content
+    Html.div [ HA.class "py-4 border-b", HA.style "border-color" "#C6C6C6"  ] content
 
 -- Add an actionRow for the delete button
 actionRow : Html msg -> Html msg

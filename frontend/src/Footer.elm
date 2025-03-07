@@ -12,7 +12,8 @@ The component takes a record with:
 view : { copyright : String, disclaimerLink : String, githubLink: String } -> Html msg
 view { copyright, disclaimerLink, githubLink } =
     footer [ 
-        class "bg-transparent py-4 px-6 border-t border-gray-200",
+        class "bg-transparent py-4 px-6 border-t",
+        style "border-color" "#C6C6C6",
         style "position" "absolute",
         style "bottom" "0",
         style "width" "100%"

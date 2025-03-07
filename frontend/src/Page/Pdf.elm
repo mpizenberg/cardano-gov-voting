@@ -246,39 +246,121 @@ view ctx model =
                 [ HA.href href
                 , HA.target "_blank"
                 , HA.rel "noopener noreferrer"
-                , HA.class "text-blue-600 hover:text-blue-800 underline"
+                , HA.style "color" "#0084FF"
+                , HA.style "text-decoration" "underline"
+                , HA.style "font-weight" "500"
                 ] 
                 [ text content ]
+
+        -- Hero section component
+        heroSection =
+            div 
+                [ HA.style "position" "relative"
+                , HA.style "overflow" "hidden"
+                , HA.style "padding-top" "6rem"
+                , HA.style "padding-bottom" "6rem"
+                , HA.style "margin-bottom" "2rem"
+                ] 
+                [ -- Main hero content
+                  div 
+                    [ HA.style "position" "relative"
+                    , HA.style "z-index" "10"
+                    , HA.style "max-width" "840px"
+                    , HA.style "margin" "0 auto"
+                    , HA.style "padding" "0 1.5rem"
+                    ]
+                    [ Html.h1 
+                        [ HA.style "font-size" "3.5rem"
+                        , HA.style "font-weight" "600"
+                        , HA.style "line-height" "1.1"
+                        , HA.style "margin-bottom" "1.5rem"
+                        ] 
+                        [ text "Generate Pretty PDFs for Governance Metadata" ]
+                    , Html.p 
+                        [ HA.style "font-size" "1.25rem"
+                        , HA.style "line-height" "1.6"
+                        , HA.style "max-width" "640px"
+                        , HA.style "margin-bottom" "2rem"
+                        ] 
+                        [ text "This page helps you generate well-formatted PDF documents from governance metadata JSON files. It supports metadata documents following the "
+                        , extLink "https://github.com/cardano-foundation/CIPs/tree/master/CIP-0100" "CIP-100 standard"
+                        , text ", particularly vote rationales that follow the "
+                        , extLink "https://github.com/cardano-foundation/CIPs/tree/master/CIP-0136" "CIP-136 standard"
+                        , text "."
+                        ]
+                    , Html.div 
+                        [ HA.style "display" "flex"
+                        , HA.style "gap" "1rem"
+                        , HA.style "flex-wrap" "wrap"
+                        ]
+                        [ Helper.viewButton "Load JSON-LD File" LoadJsonButtonClicked ]
+                    ]
+                  
+                  -- Desktop gradient (always visible since we can't do media queries easily in Elm)
+                , div 
+                    [ HA.style "position" "absolute"
+                    , HA.style "z-index" "1"
+                    , HA.style "top" "-13rem"
+                    , HA.style "right" "0"
+                    , HA.style "left" "0"
+                    , HA.style "overflow" "hidden"
+                    , HA.style "transform" "translateZ(0)" -- gpu acceleration
+                    , HA.style "filter" "blur(64px)"
+                    ]
+                    [ div 
+                        [ HA.style "position" "relative"
+                        , HA.style "width" "100%"
+                        , HA.style "padding-bottom" "58.7%" -- aspect ratio 1155/678
+                        , HA.style "background" "linear-gradient(90deg, #00E0FF, #0084FF)"
+                        , HA.style "opacity" "0.8"
+                        , HA.style "clip-path" "polygon(19% 5%, 36% 8%, 55% 15%, 76% 5%, 100% 16%, 100% 100%, 0 100%, 0 14%)"
+                        ]
+                        []
+                    ]
+                ]
 
         fileStatusSection =
             case model.fileContent of
                 Nothing ->
                     Helper.formContainer
-                        [ Html.h3 [ HA.class "text-xl font-medium mb-2" ] [ text "File Status" ]
-                        , Html.p [ HA.class "text-gray-600 italic" ] [ text "No file loaded yet" ]
+                        [ Html.h3 [ HA.style "font-size" "1.25rem", HA.style "font-weight" "500", HA.style "margin-bottom" "0.5rem" ] 
+                            [ text "File Status" ]
+                        , Html.p [ HA.style "color" "#666666", HA.style "font-style" "italic" ] 
+                            [ text "No file loaded yet" ]
                         ]
 
                 Just { name, decoded } ->
                     Helper.formContainer
-                        [ Html.h3 [ HA.class "text-xl font-medium mb-2" ] [ text "File Status" ]
-                        , Html.div [ HA.class "mb-2" ]
-                            [ Html.span [ HA.class "font-medium mr-2" ] [ text "Loaded file:" ]
+                        [ Html.h3 [ HA.style "font-size" "1.25rem", HA.style "font-weight" "500", HA.style "margin-bottom" "0.5rem" ] 
+                            [ text "File Status" ]
+                        , Html.div [ HA.style "margin-bottom" "0.5rem" ]
+                            [ Html.span [ HA.style "font-weight" "500", HA.style "margin-right" "0.5rem" ] 
+                                [ text "Loaded file:" ]
                             , text name 
                             ]
                         , case decoded of
                             VoteRationale rationale ->
                                 Html.div []
-                                    [ Html.div [ HA.class "p-4 bg-blue-50 border border-blue-200 rounded-md" ]
-                                        [ Html.h4 [ HA.class "font-medium mb-2" ] [ text "Vote Rationale" ]
-                                        , Html.div [ HA.class "space-y-1" ]
+                                    [ Html.div [ 
+                                        HA.style "padding" "1rem", 
+                                        HA.style "background-color" "#f0f7ff",
+                                        HA.style "border" "1px solid #bedcff",
+                                        HA.style "border-radius" "0.375rem",
+                                        HA.style "margin-top" "0.5rem"
+                                        ]
+                                        [ Html.h4 [ HA.style "font-weight" "500", HA.style "margin-bottom" "0.5rem" ] 
+                                            [ text "Vote Rationale" ]
+                                        , Html.div [ HA.style "display" "flex", HA.style "flex-direction" "column", HA.style "gap" "0.25rem" ]
                                             [ Html.div []
-                                                [ Html.span [ HA.class "font-medium mr-2" ] [ text "Summary:" ]
+                                                [ Html.span [ HA.style "font-weight" "500", HA.style "margin-right" "0.5rem" ] 
+                                                    [ text "Summary:" ]
                                                 , text (String.left 80 rationale.summary ++ 
                                                     if String.length rationale.summary > 80 then "..." else "")
                                                 ]
                                             , if not (List.isEmpty rationale.references) then
                                                 Html.div []
-                                                    [ Html.span [ HA.class "font-medium mr-2" ] [ text "References:" ]
+                                                    [ Html.span [ HA.style "font-weight" "500", HA.style "margin-right" "0.5rem" ] 
+                                                        [ text "References:" ]
                                                     , text (String.fromInt (List.length rationale.references) ++ " included")
                                                     ]
                                               else
@@ -294,13 +376,15 @@ view ctx model =
                     case decoded of
                         VoteRationale _ ->
                             Helper.formContainer
-                                [ Html.h3 [ HA.class "text-xl font-medium mb-2" ] [ text "PDF Conversion" ]
-                                , Html.p [ HA.class "mb-4" ] 
+                                [ Html.h3 [ HA.style "font-size" "1.25rem", HA.style "font-weight" "500", HA.style "margin-bottom" "0.5rem" ] 
+                                    [ text "PDF Conversion" ]
+                                , Html.p [ HA.style "margin-bottom" "1rem" ] 
                                     [ text "Convert the loaded JSON-LD metadata file to a nicely formatted PDF document." ]
-                                , Html.div [ HA.class "flex items-center" ]
+                                , Html.div [ HA.style "display" "flex", HA.style "align-items" "center" ]
                                     [ Helper.viewButton "Generate PDF" (ConvertToPdfButtonClicked raw)
                                     , if model.pdfBytes /= Nothing then
-                                        Html.span [ HA.class "ml-4 text-green-600" ] [ text "✓ PDF generated and downloaded" ]
+                                        Html.span [ HA.style "margin-left" "1rem", HA.style "color" "#059669" ] 
+                                            [ text "✓ PDF generated and downloaded" ]
                                       else
                                         text ""
                                     ]
@@ -308,45 +392,44 @@ view ctx model =
 
                 _ ->
                     text ""
-    in
-    Html.map ctx.wrapMsg <|
-        div [ HA.class "container mx-auto" ]
-            [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Generate Pretty PDFs for Governance Metadata" ]
-            , Helper.formContainer
-                [ Html.p [ HA.class "mb-4" ]
-                    [ text "This page helps you generate well-formatted PDF documents from governance metadata JSON files. "
-                    , text "It supports metadata documents following the "
-                    , extLink "https://github.com/cardano-foundation/CIPs/tree/master/CIP-0100" "CIP-100 standard"
-                    , text ", particularly vote rationales that follow the "
-                    , extLink "https://github.com/cardano-foundation/CIPs/tree/master/CIP-0136" "CIP-136 standard"
-                    , text "."
-                    ]
-                , Html.div [ HA.class "mt-4 mb-2" ] 
-                    [ Helper.viewButton "Load JSON-LD File" LoadJsonButtonClicked ]
-                ]
-            , fileStatusSection
-            , pdfConversionSection
-            , case model.error of
+                    
+        errorSection =
+            case model.error of
                 Nothing ->
                     text ""
                     
                 Just err ->
-                    Html.div [ HA.class "mt-4 p-4 bg-red-50 border border-red-200 rounded-md" ]
-                        [ Html.p [ HA.class "text-red-600 font-medium mb-2" ] [ text "Error:" ]
-                        , Html.pre [ HA.class "text-sm whitespace-pre-wrap bg-white p-2 border border-red-100 rounded" ] 
+                    Html.div [ 
+                        HA.style "margin-top" "1rem",
+                        HA.style "margin-bottom" "1rem",
+                        HA.style "padding" "1rem",
+                        HA.style "background-color" "#fef2f2",
+                        HA.style "border" "1px solid #fecaca",
+                        HA.style "border-radius" "0.375rem"
+                      ]
+                        [ Html.p [ HA.style "color" "#b91c1c", HA.style "font-weight" "500", HA.style "margin-bottom" "0.5rem" ] 
+                            [ text "Error:" ]
+                        , Html.pre [ 
+                            HA.style "font-size" "0.875rem", 
+                            HA.style "white-space" "pre-wrap",
+                            HA.style "background-color" "white",
+                            HA.style "padding" "0.5rem",
+                            HA.style "border" "1px solid #fee2e2",
+                            HA.style "border-radius" "0.25rem"
+                          ] 
                             [ text err ]
                         ]
-            ]
-
-viewError : Maybe String -> Html msg
-viewError error =
-    case error of
-        Nothing ->
-            text ""
-
-        Just err ->
-            Html.div [ HA.class "mt-4 p-4 bg-red-50 border border-red-200 rounded-md" ]
-                [ Html.p [ HA.class "text-red-600 font-medium mb-2" ] [ text "Error:" ]
-                , Html.pre [ HA.class "text-sm whitespace-pre-wrap bg-white p-2 border border-red-100 rounded" ] 
-                    [ text err ]
+    in
+    Html.map ctx.wrapMsg <|
+        div [ HA.style "max-width" "1440px", HA.style "margin" "0 auto" ]
+            [ heroSection
+            , div
+                [ HA.style "max-width" "840px"
+                , HA.style "margin" "0 auto" 
+                , HA.style "padding" "0 1.5rem"
                 ]
+                [ fileStatusSection
+                , pdfConversionSection
+                , errorSection
+                ]
+            ]

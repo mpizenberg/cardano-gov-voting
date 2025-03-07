@@ -498,89 +498,153 @@ type alias ViewContext msg =
 
 view : ViewContext msg -> Model -> Html msg
 view ctx model =
-    div [ HA.class "container mx-auto" ]
-        [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Registering a multisig DRep" ]
-        , Helper.formContainer
-            [ Html.p [ HA.class "mb-4" ]
-                [ text "This page facilitates registration of multisig DReps. "
-                , text "You can build a transaction that either: "
-                , text "(1) registers the multisig as a DRep, "
-                , text "(2) saves the multisig script into a reference output, "
-                , text "or both. For multisigs with 5+ keys, using a script reference instead of an inline script can reduce fees."
+    div [ HA.style "max-width" "1440px", HA.style "margin" "0 auto" ]
+        [ -- Hero section component
+          div 
+            [ HA.style "position" "relative"
+            , HA.style "overflow" "hidden"
+            , HA.style "padding-top" "6rem"
+            , HA.style "padding-bottom" "6rem"
+            , HA.style "margin-bottom" "2rem"
+            ] 
+            [ -- Main hero content (keeps its own padding)
+              div 
+                [ HA.style "position" "relative"
+                , HA.style "z-index" "10"
+                , HA.style "max-width" "840px"
+                , HA.style "margin" "0 auto"
+                , HA.style "padding" "0 1.5rem"
+                ]
+                [ Html.h1 
+                    [ HA.style "font-size" "3.5rem"
+                    , HA.style "font-weight" "600"
+                    , HA.style "line-height" "1.1"
+                    , HA.style "margin-bottom" "1.5rem"
+                    ] 
+                    [ text "Registering a multisig DRep" ]
+                , Html.p 
+                    [ HA.style "font-size" "1.25rem"
+                    , HA.style "line-height" "1.6"
+                    , HA.style "max-width" "640px"
+                    , HA.style "margin-bottom" "2rem"
+                    ] 
+                    [ text "This page facilitates registration of multisig DReps. "
+                    , text "You can build a transaction that either: "
+                    , text "(1) registers the multisig as a DRep, "
+                    , text "(2) saves the multisig script into a reference output, "
+                    , text "or both. For multisigs with 5+ keys, using a script reference instead of an inline script can reduce fees."
+                    ]
+                , Html.div 
+                    [ HA.style "display" "flex"
+                    , HA.style "gap" "1rem"
+                    , HA.style "flex-wrap" "wrap"
+                    ]
+                    [ Html.map ctx.wrapMsg (Helper.viewButton "Configure Multisig" AddKeyButtonClicked) ]
+                ]
+              
+              -- Desktop gradient (already positioned properly)
+            , div 
+                [ HA.style "position" "absolute"
+                , HA.style "z-index" "1"
+                , HA.style "top" "-13rem"
+                , HA.style "right" "0"
+                , HA.style "left" "0"
+                , HA.style "overflow" "hidden"
+                , HA.style "transform" "translateZ(0)" -- gpu acceleration
+                , HA.style "filter" "blur(64px)"
+                ]
+                [ div 
+                    [ HA.style "position" "relative"
+                    , HA.style "width" "100%"
+                    , HA.style "padding-bottom" "58.7%" -- aspect ratio 1155/678
+                    , HA.style "background" "linear-gradient(90deg, #00E0FF, #0084FF)"
+                    , HA.style "opacity" "0.8"
+                    , HA.style "clip-path" "polygon(19% 5%, 36% 8%, 55% 15%, 76% 5%, 100% 16%, 100% 100%, 0 100%, 0 14%)"
+                    ]
+                    []
                 ]
             ]
-        
-        , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Multisig Configuration" ]
-        , Html.map ctx.wrapMsg <| viewMultisigConfigForm model
-        
-        , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "DRep Registration" ]
-        , Html.map ctx.wrapMsg <| viewRegisterForm model
-        
-        , case model.registerTxSummary of
-            Nothing ->
-                text ""
+          
+          -- Content container that wraps everything else with consistent padding
+        , div
+            [ HA.style "max-width" "840px"
+            , HA.style "margin" "0 auto" 
+            , HA.style "padding" "0 1.5rem"
+            ]
+            [ Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Multisig Configuration" ]
+            , Html.map ctx.wrapMsg <| viewMultisigConfigForm model
+            
+            , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "DRep Registration" ]
+            , Html.map ctx.wrapMsg <| viewRegisterForm model
+            
+            , case model.registerTxSummary of
+                Nothing ->
+                    text ""
 
-            Just summary ->
-                Helper.formContainer
-                    [ Html.p [ HA.class "mb-2" ] 
-                        [ Html.strong [ HA.class "font-medium" ] [ text "Transaction ID: " ]
-                        , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex <| Transaction.computeTxId summary.tx ] 
-                        ]
-                    , Html.p [ HA.class "mb-2" ] [ text "Transaction details: (₳ displayed as lovelaces)" ]
-                    , Html.pre [ 
-                        HA.class "bg-gray-50 p-4 rounded-md border border-gray-200 overflow-auto mt-2 text-sm whitespace-pre-wrap break-words",
-                        HA.style "max-height" "300px",
-                        HA.style "word-break" "break-all"
-                      ] 
-                      [ text <| prettyTx summary.tx ]
-                    , viewImportantSummaryTx summary
-                    , div [ HA.class "mt-4" ]
-                        [ ctx.signingLink summary.tx summary.expectedSignatures 
-                            [ Html.span [ HA.class "text-blue-600 hover:text-blue-800 underline" ] 
-                                [ text "Sign & submit the transaction on the signing page" ]
+                Just summary ->
+                    Helper.formContainer
+                        [ Html.p [ HA.class "mb-2" ] 
+                            [ Html.strong [ HA.class "font-medium" ] [ text "Transaction ID: " ]
+                            , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex <| Transaction.computeTxId summary.tx ] 
+                            ]
+                        , Html.p [ HA.class "mb-2" ] [ text "Transaction details: (₳ displayed as lovelaces)" ]
+                        , Html.pre [ 
+                            HA.class "bg-gray-50 p-4 rounded-md border overflow-auto mt-2 text-sm whitespace-pre-wrap break-words",
+                            HA.style "border-color" "#C6C6C6",
+                            HA.style "max-height" "300px",
+                            HA.style "word-break" "break-all"
+                          ] 
+                          [ text <| prettyTx summary.tx ]
+                        , viewImportantSummaryTx summary
+                        , div [ HA.class "mt-4" ]
+                            [ ctx.signingLink summary.tx summary.expectedSignatures 
+                                [ Html.span [ HA.class "text-blue-600 hover:text-blue-800 underline" ] 
+                                    [ text "Sign & submit the transaction on the signing page" ]
+                                ]
                             ]
                         ]
-                    ]
-                
-        , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "DRep Unregistration" ]
-        , Html.map ctx.wrapMsg <|
-            Helper.formContainer
-                [ Html.p [] [ Helper.viewButton "Build Unregistration Tx" BuildUnregistrationTxButtonClicked ] ]
-        
-        , case model.unregisterTxSummary of
-            Nothing ->
-                text ""
-
-            Just summary ->
+                    
+            , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "DRep Unregistration" ]
+            , Html.map ctx.wrapMsg <|
                 Helper.formContainer
-                    [ Html.p [ HA.class "mb-2" ] 
-                        [ Html.strong [ HA.class "font-medium" ] [ text "Transaction ID: " ]
-                        , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex <| Transaction.computeTxId summary.tx ] 
-                        ]
-                    , Html.p [ HA.class "mb-2" ] [ text "Transaction details: (₳ displayed as lovelaces)" ]
-                    , Html.pre [ 
-                        HA.class "bg-gray-50 p-4 rounded-md border border-gray-200 overflow-auto mt-2 text-sm whitespace-pre-wrap break-words",
-                        HA.style "max-height" "300px",
-                        HA.style "word-break" "break-all"
-                      ] 
-                      [ text <| prettyTx summary.tx ]
-                    , div [ HA.class "mt-4" ]
-                        [ ctx.signingLink summary.tx summary.expectedSignatures 
-                            [ Html.span [ HA.class "text-blue-600 hover:text-blue-800 underline" ] 
-                                [ text "Sign & submit the transaction on the signing page" ]
+                    [ Html.p [] [ Helper.viewButton "Build Unregistration Tx" BuildUnregistrationTxButtonClicked ] ]
+            
+            , case model.unregisterTxSummary of
+                Nothing ->
+                    text ""
+
+                Just summary ->
+                    Helper.formContainer
+                        [ Html.p [ HA.class "mb-2" ] 
+                            [ Html.strong [ HA.class "font-medium" ] [ text "Transaction ID: " ]
+                            , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex <| Transaction.computeTxId summary.tx ] 
+                            ]
+                        , Html.p [ HA.class "mb-2" ] [ text "Transaction details: (₳ displayed as lovelaces)" ]
+                        , Html.pre [ 
+                            HA.class "bg-gray-50 p-4 rounded-md border overflow-auto mt-2 text-sm whitespace-pre-wrap break-words",
+                            HA.style "border-color" "#C6C6C6",
+                            HA.style "max-height" "300px",
+                            HA.style "word-break" "break-all"
+                          ] 
+                          [ text <| prettyTx summary.tx ]
+                        , div [ HA.class "mt-4" ]
+                            [ ctx.signingLink summary.tx summary.expectedSignatures 
+                                [ Html.span [ HA.class "text-blue-600 hover:text-blue-800 underline" ] 
+                                    [ text "Sign & submit the transaction on the signing page" ]
+                                ]
                             ]
                         ]
-                    ]
-        
-        , case model.error of
-            Nothing ->
-                text ""
+            
+            , case model.error of
+                Nothing ->
+                    text ""
 
-            Just err ->
-                Html.div [ HA.class "mt-4 p-4 bg-red-50 border border-red-200 rounded-md" ]
-                    [ Html.p [ HA.class "text-red-600 font-medium mb-2" ] [ text "Error:" ]
-                    , Html.pre [ HA.class "text-sm whitespace-pre-wrap" ] [ text err ]
-                    ]
+                Just err ->
+                    Html.div [ HA.class "mt-4 p-4 bg-red-50 border rounded-md", HA.style "border-color" "#C6C6C6" ]
+                        [ Html.p [ HA.class "text-red-600 font-medium mb-2" ] [ text "Error:" ]
+                        , Html.pre [ HA.class "text-sm whitespace-pre-wrap" ] [ text err ]
+                        ]
+            ]
         ]
 
 viewMultisigConfigForm : Model -> Html Msg
@@ -590,7 +654,8 @@ viewMultisigConfigForm { minCount, hashes } =
             [ Html.label [ HA.class "mr-3 font-medium" ] [ text "Minimum number of required signatures: " ]
             , Html.input
                 [ HA.type_ "number"
-                , HA.class "border border-gray-300 rounded px-3 py-1 w-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                , HA.class "border rounded px-3 py-1 w-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                , HA.style "border-color" "#C6C6C6" 
                 , HA.value (String.fromInt minCount)
                 , HA.min "1"
                 , Html.Events.onInput MinCountChange
@@ -662,7 +727,7 @@ viewImportantSummaryTx { nativeScript, scriptHash, scriptRefInput, drepId } =
                 Just { transactionId, outputIndex } ->
                     Bytes.toHex transactionId ++ "#" ++ String.fromInt outputIndex
     in
-    div [ HA.class "mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md" ]
+    div [ HA.class "mt-6 p-4 bg-blue-50 border rounded-md", HA.style "border-color" "#C6C6C6"  ]
         [ Html.p [ HA.class "text-blue-800 font-medium mb-3" ] 
             [ text "Important information to save for future multisig operations:" ]
         , Html.div [ HA.class "space-y-2" ]

@@ -64,7 +64,7 @@ view :
     -> Html msg
 view config =
     nav [ class "relative z-10 w-full bg-transparent" ]
-        [ div [ class "container mx-auto py-6" ]
+        [ div [ class "container mx-auto py-6", style "padding-right" "6px" ]
             [ div [ class "flex items-center justify-between" ]
                 -- Logo/Brand section
                 [ div [ class "flex-shrink-0" ]

@@ -1,4 +1,4 @@
-module Helper exposing (prettyAdaLovelace, prettyAddr, shortenedHex, viewNumberInput, viewNumberInputInline, textFieldInline, viewButton, viewSelect, textField, viewTextarea, firstTextField, labeledField, formRow, formContainer, actionRow)
+module Helper exposing (actionRow, firstTextField, formContainer, formRow, labeledField, prettyAdaLovelace, prettyAddr, shortenedHex, textField, textFieldInline, viewButton, viewNumberInput, viewNumberInputInline, viewSelect, viewTextarea)
 
 {-| Helper module for miscellaneous functions that didn’t fit elsewhere,
 and are potentially useful in multiple places.
@@ -6,10 +6,9 @@ and are potentially useful in multiple places.
 
 import Bytes.Comparable as Bytes
 import Cardano.Address as Address exposing (Address)
-import Html exposing (Html, text, button)
+import Html exposing (Html, button, text)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
-import Html.Events
 import Natural exposing (Natural)
 import Numeral
 
@@ -73,13 +72,13 @@ prettyAdaLovelace n =
 viewNumberInput : String -> Int -> (String -> msg) -> Html msg
 viewNumberInput label n msgOnInput =
     Html.div []
-        [ Html.label [ 
-            HA.style "display" "block",
-            HA.style "font-weight" "500",
-            HA.style "color" "#374151",
-            HA.style "margin-bottom" "0.25rem"
-          ] 
-          [ text label ]
+        [ Html.label
+            [ HA.style "display" "block"
+            , HA.style "font-weight" "500"
+            , HA.style "color" "#374151"
+            , HA.style "margin-bottom" "0.25rem"
+            ]
+            [ text label ]
         , Html.input
             [ HA.type_ "number"
             , HA.value (String.fromInt n)
@@ -101,6 +100,7 @@ viewNumberInput label n msgOnInput =
             []
         ]
 
+
 viewNumberInputInline : Int -> (String -> msg) -> Html msg
 viewNumberInputInline value toMsg =
     Html.span [ HA.class "inline-block ml-2" ]
@@ -112,10 +112,11 @@ viewNumberInputInline value toMsg =
             , HA.style "padding" "0.5rem 0.75rem"
             , HA.style "border-radius" "4px"
             , HA.style "border" "1px solid #ccc"
-            , HA.style "width" "80px" 
+            , HA.style "width" "80px"
             ]
             []
         ]
+
 
 textFieldInline : String -> String -> (String -> msg) -> Html msg
 textFieldInline label value toMsg =
@@ -138,9 +139,12 @@ textFieldInline label value toMsg =
             []
         ]
 
--- The viewSelect already looks good!
 
+
+-- The viewSelect already looks good!
 -- Add a new labeledField function for the reference form layout
+
+
 labeledField : String -> Html msg -> Html msg
 labeledField labelText field =
     Html.div [ HA.class "w-1/3 pl-4 first:pl-0" ]
@@ -148,20 +152,34 @@ labeledField labelText field =
         , field
         ]
 
+
+
 -- Add a formRow helper for reference form rows
+
+
 formRow : List (Html msg) -> Html msg
 formRow fields =
     Html.div [ HA.class "flex items-center mb-4" ] fields
 
+
+
 -- Add a formContainer for each reference item
+
+
 formContainer : List (Html msg) -> Html msg
 formContainer content =
-    Html.div [ HA.class "py-4 border-b", HA.style "border-color" "#C6C6C6"  ] content
+    Html.div [ HA.class "py-4 border-b", HA.style "border-color" "#C6C6C6" ] content
+
+
 
 -- Add an actionRow for the delete button
+
+
 actionRow : Html msg -> Html msg
 actionRow button =
     Html.div [ HA.class "flex justify-end" ] [ button ]
+
+
 viewButton : String -> msg -> Html msg
 viewButton label msg =
     button
@@ -179,9 +197,9 @@ viewButton label msg =
         , HA.style "focus-visible:ring" "2px"
         , HA.style "focus-visible:ring-color" "ring"
         , HA.style "focus-visible:ring-offset" "2px"
-        , HA.style "background-color" "#272727" 
-        , HA.style "color" "#f7fafc"  
-        , HA.style "hover:bg-color" "#f9fafb"  
+        , HA.style "background-color" "#272727"
+        , HA.style "color" "#f7fafc"
+        , HA.style "hover:bg-color" "#f9fafb"
         , HA.style "hover:text-color" "#1a202c"
         , HA.style "height" "4rem"
         , HA.style "padding-left" "1.5rem"
@@ -193,6 +211,7 @@ viewButton label msg =
         ]
         [ text label ]
 
+
 viewSelect : List (Html.Attribute msg) -> List (Html msg) -> Html msg
 viewSelect attributes options =
     Html.select
@@ -202,13 +221,16 @@ viewSelect attributes options =
          , HA.style "border-left" "none"
          , HA.style "border-right" "none"
          , HA.style "border-bottom" "1px solid #7A7A7A"
-         , HA.style "border-radius" "0"  
-         , HA.style "outline" "none"     
-         , HA.style "box-shadow" "none"  
+         , HA.style "border-radius" "0"
+         , HA.style "outline" "none"
+         , HA.style "box-shadow" "none"
          , HA.style "margin-top" "1px"
          , HA.class "w-full"
-         ] ++ attributes)
+         ]
+            ++ attributes
+        )
         options
+
 
 firstTextField : String -> String -> (String -> msg) -> Html msg
 firstTextField label value toMsg =
@@ -223,12 +245,14 @@ firstTextField label value toMsg =
             , HA.style "border-top" "none"
             , HA.style "border-left" "none"
             , HA.style "border-right" "none"
-            , HA.class "w-full"   
+            , HA.class "w-full"
             , HA.style "width" "100%"
             , HA.style "padding" "0.5rem 0.75rem"
             ]
             []
         ]
+
+
 textField : String -> String -> (String -> msg) -> Html msg
 textField label value toMsg =
     Html.span [ HA.style "display" "block", HA.style "margin-bottom" "0.5rem" ]
@@ -243,6 +267,7 @@ textField label value toMsg =
             ]
             []
         ]
+
 
 viewTextarea : String -> (String -> msg) -> Html msg
 viewTextarea value onInputMsg =

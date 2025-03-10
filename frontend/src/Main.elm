@@ -1,4 +1,4 @@
-port module Main exposing (Msg(..), Route(..), link, main, init, update, view)
+port module Main exposing (Msg(..), Route(..), init, link, main, update, view)
 
 {-| Main application module for the Cardano Governance Voting web app.
 
@@ -58,19 +58,19 @@ import Cardano.Utxo as Utxo exposing (Output)
 import ConcurrentTask exposing (ConcurrentTask)
 import ConcurrentTask.Extra
 import Dict exposing (Dict)
+import Footer
 import Helper exposing (prettyAddr)
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA exposing (height, src)
 import Html.Events exposing (onClick, preventDefaultOn)
 import Http
 import Json.Decode as JD exposing (Decoder, Value)
-import Navigation exposing (NavState, Msg(..), Route(..), routeToAppUrl, locationHrefToRoute, link)
+import Navigation exposing (Msg(..), NavState, Route(..), link, locationHrefToRoute, routeToAppUrl)
+import Page.Disclaimer
 import Page.MultisigRegistration
 import Page.Pdf
 import Page.Preparation exposing (JsonLdContexts)
 import Page.Signing
-import Page.Disclaimer
-import Footer
 import Platform.Cmd as Cmd
 import ProposalMetadata exposing (ProposalMetadata)
 import RemoteData exposing (WebData)
@@ -303,7 +303,7 @@ locationHrefToRoute locationHref =
 
                 [ "page", "pdf" ] ->
                     RoutePdf
-                    
+
                 [ "page", "disclaimer" ] ->
                     RouteDisclaimer
 
@@ -331,12 +331,12 @@ routeToAppUrl route =
 
         RouteMultisigRegistration ->
             AppUrl.fromPath [ "page", "registration" ]
+
         RoutePdf ->
             AppUrl.fromPath [ "page", "pdf" ]
-            
+
         RouteDisclaimer ->
             AppUrl.fromPath [ "page", "disclaimer" ]
-
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -490,13 +490,13 @@ update msg model =
             case page of
                 DisclaimerPage disclaimerModel ->
                     let
-                        (updatedDisclaimerModel, disclaimerCmd) =
+                        ( updatedDisclaimerModel, disclaimerCmd ) =
                             Page.Disclaimer.update subMsg disclaimerModel
                     in
                     ( { model | page = DisclaimerPage updatedDisclaimerModel }
                     , Cmd.map DisclaimerPageMsg disclaimerCmd
                     )
-                    
+
                 _ ->
                     ( model, Cmd.none )
 
@@ -546,13 +546,13 @@ update msg model =
                 Navigation.ConnectWalletClicked { id } ->
                     -- Reuse your existing wallet connection code
                     ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = [] })) )
-                
+
                 Navigation.DisconnectWalletClicked ->
                     -- Reuse your existing disconnect code
                     ( { model | wallet = Nothing, walletChangeAddress = Nothing, walletUtxos = Nothing }
                     , Cmd.none
                     )
-                
+
                 _ ->
                     -- Handle other navigation messages
                     let
@@ -562,7 +562,6 @@ update msg model =
                     ( { model | navigationState = newNavState }
                     , Cmd.map NavigationMsg navCmd
                     )
-    
 
 
 handleUrlChange : Route -> Model -> ( Model, Cmd Msg )
@@ -621,7 +620,7 @@ handleUrlChange route model =
               }
             , pushUrl <| AppUrl.toString <| routeToAppUrl route
             )
-            
+
         RouteDisclaimer ->
             ( { model
                 | errors = []
@@ -809,21 +808,23 @@ view model =
             if model.page == LandingPage then
                 -- Use transparent background on landing page to show gradients
                 HA.style "background" "transparent"
+
             else
                 -- Use gray background on other pages
                 HA.style "background" "#d9d9d9"
     in
-    div [ 
-        HA.style "min-height" "100vh",
-        HA.style "position" "relative",
-        HA.style "padding-bottom" "100px",
-        backgroundStyle  -- Apply the conditional background
-    ]
+    div
+        [ HA.style "min-height" "100vh"
+        , HA.style "position" "relative"
+        , HA.style "padding-bottom" "100px"
+        , backgroundStyle -- Apply the conditional background
+        ]
         [ -- Gradient circles (only on landing page)
           if model.page == LandingPage then
-              viewGradientBackgrounds
+            viewGradientBackgrounds
+
           else
-              text ""
+            text ""
         , viewHeader model
         , viewContent model
         , viewErrors model.errors
@@ -834,68 +835,95 @@ view model =
             }
         ]
 
+
+
 -- Separate function for gradient backgrounds
+
+
 viewGradientBackgrounds : Html Msg
 viewGradientBackgrounds =
-    div [ 
-        HA.style "position" "absolute",
-        HA.style "right" "0",
-        HA.style "top" "0",
-        HA.style "z-index" "-1" 
-    ]
-    [ -- Blue gradient circle
-      div [ 
-          HA.style "width" "75vw",
-          HA.style "height" "75vh",
-          HA.style "border-radius" "75rem",
-          HA.style "background" "linear-gradient(270deg, #00e0ff, #0084ff 100%)",
-          HA.style "filter" "blur(128px)",
-          HA.style "transform-origin" "center center",
-          HA.style "position" "absolute",
-          HA.style "right" "-7.5vw",
-          HA.style "top" "-30vh",
-          HA.class "blue-gradient-animation"
-      ] []
-      -- Red-Yellow gradient circle
-    , div [
-          HA.style "width" "22rem",
-          HA.style "height" "22rem",
-          HA.style "border-radius" "22rem",
-          HA.style "background" "linear-gradient(90deg, #d1085c -0.01%, #ffad0f 55.09%)",
-          HA.style "filter" "blur(4rem)",
-          HA.style "transform-origin" "center center",
-          HA.style "position" "absolute",
-          HA.style "right" "0vh",
-          HA.style "top" "5vh",
-          HA.class "red-yellow-gradient-animation"
-      ] []
-    ]
+    div
+        [ HA.style "position" "absolute"
+        , HA.style "right" "0"
+        , HA.style "top" "0"
+        , HA.style "z-index" "-1"
+        ]
+        [ -- Blue gradient circle
+          div
+            [ HA.style "width" "75vw"
+            , HA.style "height" "75vh"
+            , HA.style "border-radius" "75rem"
+            , HA.style "background" "linear-gradient(270deg, #00e0ff, #0084ff 100%)"
+            , HA.style "filter" "blur(128px)"
+            , HA.style "transform-origin" "center center"
+            , HA.style "position" "absolute"
+            , HA.style "right" "-7.5vw"
+            , HA.style "top" "-30vh"
+            , HA.class "blue-gradient-animation"
+            ]
+            []
+
+        -- Red-Yellow gradient circle
+        , div
+            [ HA.style "width" "22rem"
+            , HA.style "height" "22rem"
+            , HA.style "border-radius" "22rem"
+            , HA.style "background" "linear-gradient(90deg, #d1085c -0.01%, #ffad0f 55.09%)"
+            , HA.style "filter" "blur(4rem)"
+            , HA.style "transform-origin" "center center"
+            , HA.style "position" "absolute"
+            , HA.style "right" "0vh"
+            , HA.style "top" "5vh"
+            , HA.class "red-yellow-gradient-animation"
+            ]
+            []
+        ]
+
 
 viewHeader : Model -> Html Msg
 viewHeader model =
-    Navigation.view 
+    Navigation.view
         { state = model.navigationState
         , toMsg = NavigationMsg
         , brand = ""
         , items =
             [ { label = "Home", url = AppUrl.toString <| routeToAppUrl RouteLanding, isActive = model.page == LandingPage }
-            , { label = "Vote Preparation", url = AppUrl.toString <| routeToAppUrl RoutePreparation, isActive = case model.page of
-                PreparationPage _ -> True
-                _ -> False
+            , { label = "Vote Preparation"
+              , url = AppUrl.toString <| routeToAppUrl RoutePreparation
+              , isActive =
+                    case model.page of
+                        PreparationPage _ ->
+                            True
+
+                        _ ->
+                            False
               }
-            , { label = "Multisig Registration", url = AppUrl.toString <| routeToAppUrl RouteMultisigRegistration, isActive = case model.page of
-                MultisigRegistrationPage _ -> True
-                _ -> False
+            , { label = "Multisig Registration"
+              , url = AppUrl.toString <| routeToAppUrl RouteMultisigRegistration
+              , isActive =
+                    case model.page of
+                        MultisigRegistrationPage _ ->
+                            True
+
+                        _ ->
+                            False
               }
-            , { label = "PDFs", url = AppUrl.toString <| routeToAppUrl RoutePdf, isActive = case model.page of
-                PdfPage _ -> True
-                _ -> False
+            , { label = "PDFs"
+              , url = AppUrl.toString <| routeToAppUrl RoutePdf
+              , isActive =
+                    case model.page of
+                        PdfPage _ ->
+                            True
+
+                        _ ->
+                            False
               }
             ]
         , wallet = model.wallet
         , walletsDiscovered = model.walletsDiscovered
         , walletChangeAddress = model.walletChangeAddress
         }
+
 
 viewPagesLinks : List (Html Msg)
 viewPagesLinks =
@@ -907,6 +935,8 @@ viewPagesLinks =
     , text " | "
     , link RoutePdf [] [ text "PDFs" ]
     ]
+
+
 viewContent : Model -> Html Msg
 viewContent model =
     case model.page of
@@ -956,16 +986,20 @@ viewContent model =
 viewLandingPage : Html Msg
 viewLandingPage =
     div [ HA.class "container mx-auto" ]
-        [ Html.h2 [ HA.style "font-size" "5.5rem", HA.style "line-height" "normal", HA.style "max-width" "50rem", HA.style "margin-top" "4rem" ] 
+        [ Html.h2 [ HA.style "font-size" "5.5rem", HA.style "line-height" "normal", HA.style "max-width" "50rem", HA.style "margin-top" "4rem" ]
             [ text "Welcome to Cardano Governance Voting" ]
         , Html.p [ HA.style "font-size" "1.3rem", HA.style "max-width" "45rem", HA.class "mb-2" ]
             [ text "Leverage blockchain to build future-proof solutions. This page aims to help generate pretty PDFs for different kinds of governance metadata JSON files."
             ]
-        , Html.p [ HA.class "mt-4" ] 
-            [ link RoutePreparation [ HA.class "inline-block" ]
+        , Html.p [ HA.class "mt-4" ]
+            [ link RoutePreparation
+                [ HA.class "inline-block" ]
                 [ Helper.viewButton "Get Started" NoMsg ]
             ]
         ]
+
+
+
 -- Helpers
 
 

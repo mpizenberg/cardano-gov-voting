@@ -319,11 +319,11 @@ view ctx model =
                         in
                         Helper.formContainer
                             [ if ctx.wallet == Nothing then
-                                Html.p [ HA.class "mb-4 text-amber-600" ] 
+                                Html.p [ HA.class "mb-4 text-amber-600" ]
                                     [ text "If you want to sign with your web wallet, you need to connect it (see the page top)." ]
 
                               else if Dict.isEmpty vkeyWitnesses then
-                                Html.p [ HA.class "mb-4" ] 
+                                Html.p [ HA.class "mb-4" ]
                                     [ Helper.viewButton "Sign with connected wallet" (ctx.wrapMsg SignTxButtonClicked) ]
 
                               else
@@ -348,17 +348,17 @@ view ctx model =
                 in
                 div []
                     [ Helper.formContainer
-                        [ Html.p [ HA.class "mb-2" ] 
+                        [ Html.p [ HA.class "mb-2" ]
                             [ Html.strong [] [ text "Transaction ID: " ]
-                            , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex txId ] 
+                            , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex txId ]
                             ]
                         , Html.p [] [ text "Transaction details: (₳ amounts are in lovelaces)" ]
-                        , Html.pre [ 
-                            HA.class "bg-gray-50 p-4 rounded-md border overflow-auto mt-2 text-sm",
-                            HA.style "border-color" "#C6C6C6",
-                            HA.style "max-height" "300px"
-                          ] 
-                          [ text <| prettyTx tx ] 
+                        , Html.pre
+                            [ HA.class "bg-gray-50 p-4 rounded-md border overflow-auto mt-2 text-sm"
+                            , HA.style "border-color" "#C6C6C6"
+                            , HA.style "max-height" "300px"
+                            ]
+                            [ text <| prettyTx tx ]
                         ]
                     , if Dict.isEmpty expectedSigners then
                         div []
@@ -400,7 +400,7 @@ view ctx model =
 
                         Just _ ->
                             Helper.formContainer
-                                [ Html.p [ HA.class "text-green-600 font-medium" ] 
+                                [ Html.p [ HA.class "text-green-600 font-medium" ]
                                     [ text "Transaction submitted successfully!" ]
                                 , Html.p []
                                     [ text "Transaction ID: "
@@ -410,6 +410,7 @@ view ctx model =
                     , viewError error
                     ]
         ]
+
 
 viewExpectedSignatures : Dict String { keyHash : Bytes CredentialHash } -> Dict String VKeyWitness -> List (Html msg)
 viewExpectedSignatures expectedSigners vkeyWitnesses =
@@ -421,15 +422,15 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
                         [ Html.div [ HA.class "mr-2 font-bold" ] [ text "✓" ]
                         , Html.div [ HA.class "font-mono text-sm" ]
                             [ Html.div [] [ text <| "Key Hash: " ++ shortenedHex 8 hash ]
-                            , Html.div [ HA.class "text-gray-600" ] 
+                            , Html.div [ HA.class "text-gray-600" ]
                                 [ text <| "VKey: " ++ shortenedHex 8 (Bytes.toHex witness.vkey) ]
-                            , Html.div [ HA.class "text-gray-600" ] 
+                            , Html.div [ HA.class "text-gray-600" ]
                                 [ text <| "Signature: " ++ shortenedHex 8 (Bytes.toHex witness.signature) ]
                             ]
                         ]
 
                 Nothing ->
-                    Html.div [ HA.class "bg-gray-50 border p-3 rounded-md mb-2 flex items-center", HA.style "border-color" "#C6C6C6"  ]
+                    Html.div [ HA.class "bg-gray-50 border p-3 rounded-md mb-2 flex items-center", HA.style "border-color" "#C6C6C6" ]
                         [ Html.div [ HA.class "mr-2 text-gray-600" ] [ text "□" ]
                         , Html.div [ HA.class "font-mono text-sm" ]
                             [ text <| "Key Hash: " ++ shortenedHex 8 hash ]
@@ -437,6 +438,7 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
     in
     Dict.keys expectedSigners
         |> List.map viewExpectedSigner
+
 
 viewError : Maybe String -> Html msg
 viewError error =

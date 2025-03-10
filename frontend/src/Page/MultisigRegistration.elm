@@ -34,9 +34,9 @@ import Cardano.Utxo as Utxo exposing (Output, OutputReference)
 import Cardano.Value
 import Cbor.Encode
 import Helper
-import Html exposing (Html, button, div, text)
+import Html exposing (Html, div, text)
 import Html.Attributes as HA
-import Html.Events exposing (onCheck, onClick)
+import Html.Events exposing (onCheck)
 import List.Extra
 import Natural
 
@@ -728,7 +728,7 @@ viewOneKeyForm n hash =
     Html.div [ HA.class "flex items-center gap-2" ]
         [ Html.div [ HA.class "flex-1" ]
             [ Html.label [ HA.class "text-sm text-gray-600 mr-2" ] [ text "Key hash: " ]
-            , Helper.textFieldInline "" hash (KeyHashChange n)
+            , Helper.textFieldInline hash (KeyHashChange n)
             ]
         , Helper.viewButton "Delete" (DeleteKeyButtonClicked n)
         ]

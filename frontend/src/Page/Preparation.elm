@@ -47,7 +47,7 @@ import Dict.Any
 import File exposing (File)
 import File.Select
 import Helper exposing (prettyAdaLovelace, prettyAddr)
-import Html exposing (Html, button, div, text)
+import Html exposing (Html, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onCheck, onClick)
 import Html.Lazy
@@ -2546,7 +2546,7 @@ viewIdentifiedVoter form voter =
 viewProposalSelectionStep : ViewContext msg -> Model -> Html msg
 viewProposalSelectionStep ctx model =
     case model.pickProposalStep of
-        Preparing form ->
+        Preparing _ ->
             div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
                 [ Html.h2 [ HA.class "text-3xl font-medium  mb-4" ] [ text "Pick a Proposal" ]
                 , case ctx.proposals of
@@ -2637,35 +2637,10 @@ viewProposalSelectionStep ctx model =
 
 
 viewProposalOption : ActiveProposal -> Html Msg
-viewProposalOption { id, actionType, metadata, metadataUrl } =
+viewProposalOption { id, metadata, metadataUrl } =
     Html.option
         [ HA.value (Gov.actionIdToString id) ]
         [ text <|
-            case metadata of
-                RemoteData.NotAsked ->
-                    "not loading"
-
-                RemoteData.Loading ->
-                    "loading ..."
-
-                RemoteData.Failure error ->
-                    "ERROR for " ++ metadataUrl ++ ": " ++ Debug.toString error
-
-                RemoteData.Success meta ->
-                    meta.body.title
-                        |> Maybe.withDefault "unknown (unexpected metadata format)"
-        ]
-
-
-viewActiveProposal : ActiveProposal -> Html Msg
-viewActiveProposal { id, actionType, metadata, metadataUrl } =
-    Html.p [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
-        [ button [ onClick (PickProposalButtonClicked <| Gov.actionIdToString id) ] [ text "Pick this proposal" ]
-        , text " "
-        , cardanoScanActionLink id
-        , text <| ", type: " ++ actionType
-        , text ", title: "
-        , text <|
             case metadata of
                 RemoteData.NotAsked ->
                     "not loading"
@@ -2884,11 +2859,11 @@ viewOneRefForm n reference =
                     ]
                 , div [ HA.class "w-1/3 mr-6", HA.style "margin-right" "20px" ]
                     [ Helper.labeledField "Label"
-                        (Helper.textFieldInline "" reference.label (ReferenceLabelChange n))
+                        (Helper.textFieldInline reference.label (ReferenceLabelChange n))
                     ]
                 , div [ HA.class "w-1/3", HA.style "margin-right" "20px" ]
                     [ Helper.labeledField "URI"
-                        (Helper.textFieldInline "" reference.uri (ReferenceUriChange n))
+                        (Helper.textFieldInline reference.uri (ReferenceUriChange n))
                     ]
                 ]
             , Helper.viewButton "Delete" (DeleteRefButtonClicked n)
@@ -3181,7 +3156,7 @@ viewOneAuthorForm n author =
             [ div [ HA.class "flex-1 flex" ]
                 [ div [ HA.class "w-1/3", HA.style "margin-right" "20px" ]
                     [ Helper.labeledField "Author name"
-                        (Helper.textFieldInline "" author.name (AuthorNameChange n))
+                        (Helper.textFieldInline author.name (AuthorNameChange n))
                     ]
                 , div [ HA.class "w-2/3" ]
                     [ case author.signature of
@@ -3270,7 +3245,7 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                         ]
                     , Helper.formContainer
                         [ Helper.labeledField "IPFS RPC server:"
-                            (Helper.textFieldInline "" form.ipfsServer IpfsServerChange)
+                            (Helper.textFieldInline form.ipfsServer IpfsServerChange)
                         , Helper.viewButton "Add header" AddHeaderButtonClicked
                         , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
                         ]
@@ -3349,9 +3324,9 @@ viewHeader n ( field, value ) =
         [ div [ HA.class "flex items-center" ]
             [ div [ HA.class "flex-1 flex gap-12" ]
                 [ Helper.labeledField "Project ID"
-                    (Helper.textFieldInline "" field (StorageHeaderFieldChange n))
+                    (Helper.textFieldInline field (StorageHeaderFieldChange n))
                 , Helper.labeledField "IPFS"
-                    (Helper.textFieldInline "" value (StorageHeaderValueChange n))
+                    (Helper.textFieldInline value (StorageHeaderValueChange n))
                 ]
             , Helper.viewButton "Delete" (DeleteHeaderButtonClicked n)
             ]
@@ -3456,25 +3431,11 @@ viewFeeProviderForm feeProviderForm =
             , case feeProviderForm of
                 ExternalFeeProvider { endpoint, error } ->
                     Helper.labeledField "External Provider Endpoint"
-                        (Helper.textFieldInline "" endpoint (\s -> FeeProviderUpdated (ExternalFeeProvider { endpoint = s, error = error })))
+                        (Helper.textFieldInline endpoint (\s -> FeeProviderUpdated (ExternalFeeProvider { endpoint = s, error = error })))
 
                 _ ->
                     text ""
             ]
-        ]
-
-
-viewFeeProviderOption : FeeProviderForm -> String -> Bool -> Html Msg
-viewFeeProviderOption feeProviderForm label isSelected =
-    div []
-        [ Html.input
-            [ HA.type_ "radio"
-            , HA.name "fee-provider"
-            , HA.checked isSelected
-            , onClick (FeeProviderUpdated feeProviderForm)
-            ]
-            []
-        , Html.label [] [ text label ]
         ]
 
 

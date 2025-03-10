@@ -1,4 +1,4 @@
-port module Main exposing (Msg(..), Route(..), init, link, main, update, view)
+port module Main exposing (Model, Msg(..), Page, Route(..), TaskCompleted, main)
 
 {-| Main application module for the Cardano Governance Voting web app.
 
@@ -59,13 +59,13 @@ import ConcurrentTask exposing (ConcurrentTask)
 import ConcurrentTask.Extra
 import Dict exposing (Dict)
 import Footer
-import Helper exposing (prettyAddr)
-import Html exposing (Html, button, div, text)
-import Html.Attributes as HA exposing (height, src)
-import Html.Events exposing (onClick, preventDefaultOn)
+import Helper
+import Html exposing (Html, div, text)
+import Html.Attributes as HA
+import Html.Events exposing (preventDefaultOn)
 import Http
 import Json.Decode as JD exposing (Decoder, Value)
-import Navigation exposing (Msg(..), NavState, Route(..), link, locationHrefToRoute, routeToAppUrl)
+import Navigation
 import Page.Disclaimer
 import Page.MultisigRegistration
 import Page.Pdf
@@ -164,7 +164,7 @@ type Page
     | SigningPage Page.Signing.Model
     | MultisigRegistrationPage Page.MultisigRegistration.Model
     | PdfPage Page.Pdf.Model
-    | DisclaimerPage Page.Disclaimer.Model
+    | DisclaimerPage
 
 
 type TaskCompleted
@@ -213,8 +213,6 @@ type Msg
     = NoMsg
     | UrlChanged Route
     | WalletMsg Value
-    | ConnectButtonClicked { id : String }
-    | DisconnectWalletButtonClicked
     | GotProtocolParams (Result Http.Error ProtocolParams)
     | GotProposals (Result Http.Error (List ActiveProposal))
       -- Preparation page
@@ -226,8 +224,6 @@ type Msg
     | MultisigPageMsg Page.MultisigRegistration.Msg
       -- PDF page
     | PdfPageMsg Page.Pdf.Msg
-      -- Disclaimer page
-    | DisclaimerPageMsg Page.Disclaimer.Msg
       -- Navigation
     | NavigationMsg Navigation.Msg
       -- Task port
@@ -356,14 +352,6 @@ update msg model =
                 Err err ->
                     ( { model | errors = Debug.toString err :: model.errors }, Cmd.none )
 
-        ( ConnectButtonClicked { id }, _ ) ->
-            ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = [] })) )
-
-        ( DisconnectWalletButtonClicked, _ ) ->
-            ( { model | wallet = Nothing, walletChangeAddress = Nothing, walletUtxos = Nothing }
-            , Cmd.none
-            )
-
         ( WalletMsg value, _ ) ->
             case JD.decodeValue Cip30.responseDecoder value of
                 Ok response ->
@@ -481,21 +469,6 @@ update msg model =
                     in
                     Page.Pdf.update ctx pageMsg pageModel
                         |> Tuple.mapFirst (\newPageModel -> { model | page = PdfPage newPageModel })
-
-                _ ->
-                    ( model, Cmd.none )
-
-        -- Result Http.Error (List Page.Preparation.ActiveProposal)
-        ( DisclaimerPageMsg subMsg, { page } ) ->
-            case page of
-                DisclaimerPage disclaimerModel ->
-                    let
-                        ( updatedDisclaimerModel, disclaimerCmd ) =
-                            Page.Disclaimer.update subMsg disclaimerModel
-                    in
-                    ( { model | page = DisclaimerPage updatedDisclaimerModel }
-                    , Cmd.map DisclaimerPageMsg disclaimerCmd
-                    )
 
                 _ ->
                     ( model, Cmd.none )
@@ -624,7 +597,7 @@ handleUrlChange route model =
         RouteDisclaimer ->
             ( { model
                 | errors = []
-                , page = DisclaimerPage Page.Disclaimer.initialModel
+                , page = DisclaimerPage
               }
             , pushUrl <| AppUrl.toString <| routeToAppUrl route
             )
@@ -925,26 +898,14 @@ viewHeader model =
         }
 
 
-viewPagesLinks : List (Html Msg)
-viewPagesLinks =
-    [ link RouteLanding [] [ text "Home" ]
-    , text " | "
-    , link RoutePreparation [] [ text "Vote Preparation" ]
-    , text " | "
-    , link RouteMultisigRegistration [] [ text "Multisig Registration" ]
-    , text " | "
-    , link RoutePdf [] [ text "PDFs" ]
-    ]
-
-
 viewContent : Model -> Html Msg
 viewContent model =
     case model.page of
         LandingPage ->
             viewLandingPage
 
-        DisclaimerPage disclaimerModel ->
-            Html.map DisclaimerPageMsg (Page.Disclaimer.view disclaimerModel)
+        DisclaimerPage ->
+            Page.Disclaimer.view
 
         PreparationPage prepModel ->
             Page.Preparation.view

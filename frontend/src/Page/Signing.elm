@@ -24,7 +24,6 @@ import File.Select
 import Helper exposing (shortenedHex)
 import Html exposing (Html, div, text)
 import Html.Attributes as HA
-import Html.Events exposing (onClick)
 import Json.Decode as JD
 import Json.Encode as JE
 import Task

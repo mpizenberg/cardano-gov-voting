@@ -18,9 +18,8 @@ import File exposing (File)
 import File.Download
 import File.Select
 import Helper
-import Html exposing (Html, button, div, text)
+import Html exposing (Html, div, text)
 import Html.Attributes as HA
-import Html.Events exposing (onClick)
 import Http
 import Json.Decode as JD exposing (Decoder)
 import Page.Preparation as Preparation exposing (InternalVote, Rationale, Reference, ReferenceType(..))

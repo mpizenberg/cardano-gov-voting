@@ -1,27 +1,17 @@
 module Navigation exposing
     ( Msg(..)
     , NavState
-    , Route(..)
     , init
-    , link
-    , locationHrefToRoute
-    , routeToAppUrl
     , update
     , view
     )
 
-import AppUrl exposing (AppUrl)
-import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano.Address exposing (Address, CredentialHash)
+import Cardano.Address exposing (Address)
 import Cardano.Cip30 as Cip30
-import Cardano.Transaction as Transaction exposing (Transaction)
-import Dict exposing (Dict)
 import Helper exposing (prettyAddr)
-import Html exposing (..)
-import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, preventDefaultOn)
-import Json.Decode as JD exposing (Decoder)
-import Url
+import Html exposing (Html, a, button, div, img, li, nav, span, text, ul)
+import Html.Attributes exposing (alt, class, href, src, style)
+import Html.Events exposing (onClick)
 
 
 type alias NavState =
@@ -31,19 +21,8 @@ type alias NavState =
 
 type Msg
     = ToggleMobileMenu
-    | CloseMenu
     | ConnectWalletClicked { id : String }
     | DisconnectWalletClicked
-
-
-type Route
-    = RouteLanding
-    | RoutePreparation
-    | RouteSigning { expectedSigners : List (Bytes CredentialHash), tx : Maybe Transaction }
-    | RouteMultisigRegistration
-    | RoutePdf
-    | RouteDisclaimer
-    | Route404
 
 
 init : NavState
@@ -58,109 +37,12 @@ update msg state =
         ToggleMobileMenu ->
             ( { state | isOpen = not state.isOpen }, Cmd.none )
 
-        CloseMenu ->
-            ( { state | isOpen = False }, Cmd.none )
-
         -- These will be handled by Main.elm
         ConnectWalletClicked _ ->
             ( state, Cmd.none )
 
         DisconnectWalletClicked ->
             ( state, Cmd.none )
-
-
-link : (Route -> msg) -> Route -> List (Html.Attribute msg) -> List (Html msg) -> Html msg
-link urlChangedMsg route attrs children =
-    Html.a
-        (preventDefaultOn "click" (linkClickDecoder urlChangedMsg route)
-            :: href (AppUrl.toString <| routeToAppUrl <| route)
-            :: attrs
-        )
-        children
-
-
-linkClickDecoder : (Route -> msg) -> Route -> Decoder ( msg, Bool )
-linkClickDecoder urlChangedMsg route =
-    -- Custom decoder on link clicks to not overwrite expected behaviors for click with modifiers.
-    -- For example, Ctrl+Click should open in a new tab, and Shift+Click in a new window.
-    JD.map4
-        (\ctrl meta shift wheel ->
-            if ctrl || meta || shift || wheel /= 0 then
-                ( urlChangedMsg route, False )
-
-            else
-                ( urlChangedMsg route, True )
-        )
-        (JD.field "ctrlKey" JD.bool)
-        (JD.field "metaKey" JD.bool)
-        (JD.field "shiftKey" JD.bool)
-        (JD.field "button" JD.int)
-
-
-locationHrefToRoute : String -> Route
-locationHrefToRoute locationHref =
-    case Url.fromString locationHref |> Maybe.map AppUrl.fromUrl of
-        Nothing ->
-            Route404
-
-        Just { path, queryParameters, fragment } ->
-            case path of
-                [] ->
-                    RouteLanding
-
-                [ "page", "preparation" ] ->
-                    RoutePreparation
-
-                [ "page", "signing" ] ->
-                    RouteSigning
-                        { expectedSigners =
-                            Dict.get "signer" queryParameters
-                                |> Maybe.withDefault []
-                                |> List.filterMap Bytes.fromHex
-                        , tx =
-                            Maybe.andThen Bytes.fromHex fragment
-                                |> Maybe.andThen Transaction.deserialize
-                        }
-
-                [ "page", "registration" ] ->
-                    RouteMultisigRegistration
-
-                [ "page", "pdf" ] ->
-                    RoutePdf
-
-                [ "page", "disclaimer" ] ->
-                    RouteDisclaimer
-
-                _ ->
-                    Route404
-
-
-routeToAppUrl : Route -> AppUrl
-routeToAppUrl route =
-    case route of
-        Route404 ->
-            AppUrl.fromPath [ "404" ]
-
-        RouteLanding ->
-            AppUrl.fromPath []
-
-        RoutePreparation ->
-            AppUrl.fromPath [ "page", "preparation" ]
-
-        RouteSigning { expectedSigners, tx } ->
-            { path = [ "page", "signing" ]
-            , queryParameters = Dict.singleton "signer" <| List.map Bytes.toHex expectedSigners
-            , fragment = Maybe.map (Bytes.toHex << Transaction.serialize) tx
-            }
-
-        RouteMultisigRegistration ->
-            AppUrl.fromPath [ "page", "registration" ]
-
-        RoutePdf ->
-            AppUrl.fromPath [ "page", "pdf" ]
-
-        RouteDisclaimer ->
-            AppUrl.fromPath [ "page", "disclaimer" ]
 
 
 view :
@@ -187,7 +69,7 @@ view config =
 
                 -- Desktop menu
                 , div [ class "hidden md:flex space-x-8" ]
-                    (List.map (viewDesktopMenuItem config.toMsg) config.items)
+                    (List.map viewDesktopMenuItem config.items)
 
                 -- Wallet section (on the right)
                 , div [ class "hidden md:flex" ]
@@ -256,7 +138,7 @@ view config =
                 ]
                 [ div [ class "py-2" ]
                     [ ul [ class "flex flex-col space-y-4 mt-4" ]
-                        (List.map (viewMobileMenuItem config.toMsg) config.items)
+                        (List.map viewMobileMenuItem config.items)
                     , div [ class "mt-4 px-4" ]
                         [ viewWalletSection config ]
                     ]
@@ -265,8 +147,8 @@ view config =
         ]
 
 
-viewDesktopMenuItem : (Msg -> msg) -> { label : String, url : String, isActive : Bool } -> Html msg
-viewDesktopMenuItem toMsg item =
+viewDesktopMenuItem : { label : String, url : String, isActive : Bool } -> Html msg
+viewDesktopMenuItem item =
     a
         [ href item.url
         , class
@@ -282,8 +164,8 @@ viewDesktopMenuItem toMsg item =
         [ text item.label ]
 
 
-viewMobileMenuItem : (Msg -> msg) -> { label : String, url : String, isActive : Bool } -> Html msg
-viewMobileMenuItem toMsg item =
+viewMobileMenuItem : { label : String, url : String, isActive : Bool } -> Html msg
+viewMobileMenuItem item =
     li []
         [ a
             [ href item.url

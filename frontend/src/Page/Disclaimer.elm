@@ -1,4 +1,4 @@
-module Page.Disclaimer exposing (Model, Msg, initialModel, update, view)
+module Page.Disclaimer exposing (view)
 
 {-| This module provides a legal disclaimer page with important information about
 the Cardano Signature Verification tool.
@@ -20,52 +20,14 @@ import Html.Attributes as HA
 
 
 -- ###################################################################
--- MODEL
--- ###################################################################
-
-
-{-| Simple model for the disclaimer page
--}
-type alias Model =
-    {}
-
-
-initialModel : Model
-initialModel =
-    {}
-
-
-
--- ###################################################################
--- UPDATE
--- ###################################################################
-
-
-{-| No messages are needed for this static page
--}
-type Msg
-    = NoOp
-
-
-{-| Update function that maintains the current state
--}
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    case msg of
-        NoOp ->
-            ( model, Cmd.none )
-
-
-
--- ###################################################################
 -- VIEW
 -- ###################################################################
 
 
 {-| Renders the disclaimer with the legal text
 -}
-view : Model -> Html Msg
-view _ =
+view : Html msg
+view =
     div [ HA.style "max-width" "1024px", HA.style "margin" "0 auto", HA.style "padding" "0 1rem" ]
         [ h2
             [ HA.style "font-size" "1.875rem"

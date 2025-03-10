@@ -1,4 +1,4 @@
-module Helper exposing (actionRow, firstTextField, formContainer, formRow, labeledField, prettyAdaLovelace, prettyAddr, shortenedHex, textField, textFieldInline, viewButton, viewNumberInput, viewNumberInputInline, viewSelect, viewTextarea)
+module Helper exposing (firstTextField, formContainer, labeledField, prettyAdaLovelace, prettyAddr, shortenedHex, textField, textFieldInline, viewButton, viewNumberInput, viewSelect, viewTextarea)
 
 {-| Helper module for miscellaneous functions that didn’t fit elsewhere,
 and are potentially useful in multiple places.
@@ -101,25 +101,8 @@ viewNumberInput label n msgOnInput =
         ]
 
 
-viewNumberInputInline : Int -> (String -> msg) -> Html msg
-viewNumberInputInline value toMsg =
-    Html.span [ HA.class "inline-block ml-2" ]
-        [ Html.input
-            [ HA.type_ "number"
-            , HA.value (String.fromInt value)
-            , Html.Events.onInput toMsg
-            , HA.style "background-color" "#C6C6C6"
-            , HA.style "padding" "0.5rem 0.75rem"
-            , HA.style "border-radius" "4px"
-            , HA.style "border" "1px solid #ccc"
-            , HA.style "width" "80px"
-            ]
-            []
-        ]
-
-
-textFieldInline : String -> String -> (String -> msg) -> Html msg
-textFieldInline label value toMsg =
+textFieldInline : String -> (String -> msg) -> Html msg
+textFieldInline value toMsg =
     Html.span [ HA.class "inline-block mr-2" ]
         [ Html.input
             [ HA.type_ "text"
@@ -155,14 +138,6 @@ labeledField labelText field =
 
 
 -- Add a formRow helper for reference form rows
-
-
-formRow : List (Html msg) -> Html msg
-formRow fields =
-    Html.div [ HA.class "flex items-center mb-4" ] fields
-
-
-
 -- Add a formContainer for each reference item
 
 
@@ -173,11 +148,6 @@ formContainer content =
 
 
 -- Add an actionRow for the delete button
-
-
-actionRow : Html msg -> Html msg
-actionRow button =
-    Html.div [ HA.class "flex justify-end" ] [ button ]
 
 
 viewButton : String -> msg -> Html msg

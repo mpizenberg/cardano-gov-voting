@@ -47,7 +47,7 @@ import Dict.Any
 import File exposing (File)
 import File.Select
 import Helper exposing (prettyAdaLovelace, prettyAddr)
-import Html exposing (Html, div, text)
+import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onCheck, onClick)
 import Html.Lazy
@@ -3486,10 +3486,18 @@ viewBuildTxStep ctx model =
                     [ Html.p [ HA.class "mb-2" ] [ text "Transaction generated successfully (₳ displayed as lovelaces):" ]
                     , div [ HA.class "relative" ]
                         [ Html.pre
-                            [ HA.class "bg-gray-50 p-4 rounded-md border overflow-x-auto overflow-y-auto mt-2 text-sm whitespace-pre-wrap break-words"
-                            , HA.style "border-color" "#C6C6C6"
-                            , HA.style "max-height" "300px"
+                            [ HA.style "padding" "1rem"
+                            , HA.style "border-radius" "0.375rem"
+                            , HA.style "border" "1px solid #C6C6C6"
+                            , HA.style "overflow-x" "auto"
+                            , HA.style "overflow-y" "auto"
+                            , HA.style "margin-top" "0.5rem"
+                            , HA.style "font-size" "0.875rem"
+                            , HA.style "white-space" "pre-wrap"
                             , HA.style "word-break" "break-all"
+                            , HA.style "word-wrap" "break-word"
+                            , HA.style "max-height" "300px"
+                            , HA.style "font-family" "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
                             ]
                             [ text <| prettyTx tx ]
                         ]
@@ -3506,7 +3514,8 @@ viewSignTxStep ctx buildTxStep =
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Signing" ]
                 , Helper.formContainer
-                    [ Html.p [ HA.class "mb-4" ] [ text "Expecting signatures for the following public key hashes:" ]
+                    [ Html.h5 [ HA.class "text-xl font-medium mb-4" ] [ text "Finalize Your Vote" ]
+                    , Html.p [ HA.class "mb-4" ] [ text "Expecting signatures for the following public key hashes:" ]
                     , div [ HA.class "bg-gray-50 p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
                         [ Html.ul [ HA.class "font-mono text-sm space-y-2" ]
                             (List.map
@@ -3517,14 +3526,37 @@ viewSignTxStep ctx buildTxStep =
                                 expectedSignatures
                             )
                         ]
-                    , Html.p [ HA.class "text-gray-800" ]
-                        [ text "Finalize your voting transaction by signing and submitting it via the dedicated "
-                        , ctx.signingLink tx
-                            expectedSignatures
-                            [ Html.span
-                                [ HA.class "text-blue-600 hover:text-blue-800 underline" ]
-                                [ text "signing page." ]
+                    , Html.p [ HA.class "text-gray-800 mb-4" ]
+                        [ text "Click the button below to proceed to the signing page where you can finalize and submit your voting transaction." ]
+                    , ctx.signingLink tx
+                        expectedSignatures
+                        [ button
+                            [ HA.style "display" "inline-flex"
+                            , HA.style "align-items" "center"
+                            , HA.style "justify-content" "center"
+                            , HA.style "white-space" "nowrap"
+                            , HA.style "border-radius" "9999px"
+                            , HA.style "font-size" "0.875rem"
+                            , HA.style "font-weight" "500"
+                            , HA.style "transition" "all 0.2s"
+                            , HA.style "outline" "none"
+                            , HA.style "ring-offset" "background"
+                            , HA.style "focus-visible:ring" "2px"
+                            , HA.style "focus-visible:ring-color" "ring"
+                            , HA.style "focus-visible:ring-offset" "2px"
+                            , HA.style "background-color" "#272727"
+                            , HA.style "color" "#f7fafc"
+                            , HA.style "hover:bg-color" "#f9fafb"
+                            , HA.style "hover:text-color" "#1a202c"
+                            , HA.style "height" "4rem"
+                            , HA.style "padding-left" "1.5rem"
+                            , HA.style "padding-right" "1.5rem"
+                            , HA.style "padding-top" "1.25rem"
+                            , HA.style "padding-bottom" "1.25rem"
+                            , HA.style "margin-top" "0.5rem"
+                            , HA.style "margin-bottom" "0.5em"
                             ]
+                            [ text "Go to Signing Page" ]
                         ]
                     ]
                 ]

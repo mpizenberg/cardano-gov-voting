@@ -171,11 +171,9 @@ viewButton label msg =
         , HA.style "color" "#f7fafc"
         , HA.style "hover:bg-color" "#f9fafb"
         , HA.style "hover:text-color" "#1a202c"
-        , HA.style "height" "4rem"
+        , HA.style "height" "3rem"
         , HA.style "padding-left" "1.5rem"
         , HA.style "padding-right" "1.5rem"
-        , HA.style "padding-top" "1.25rem"
-        , HA.style "padding-bottom" "1.25rem"
         , HA.style "margin-top" "0.5rem"
         , HA.style "margin-bottom" "0.5em"
         ]

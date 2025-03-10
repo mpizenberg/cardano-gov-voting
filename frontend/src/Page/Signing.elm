@@ -22,8 +22,9 @@ import Dict exposing (Dict)
 import File exposing (File)
 import File.Select
 import Helper exposing (shortenedHex)
-import Html exposing (Html, div, text)
+import Html exposing (Html, a, div, text)
 import Html.Attributes as HA
+import Html.Events exposing (onClick)
 import Json.Decode as JD
 import Json.Encode as JE
 import Task
@@ -339,9 +340,10 @@ view ctx model =
                                 , text " to partially sign the transaction,"
                                 , text " and use the button below to load their signatures."
                                 ]
-                            , Html.p [ HA.class "mb-4 flex items-center gap-3" ]
+                            , Html.p [ HA.class "mb-4 flex items-center" ]
                                 [ downloadButton "Download unsigned Tx" "unsigned" "tx-unsigned.json" tx
-                                , Helper.viewButton "Load signed Tx file" (ctx.wrapMsg LoadSignedTxButtonClicked)
+                                , div [ HA.style "margin-left" "1rem" ]
+                                    [ Helper.viewButton "Load signed Tx file" (ctx.wrapMsg LoadSignedTxButtonClicked) ]
                                 ]
                             ]
                 in
@@ -351,13 +353,24 @@ view ctx model =
                             [ Html.strong [] [ text "Transaction ID: " ]
                             , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex txId ]
                             ]
-                        , Html.p [] [ text "Transaction details: (₳ amounts are in lovelaces)" ]
-                        , Html.pre
-                            [ HA.class "bg-gray-50 p-4 rounded-md border overflow-auto mt-2 text-sm"
-                            , HA.style "border-color" "#C6C6C6"
-                            , HA.style "max-height" "300px"
+                        , Html.p [ HA.class "mb-2" ] [ text "Transaction details: (₳ amounts are in lovelaces)" ]
+                        , div [ HA.class "relative" ]
+                            [ Html.pre
+                                [ HA.style "padding" "1rem"
+                                , HA.style "border-radius" "0.375rem"
+                                , HA.style "border" "1px solid #C6C6C6"
+                                , HA.style "overflow-x" "auto"
+                                , HA.style "overflow-y" "auto"
+                                , HA.style "margin-top" "0.5rem"
+                                , HA.style "font-size" "0.875rem"
+                                , HA.style "white-space" "pre-wrap"
+                                , HA.style "word-break" "break-all"
+                                , HA.style "word-wrap" "break-word"
+                                , HA.style "max-height" "300px"
+                                , HA.style "font-family" "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                                ]
+                                [ text <| prettyTx tx ]
                             ]
-                            [ text <| prettyTx tx ]
                         ]
                     , if Dict.isEmpty expectedSigners then
                         div []
@@ -399,11 +412,75 @@ view ctx model =
 
                         Just _ ->
                             Helper.formContainer
-                                [ Html.p [ HA.class "text-green-600 font-medium" ]
-                                    [ text "Transaction submitted successfully!" ]
-                                , Html.p []
-                                    [ text "Transaction ID: "
-                                    , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex txId ]
+                                [ div
+                                    [ HA.style "border-radius" "0.375rem"
+                                    ]
+                                    [ Html.p
+                                        [ HA.style "color" "#15803d"
+                                        , HA.style "font-weight" "600"
+                                        , HA.style "font-size" "1.25rem"
+                                        , HA.style "margin-bottom" "0.75rem"
+                                        ]
+                                        [ text "Transaction submitted successfully!" ]
+                                    , Html.p [ HA.style "margin-bottom" "1rem" ]
+                                        [ text "Your vote has been recorded on the Cardano blockchain." ]
+                                    , div
+                                        [ HA.style "border" "1px solid #C6C6C6"
+                                        , HA.style "border-radius" "0.375rem"
+                                        , HA.style "padding" "1rem"
+                                        , HA.style "margin-bottom" "1rem"
+                                        , HA.style "display" "inline-block"
+                                        ]
+                                        [ Html.p
+                                            [ HA.style "font-size" "0.875rem"
+                                            , HA.style "color" "#4b5563"
+                                            , HA.style "margin-bottom" "0.25rem"
+                                            ]
+                                            [ text "Transaction ID:" ]
+                                        , Html.p [ HA.style "font-family" "monospace", HA.style "font-weight" "500" ]
+                                            [ text <| Bytes.toHex txId ]
+                                        ]
+                                    , Html.p
+                                        [ HA.style "color" "#4b5563"
+                                        , HA.style "margin-bottom" "0.75rem"
+                                        ]
+                                        [ text "Track your transaction:" ]
+                                    , div [ HA.style "display" "flex", HA.style "gap" "1rem", HA.style "flex-wrap" "wrap" ]
+                                        [ a
+                                            [ HA.href ("https://preview.cardanoscan.io/transaction/" ++ Bytes.toHex txId)
+                                            , HA.target "_blank"
+                                            , HA.style "display" "inline-flex"
+                                            , HA.style "align-items" "center"
+                                            , HA.style "justify-content" "center"
+                                            , HA.style "white-space" "nowrap"
+                                            , HA.style "border-radius" "9999px"
+                                            , HA.style "font-size" "0.875rem"
+                                            , HA.style "font-weight" "500"
+                                            , HA.style "transition" "all 0.2s"
+                                            , HA.style "outline" "none"
+                                            , HA.style "background-color" "#272727"
+                                            , HA.style "color" "#f7fafc"
+                                            , HA.style "padding" "0.75rem 1.5rem"
+                                            ]
+                                            [ text "View on CardanoScan" ]
+                                        , a
+                                            [ HA.href ("https://adastat.net/transactions/" ++ Bytes.toHex txId)
+                                            , HA.target "_blank"
+                                            , HA.style "display" "inline-flex"
+                                            , HA.style "align-items" "center"
+                                            , HA.style "justify-content" "center"
+                                            , HA.style "white-space" "nowrap"
+                                            , HA.style "border-radius" "9999px"
+                                            , HA.style "font-size" "0.875rem"
+                                            , HA.style "font-weight" "500"
+                                            , HA.style "transition" "all 0.2s"
+                                            , HA.style "outline" "none"
+                                            , HA.style "background-color" "#272727"
+                                            , HA.style "color" "#f7fafc"
+                                            , HA.style "padding" "0.75rem 1.5rem"
+                                            ]
+                                            [ text "View on AdaStat" ]
+                                        ]
                                     ]
                                 ]
                     , viewError error
@@ -418,7 +495,7 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
             case Dict.get hash vkeyWitnesses of
                 Just witness ->
                     Html.div [ HA.class "bg-green-50 border p-3 rounded-md mb-2 flex items-center", HA.style "border-color" "#C6C6C6" ]
-                        [ Html.div [ HA.class "mr-2 font-bold" ] [ text "✓" ]
+                        [ Html.div [ HA.class "font-bold", HA.style "margin-left" "6px", HA.style "margin-right" "6px" ] [ text "✓" ]
                         , Html.div [ HA.class "font-mono text-sm" ]
                             [ Html.div [] [ text <| "Key Hash: " ++ shortenedHex 8 hash ]
                             , Html.div [ HA.class "text-gray-600" ]

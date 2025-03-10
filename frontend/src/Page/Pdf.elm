@@ -191,11 +191,12 @@ decodeRationale =
 
 decodeInternalVote : Decoder InternalVote
 decodeInternalVote =
-    JD.map4 InternalVote
+    JD.map5 InternalVote
         (JD.field "constitutional" JD.int)
         (JD.field "unconstitutional" JD.int)
         (JD.field "abstain" JD.int)
         (JD.field "didNotVote" JD.int)
+        (JD.field "against" JD.int)
 
 
 decodeReference : Decoder Reference

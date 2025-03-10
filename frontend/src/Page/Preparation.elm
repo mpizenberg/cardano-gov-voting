@@ -172,6 +172,7 @@ type alias InternalVote =
     , unconstitutional : Int
     , abstain : Int
     , didNotVote : Int
+    , against : Int
     }
 
 
@@ -181,6 +182,7 @@ noInternalVote =
     , unconstitutional = 0
     , abstain = 0
     , didNotVote = 0
+    , against = 0
     }
 
 
@@ -434,6 +436,7 @@ type Msg
     | InternalUnconstitutionalVoteChange String
     | InternalAbstainVoteChange String
     | InternalDidNotVoteChange String
+    | InternalAgainstVoteChange String
     | AddRefButtonClicked
     | DeleteRefButtonClicked Int
     | ReferenceLabelChange Int String
@@ -713,6 +716,12 @@ update ctx msg model =
 
         InternalDidNotVoteChange didNotVoteStr ->
             ( updateRationaleInternalVoteForm (\n internal -> { internal | didNotVote = n }) didNotVoteStr model
+            , Cmd.none
+            , Nothing
+            )
+
+        InternalAgainstVoteChange againstVoteStr ->
+            ( updateRationaleInternalVoteForm (\n internal -> { internal | against = n }) againstVoteStr model
             , Cmd.none
             , Nothing
             )
@@ -1589,6 +1598,9 @@ validateRationaleInternVote internVote =
     else if internVote.didNotVote < 0 then
         Err "DidNotVote internal vote must be >= 0"
 
+    else if internVote.against < 0 then
+        Err "AgainstVote internal vote must be >= 0"
+
     else
         Ok ()
 
@@ -1707,12 +1719,13 @@ encodeJsonLdRationale rationale =
 
 
 encodeInternalVote : InternalVote -> JE.Value
-encodeInternalVote { constitutional, unconstitutional, abstain, didNotVote } =
+encodeInternalVote { constitutional, unconstitutional, abstain, didNotVote, against } =
     JE.object
         [ ( "constitutional", JE.int constitutional )
         , ( "unconstitutional", JE.int unconstitutional )
         , ( "abstain", JE.int abstain )
         , ( "didNotVote", JE.int didNotVote )
+        , ( "againstVote", JE.int against )
         ]
 
 
@@ -2827,7 +2840,7 @@ viewConclusionForm form =
 
 
 viewInternalVoteForm : InternalVote -> Html Msg
-viewInternalVoteForm { constitutional, unconstitutional, abstain, didNotVote } =
+viewInternalVoteForm { constitutional, unconstitutional, abstain, didNotVote, against } =
     div []
         [ Html.h4 [ HA.class "text-xl font-medium" ] [ text "Internal Vote" ]
         , Html.p [ HA.class "text-sm text-gray-600 mt-2 mb-4" ]
@@ -2837,6 +2850,7 @@ viewInternalVoteForm { constitutional, unconstitutional, abstain, didNotVote } =
             , Helper.viewNumberInput "Unconstitutional" unconstitutional InternalUnconstitutionalVoteChange
             , Helper.viewNumberInput "Abstain" abstain InternalAbstainVoteChange
             , Helper.viewNumberInput "Did not vote" didNotVote InternalDidNotVoteChange
+            , Helper.viewNumberInput "Against voting" against InternalAgainstVoteChange
             ]
         ]
 
@@ -2967,7 +2981,7 @@ viewConclusion maybeConclusion =
 
 
 viewInternalVote : InternalVote -> Html msg
-viewInternalVote ({ constitutional, unconstitutional, abstain, didNotVote } as internalVote) =
+viewInternalVote ({ constitutional, unconstitutional, abstain, didNotVote, against } as internalVote) =
     if internalVote == noInternalVote then
         text ""
 
@@ -2979,6 +2993,7 @@ viewInternalVote ({ constitutional, unconstitutional, abstain, didNotVote } as i
                 , Html.li [] [ Html.strong [ HA.class "font-medium" ] [ text "Unconstitutional: " ], text (String.fromInt unconstitutional) ]
                 , Html.li [] [ Html.strong [ HA.class "font-medium" ] [ text "Abstain: " ], text (String.fromInt abstain) ]
                 , Html.li [] [ Html.strong [ HA.class "font-medium" ] [ text "Did not vote: " ], text (String.fromInt didNotVote) ]
+                , Html.li [] [ Html.strong [ HA.class "font-medium" ] [ text "Against voting: " ], text (String.fromInt against) ]
                 ]
             ]
 

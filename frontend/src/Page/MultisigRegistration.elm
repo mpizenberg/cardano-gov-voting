@@ -410,21 +410,41 @@ buildRegisterTx w costModels unsortedCreds model =
 
                 ( True, False ) ->
                     Ok
-                        [ Spend <| FromWallet w.changeAddress <| Cardano.Value.onlyLovelace depositAmount
+                        [ Spend <|
+                            FromWallet
+                                { address = w.changeAddress
+                                , value = Cardano.Value.onlyLovelace depositAmount
+                                , guaranteedUtxos = []
+                                }
                         , registrationIntent
                         ]
 
                 ( False, True ) ->
                     Ok
-                        [ Spend <| FromWallet w.changeAddress outputWithScript.amount
+                        [ Spend <|
+                            FromWallet
+                                { address = w.changeAddress
+                                , value = Cardano.Value.onlyLovelace depositAmount
+                                , guaranteedUtxos = []
+                                }
                         , SendToOutput outputWithScript
                         ]
 
                 ( True, True ) ->
                     Ok
-                        [ Spend <| FromWallet w.changeAddress <| Cardano.Value.onlyLovelace depositAmount
+                        [ Spend <|
+                            FromWallet
+                                { address = w.changeAddress
+                                , value = Cardano.Value.onlyLovelace depositAmount
+                                , guaranteedUtxos = []
+                                }
                         , registrationIntent
-                        , Spend <| FromWallet w.changeAddress outputWithScript.amount
+                        , Spend <|
+                            FromWallet
+                                { address = w.changeAddress
+                                , value = outputWithScript.amount
+                                , guaranteedUtxos = []
+                                }
                         , SendToOutput outputWithScript
                         ]
     in

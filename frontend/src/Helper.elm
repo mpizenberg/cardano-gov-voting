@@ -1,4 +1,22 @@
-module Helper exposing (firstTextField, formContainer, labeledField, prettyAdaLovelace, prettyAddr, shortenedHex, textField, textFieldInline, viewButton, viewNumberInput, viewSelect, viewTextarea)
+module Helper exposing
+    ( applyDropdownContainerStyle
+    , applyDropdownItemStyle
+    , applyWalletIconContainerStyle
+    , applyWalletIconStyle
+    , firstTextField
+    , formContainer
+    , labeledField
+    , prettyAdaLovelace
+    , prettyAddr
+    , shortenedHex
+    , textField
+    , textFieldInline
+    , viewButton
+    , viewNumberInput
+    , viewSelect
+    , viewTextarea
+    , viewWalletButton
+    )
 
 {-| Helper module for miscellaneous functions that didn’t fit elsewhere,
 and are potentially useful in multiple places.
@@ -250,3 +268,87 @@ viewTextarea value onInputMsg =
         , HA.style "margin-bottom" "40px"
         ]
         []
+
+
+
+-- Add these wallet styling functions after the existing functions
+-- Styling for wallet-related components
+
+
+viewWalletButton : String -> msg -> List (Html msg) -> Html msg
+viewWalletButton label msg content =
+    button
+        [ onClick msg
+        , HA.style "display" "inline-flex"
+        , HA.style "align-items" "center"
+        , HA.style "justify-content" "center"
+        , HA.style "white-space" "nowrap"
+        , HA.style "border-radius" "9999px"
+        , HA.style "font-size" "0.875rem"
+        , HA.style "font-weight" "500"
+        , HA.style "transition" "all 0.2s"
+        , HA.style "outline" "none"
+        , HA.style "ring-offset" "background"
+        , HA.style "focus-visible:ring" "2px"
+        , HA.style "focus-visible:ring-color" "ring"
+        , HA.style "focus-visible:ring-offset" "2px"
+        , HA.style "background-color" "#272727"
+        , HA.style "color" "#f7fafc"
+        , HA.style "hover:bg-color" "#f9fafb"
+        , HA.style "hover:text-color" "#1a202c"
+        , HA.style "height" "3rem"
+        , HA.style "padding-left" "1.5rem"
+        , HA.style "padding-right" "1.5rem"
+        ]
+        (text label :: content)
+
+
+applyDropdownContainerStyle : List (Html.Attribute msg)
+applyDropdownContainerStyle =
+    [ HA.style "position" "absolute"
+    , HA.style "top" "100%"
+    , HA.style "right" "0"
+    , HA.style "margin-top" "0.5rem"
+    , HA.style "width" "220px"
+    , HA.style "background-color" "#f8f9fa"
+    , HA.style "border" "1px solid #e2e8f0"
+    , HA.style "border-radius" "0.5rem"
+    , HA.style "box-shadow" "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)"
+    , HA.style "z-index" "50"
+    , HA.style "padding" "0.5rem 0"
+    , HA.style "max-height" "300px"
+    , HA.style "overflow-y" "auto"
+    ]
+
+
+applyDropdownItemStyle : msg -> List (Html.Attribute msg)
+applyDropdownItemStyle onClickMsg =
+    [ HA.class "px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center"
+    , onClick onClickMsg
+    , HA.style "padding-left" "1rem"
+    , HA.style "padding-right" "1rem"
+    , HA.style "padding-top" "0.5rem"
+    , HA.style "padding-bottom" "0.5rem"
+    , HA.style "cursor" "pointer"
+    , HA.style "display" "flex"
+    , HA.style "align-items" "center"
+    ]
+
+
+applyWalletIconContainerStyle : List (Html.Attribute msg)
+applyWalletIconContainerStyle =
+    [ HA.style "width" "20px"
+    , HA.style "height" "20px"
+    , HA.style "margin-right" "0.5rem"
+    , HA.style "display" "flex"
+    , HA.style "align-items" "center"
+    , HA.style "justify-content" "center"
+    ]
+
+
+applyWalletIconStyle : List (Html.Attribute msg)
+applyWalletIconStyle =
+    [ HA.style "max-height" "20px"
+    , HA.style "max-width" "20px"
+    , HA.style "object-fit" "contain"
+    ]

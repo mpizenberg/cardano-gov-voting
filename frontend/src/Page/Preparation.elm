@@ -2228,12 +2228,19 @@ view ctx model =
             , HA.style "padding" "0 1.5rem"
             ]
             [ viewVoterIdentificationStep ctx model.voterStep
+            , Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
             , viewProposalSelectionStep ctx model
+            , Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
             , viewRationaleStep ctx model.rationaleCreationStep
+            , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
             , viewRationaleSignatureStep ctx model.rationaleCreationStep model.rationaleSignatureStep
+            , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
             , viewPermanentStorageStep ctx model.rationaleSignatureStep model.permanentStorageStep
+            , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
             , viewFeeProviderStep ctx model.feeProviderStep
+            , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
             , viewBuildTxStep ctx model
+            , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
             , viewSignTxStep ctx model.buildTxStep
             ]
         ]
@@ -2490,12 +2497,12 @@ viewIdentifiedVoter form voter =
                     )
     in
     div []
-        [ Html.h4 [ HA.class "text-xl font-medium mb-2" ] [ text "Voter Information" ]
+        [ Html.h2 [ HA.class "text-3xl font-medium  mb-4" ] [ text "Voter Information" ]
         , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
             [ Html.div [ HA.class "mb-2" ]
                 [ Html.span [ HA.class "font-medium" ] [ text voterTypeText ]
                 ]
-            , Html.div [ HA.class "mb-4" ]
+            , Html.div []
                 [ case voterCred of
                     WithKey cred ->
                         Html.div [ HA.class "flex flex-col space-y-1" ]
@@ -3014,19 +3021,19 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
     case ( rationaleCreationStep, step ) of
         ( Preparing _, _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium" ] [ text "Rationale Signature" ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
                 , Html.p [] [ text "Please validate the rationale creation step first." ]
                 ]
 
         ( Validating _ _, _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium" ] [ text "Rationale Signature" ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
                 , Html.p [] [ text "Please validate the rationale creation step first." ]
                 ]
 
         ( Done _ _, Preparing form ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium" ] [ text "Rationale Signature" ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
                 , Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts form
                 , Html.p []
                     [ Helper.viewButton "Skip rationale signing" (ctx.wrapMsg SkipRationaleSignaturesButtonClicked)
@@ -3038,7 +3045,7 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
 
         ( Done _ _, Validating _ _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium" ] [ text "Rationale Signature" ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
                 , Html.p [] [ text "Validating rationale author signatures ..." ]
                 ]
 

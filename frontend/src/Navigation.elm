@@ -8,7 +8,7 @@ module Navigation exposing
 
 import Cardano.Address exposing (Address)
 import Cardano.Cip30 as Cip30
-import Helper exposing (prettyAddr)
+import Helper exposing (prettyAddr, viewButton)
 import Html exposing (Html, a, button, div, img, li, nav, span, text, ul)
 import Html.Attributes exposing (alt, class, href, src, style)
 import Html.Events exposing (onClick)
@@ -16,11 +16,13 @@ import Html.Events exposing (onClick)
 
 type alias NavState =
     { isOpen : Bool
+    , walletDropdownOpen : Bool
     }
 
 
 type Msg
     = ToggleMobileMenu
+    | ToggleWalletDropdown -- Add this message
     | ConnectWalletClicked { id : String }
     | DisconnectWalletClicked
 
@@ -28,6 +30,7 @@ type Msg
 init : NavState
 init =
     { isOpen = False
+    , walletDropdownOpen = False -- Initialize as closed
     }
 
 
@@ -37,10 +40,14 @@ update msg state =
         ToggleMobileMenu ->
             ( { state | isOpen = not state.isOpen }, Cmd.none )
 
+        ToggleWalletDropdown ->
+            ( { state | walletDropdownOpen = not state.walletDropdownOpen }, Cmd.none )
+
         -- These will be handled by Main.elm
         ConnectWalletClicked _ ->
-            ( state, Cmd.none )
+            ( { state | walletDropdownOpen = False }, Cmd.none )
 
+        -- Close dropdown after selection
         DisconnectWalletClicked ->
             ( state, Cmd.none )
 
@@ -183,12 +190,12 @@ viewMobileMenuItem item =
         ]
 
 
-viewWalletSection : { a | wallet : Maybe Cip30.Wallet, walletsDiscovered : List Cip30.WalletDescriptor, walletChangeAddress : Maybe Address, toMsg : Msg -> msg } -> Html msg
+viewWalletSection : { a | wallet : Maybe Cip30.Wallet, walletsDiscovered : List Cip30.WalletDescriptor, walletChangeAddress : Maybe Address, state : NavState, toMsg : Msg -> msg } -> Html msg
 viewWalletSection config =
-    div [ class "flex-shrink-0 max-w-[120px]" ]
+    div [ class "flex-shrink-0 min-w-[150px]" ]
         [ case config.wallet of
             Nothing ->
-                viewAvailableWallets config.walletsDiscovered config.toMsg
+                viewAvailableWallets config.walletsDiscovered config.state.walletDropdownOpen config.toMsg
 
             Just wallet ->
                 viewConnectedWallet wallet config.walletChangeAddress config.toMsg
@@ -198,7 +205,7 @@ viewWalletSection config =
 viewConnectedWallet : Cip30.Wallet -> Maybe Address -> (Msg -> msg) -> Html msg
 viewConnectedWallet wallet maybeChangeAddress toMsg =
     div [ class "flex items-center" ]
-        [ div [ class "text-xs mr-1" ]
+        [ div [ class "text-xs mr-3" ]
             [ div [ class "font-medium" ] [ text (Cip30.walletDescriptor wallet).name ]
             , case maybeChangeAddress of
                 Just addr ->
@@ -215,59 +222,114 @@ viewConnectedWallet wallet maybeChangeAddress toMsg =
             , style "justify-content" "center"
             , style "white-space" "nowrap"
             , style "border-radius" "9999px"
-            , style "font-size" "0.7rem"
+            , style "font-size" "0.875rem"
             , style "font-weight" "500"
             , style "transition" "all 0.2s"
             , style "outline" "none"
+            , style "ring-offset" "background"
+            , style "focus-visible:ring" "2px"
+            , style "focus-visible:ring-color" "ring"
+            , style "focus-visible:ring-offset" "2px"
             , style "background-color" "#272727"
             , style "color" "#f7fafc"
+            , style "hover:bg-color" "#f9fafb"
+            , style "hover:text-color" "#1a202c"
             , style "height" "3rem"
-            , style "padding-left" "2rem"
-            , style "padding-right" "2rem"
+            , style "padding-left" "1.5rem"
+            , style "padding-right" "1.5rem"
             ]
             [ text "Disconnect" ]
         ]
 
 
-viewAvailableWallets : List Cip30.WalletDescriptor -> (Msg -> msg) -> Html msg
-viewAvailableWallets wallets toMsg =
+viewAvailableWallets : List Cip30.WalletDescriptor -> Bool -> (Msg -> msg) -> Html msg
+viewAvailableWallets wallets dropdownOpen toMsg =
     if List.isEmpty wallets then
         div [ class "text-xs text-gray-600" ] [ text "No wallets" ]
 
     else
-        div [ class "flex items-center space-x-1" ]
-            (List.map (viewWalletConnectButton toMsg) wallets)
+        div [ class "relative" ]
+            [ button
+                [ onClick (toMsg ToggleWalletDropdown)
+                , style "display" "inline-flex"
+                , style "align-items" "center"
+                , style "justify-content" "center"
+                , style "white-space" "nowrap"
+                , style "border-radius" "9999px"
+                , style "font-size" "0.875rem"
+                , style "font-weight" "500"
+                , style "transition" "all 0.2s"
+                , style "outline" "none"
+                , style "ring-offset" "background"
+                , style "focus-visible:ring" "2px"
+                , style "focus-visible:ring-color" "ring"
+                , style "focus-visible:ring-offset" "2px"
+                , style "background-color" "#272727"
+                , style "color" "#f7fafc"
+                , style "hover:bg-color" "#f9fafb"
+                , style "hover:text-color" "#1a202c"
+                , style "height" "3rem" -- Slightly smaller to fit navbar
+                , style "padding-left" "1.5rem"
+                , style "padding-right" "1.5rem"
+                ]
+                [ div [ class "flex items-center" ]
+                    [ text "Connect Wallet" ]
+                , span
+                    [ class "ml-2 transition-transform"
+                    , style "transform"
+                        (if dropdownOpen then
+                            "rotate(180deg)"
+
+                         else
+                            "rotate(0)"
+                        )
+                    ]
+                    [ text "▼" ]
+                ]
+            , if dropdownOpen then
+                div
+                    [ style "position" "absolute"
+                    , style "top" "100%"
+                    , style "right" "0"
+                    , style "margin-top" "0.5rem"
+                    , style "width" "220px"
+                    , style "background-color" "#f8f9fa"
+                    , style "border" "1px solid #e2e8f0"
+                    , style "border-radius" "0.5rem"
+                    , style "box-shadow" "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)"
+                    , style "z-index" "50"
+                    , style "padding" "0.5rem 0"
+                    , style "max-height" "300px"
+                    , style "overflow-y" "auto"
+                    ]
+                    [ ul []
+                        (List.map (viewWalletDropdownItem toMsg) wallets)
+                    ]
+
+              else
+                text ""
+            ]
 
 
-viewWalletConnectButton : (Msg -> msg) -> Cip30.WalletDescriptor -> Html msg
-viewWalletConnectButton toMsg wallet =
-    button
-        [ onClick (toMsg (ConnectWalletClicked { id = wallet.id }))
-        , style "display" "inline-flex"
-        , style "align-items" "center"
-        , style "justify-content" "center"
-        , style "white-space" "nowrap"
-        , style "border-radius" "9999px"
-        , style "font-size" "0.7rem"
-        , style "font-weight" "500"
-        , style "transition" "all 0.2s"
-        , style "outline" "none"
-        , style "background-color" "#272727"
-        , style "color" "#f7fafc"
-        , style "height" "3rem"
-        , style "padding-left" "2rem"
-        , style "padding-right" "2rem"
+viewWalletDropdownItem : (Msg -> msg) -> Cip30.WalletDescriptor -> Html msg
+viewWalletDropdownItem toMsg wallet =
+    li
+        [ class "px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center"
+        , onClick (toMsg (ConnectWalletClicked { id = wallet.id }))
         ]
         [ if not (String.isEmpty wallet.icon) then
-            img
-                [ src wallet.icon
-                , style "height" "20px"
-                , style "margin-right" "0.25rem"
-                , alt wallet.name
+            div [ class "flex items-center justify-center mr-2", style "width" "20px", style "height" "20px" ]
+                [ img
+                    [ src wallet.icon
+                    , style "max-height" "20px"
+                    , style "max-width" "20px"
+                    , style "object-fit" "contain"
+                    , alt wallet.name
+                    ]
+                    []
                 ]
-                []
 
           else
-            text ""
+            div [ style "width" "20px", style "height" "20px", class "mr-2" ] []
         , text wallet.name
         ]

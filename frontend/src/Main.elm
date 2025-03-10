@@ -871,16 +871,17 @@ viewHeader model =
                         _ ->
                             False
               }
-            , { label = "Multisig Registration"
-              , url = AppUrl.toString <| routeToAppUrl RouteMultisigRegistration
-              , isActive =
-                    case model.page of
-                        MultisigRegistrationPage _ ->
-                            True
 
-                        _ ->
-                            False
-              }
+            -- Remove Multisig registration for now
+            -- , { label = "Multisig Registration"
+            --   , url = AppUrl.toString <| routeToAppUrl RouteMultisigRegistration
+            --   , isActive =
+            --         case model.page of
+            --             MultisigRegistrationPage _ ->
+            --                 True
+            --             _ ->
+            --                 False
+            --   }
             , { label = "PDFs"
               , url = AppUrl.toString <| routeToAppUrl RoutePdf
               , isActive =

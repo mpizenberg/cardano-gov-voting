@@ -306,8 +306,14 @@ initAuthorForm =
 -- Storage Step
 
 
+type StorageMethod
+    = StandardIPFS
+    | CustomIPFS
+
+
 type alias StorageForm =
-    { ipfsServer : String
+    { storageMethod : StorageMethod
+    , ipfsServer : String
     , headers : List ( String, String )
     , error : Maybe String
     }
@@ -315,7 +321,8 @@ type alias StorageForm =
 
 initStorageForm : StorageForm
 initStorageForm =
-    { ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
+    { storageMethod = StandardIPFS
+    , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
     , headers = [ ( "project_id", "" ) ]
     , error = Nothing
     }
@@ -415,6 +422,7 @@ type TaskCompleted
 type Msg
     = NoMsg
       -- Voter Step
+    | StorageMethodSelected StorageMethod
     | VoterGovIdChange String
     | GotDrepInfo (Result Http.Error DrepInfo)
     | GotCcInfo (Result Http.Error CcInfo)
@@ -514,6 +522,12 @@ type alias LoadedWallet =
 update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg, Maybe MsgToParent )
 update ctx msg model =
     case msg of
+        StorageMethodSelected method ->
+            ( updateStorageForm (\form -> { form | storageMethod = method }) model
+            , Cmd.none
+            , Nothing
+            )
+
         NoMsg ->
             ( model, Cmd.none, Nothing )
 
@@ -760,13 +774,26 @@ update ctx msg model =
         ValidateRationaleButtonClicked ->
             case validateRationaleForm model.rationaleCreationStep of
                 Done prep newRationale ->
-                    ( { model
-                        | rationaleCreationStep = Done prep newRationale
-                        , rationaleSignatureStep = Preparing <| resetRationaleSignatures newRationale model.rationaleSignatureStep
-                      }
-                    , Cmd.none
-                    , Nothing
-                    )
+                    let
+                        -- Initialize the form
+                        updatedModel =
+                            { model
+                                | rationaleCreationStep = Done prep newRationale
+                                , rationaleSignatureStep =
+                                    Done
+                                        { authors = []
+                                        , rationale = newRationale
+                                        , error = Nothing
+                                        }
+                                        (rationaleSignatureFromForm ctx.jsonLdContexts
+                                            { authors = []
+                                            , rationale = newRationale
+                                            , error = Nothing
+                                            }
+                                        )
+                            }
+                    in
+                    ( updatedModel, Cmd.none, Nothing )
 
                 prepOrValidating ->
                     ( { model | rationaleCreationStep = prepOrValidating }, Cmd.none, Nothing )
@@ -2004,27 +2031,32 @@ validateIpfsFormAndSendPinRequest ctx form model =
 
 validateIpfsForm : StorageForm -> Result String ()
 validateIpfsForm form =
-    let
-        -- Check that the IPFS server url looks legit
-        ipfsServerUrlSeemsLegit =
-            case Url.fromString form.ipfsServer of
-                Just _ ->
-                    Ok ()
+    case form.storageMethod of
+        StandardIPFS ->
+            -- For standard IPFS, no validation needed
+            Ok ()
 
-                Nothing ->
-                    Err ("This url seems incorrect, it must look like this: https://subdomain.domain.org, instead I got this: " ++ form.ipfsServer)
+        CustomIPFS ->
+            let
+                -- Check that the IPFS server url looks legit
+                ipfsServerUrlSeemsLegit =
+                    case Url.fromString form.ipfsServer of
+                        Just _ ->
+                            Ok ()
 
-        -- Check that headers look valid
-        -- There are many rules, but will just check they aren’t empty
-        nonEmptyHeadersResult headers =
-            if List.any (\( f, _ ) -> String.isEmpty f) headers then
-                Err "Empty header fields are forbidden."
+                        Nothing ->
+                            Err ("This url seems incorrect, it must look like this: https://subdomain.domain.org, instead I got this: " ++ form.ipfsServer)
 
-            else
-                Ok ()
-    in
-    ipfsServerUrlSeemsLegit
-        |> Result.andThen (\_ -> nonEmptyHeadersResult form.headers)
+                -- Check that headers look valid
+                nonEmptyHeadersResult headers =
+                    if List.any (\( f, _ ) -> String.isEmpty f) headers then
+                        Err "Empty header fields are forbidden."
+
+                    else
+                        Ok ()
+            in
+            ipfsServerUrlSeemsLegit
+                |> Result.andThen (\_ -> nonEmptyHeadersResult form.headers)
 
 
 pinRationaleFile : JD.Value -> Model -> ( Model, Cmd Msg )
@@ -2037,13 +2069,22 @@ pinRationaleFile fileAsValue model =
 
         ( Ok file, Validating storageForm _ ) ->
             ( model
-            , Api.defaultApiProvider.ipfsCfAdd
-                { file = file
-                }
-                GotIpfsAnswer
+            , case storageForm.storageMethod of
+                StandardIPFS ->
+                    Api.defaultApiProvider.ipfsCfAdd
+                        { file = file }
+                        GotIpfsAnswer
+
+                CustomIPFS ->
+                    Api.defaultApiProvider.ipfsAdd
+                        { rpc = storageForm.ipfsServer
+                        , headers = storageForm.headers
+                        , file = file
+                        }
+                        GotIpfsAnswer
             )
 
-        -- Ignore if we aren’t validating the permanent storage step
+        -- Ignore if we aren't validating the permanent storage step
         _ ->
             ( model, Cmd.none )
 
@@ -2247,7 +2288,6 @@ view ctx model =
             , viewRationaleStep ctx model.rationaleCreationStep
             , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
             , viewRationaleSignatureStep ctx model.rationaleCreationStep model.rationaleSignatureStep
-            , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
             , viewPermanentStorageStep ctx model.rationaleSignatureStep model.permanentStorageStep
             , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
             , viewFeeProviderStep ctx model.feeProviderStep
@@ -2737,7 +2777,7 @@ viewRationaleStep ctx step =
                     , Helper.formContainer [ viewConclusionForm form.conclusion ]
                     , Helper.formContainer [ viewInternalVoteForm form.internalVote ]
                     , viewReferencesForm form.references
-                    , Html.p [ HA.class "mt-6" ] [ Helper.viewButton "Confirm rationale" ValidateRationaleButtonClicked ]
+                    , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Confirm rationale" ValidateRationaleButtonClicked ]
                     , viewError form.error
                     ]
 
@@ -2780,7 +2820,7 @@ viewRationaleStep ctx step =
 
                       else
                         text ""
-                    , Html.p [ HA.class "mt-6" ] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
+                    , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
                     ]
 
 
@@ -3086,9 +3126,9 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                 Html.map ctx.wrapMsg <|
                     div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                         [ Html.h4 [ HA.class "text-3xl font-medium" ] [ text "Rationale Signature" ]
-                        , Html.p [] [ downloadButton ]
+                        , Html.p [ HA.class "mt-4 mb-4" ] [ downloadButton ]
                         , Html.p [] [ text "No registered author." ]
-                        , Html.p [] [ Helper.viewButton "Update autohors" ChangeAuthorsButtonClicked ]
+                        , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Update autohors" ChangeAuthorsButtonClicked ]
                         ]
 
             else
@@ -3097,7 +3137,7 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                         [ Html.h4 [ HA.class "text-3xl font-medium" ] [ text "Rationale Signature" ]
                         , Html.p [] [ downloadButton ]
                         , Html.ul [] (List.map viewSigner ratSig.authors)
-                        , Html.p [] [ Helper.viewButton "Update autohors" ChangeAuthorsButtonClicked ]
+                        , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Update authors" ChangeAuthorsButtonClicked ]
                         ]
 
 
@@ -3118,7 +3158,7 @@ viewRationaleSignatureForm jsonLdContexts ({ authors } as form) =
                     [ Helper.viewButton "Download JSON rationale" NoMsg ]
                 ]
             ]
-        , Html.h5 [ HA.class "text-xl font-medium mt-6 mb-4" ] [ text "Authors" ]
+        , Html.h5 [ HA.class "text-xl font-medium" ] [ text "Authors" ]
         , Helper.formContainer
             [ Html.p [ HA.class "mb-4" ]
                 [ text "Each author needs to sign the above metadata. "
@@ -3184,17 +3224,22 @@ viewOneAuthorForm : Int -> AuthorWitness -> Html Msg
 viewOneAuthorForm n author =
     Helper.formContainer
         [ div [ HA.class "flex items-center" ]
-            [ div [ HA.class "flex-1 flex" ]
-                [ div [ HA.class "w-1/3", HA.style "margin-right" "20px" ]
+            [ div [ HA.class "flex-1 flex flex-col md:flex-row gap-4" ]
+                [ div [ HA.class "w-full md:w-1/3" ]
                     [ Helper.labeledField "Author name"
                         (Helper.textFieldInline author.name (AuthorNameChange n))
                     ]
-                , div [ HA.class "w-2/3" ]
+                , div [ HA.class "w-full md:w-2/3" ]
                     [ case author.signature of
                         Nothing ->
                             div [ HA.class "flex items-center" ]
                                 [ Helper.labeledField "Signature"
-                                    (Helper.viewButton "Load signature" (LoadJsonSignatureButtonClicked n author.name))
+                                    (div [ HA.class "flex items-center" ]
+                                        [ Helper.viewButton "Load signature" (LoadJsonSignatureButtonClicked n author.name)
+                                        , div [ HA.class "ml-2" ]
+                                            [ Helper.viewButton "Delete" (DeleteAuthorButtonClicked n) ]
+                                        ]
+                                    )
                                 ]
 
                         Just sig ->
@@ -3206,20 +3251,20 @@ viewOneAuthorForm n author =
                                         [ text (String.left 12 sig ++ "...")
                                         , div [ HA.class "ml-2" ]
                                             [ Helper.viewButton "Change" (LoadJsonSignatureButtonClicked n author.name) ]
+                                        , div [ HA.class "ml-2" ]
+                                            [ Helper.viewButton "Delete" (DeleteAuthorButtonClicked n) ]
                                         ]
                                     )
                                 ]
                     ]
                 ]
-            , div [ HA.style "margin-top" "20px", HA.style "margin-left" "8px" ]
-                [ Helper.viewButton "Delete" (DeleteAuthorButtonClicked n) ]
             ]
         ]
 
 
 viewSigner : AuthorWitness -> Html Msg
 viewSigner { name, witnessAlgorithm, publicKey, signature } =
-    Html.li [ HA.class "border-b pb-2 last:border-b-0 last:pb-0", HA.style "border-color" "#C6C6C6" ]
+    Html.li []
         [ Html.div []
             [ Html.strong [ HA.class "font-medium" ] [ text "Name: " ]
             , text name
@@ -3263,24 +3308,56 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                         [ text "Only the hash of your rationale is stored on Cardano,"
                         , text " so it's recommended to also store the actual JSON file containing the rationale in a permanent storage solution."
                         , text " Here we provide an easy way to store it on IPFS."
-                        , text " You can specify your own IPFS RPC server, or use one of an API provider, such as Blockfrost for example."
-                        , text " More info on "
-                        , Html.a
-                            [ HA.href "https://blockfrost.dev/start-building/ipfs/"
-                            , HA.target "_blank"
-                            , HA.rel "noopener noreferrer"
-                            , HA.style "color" "#2563eb"
-                            , HA.style "text-decoration" "underline"
-                            ]
-                            [ text "Blockfrost docs." ]
                         ]
                     , Helper.formContainer
-                        [ Helper.labeledField "IPFS RPC server:"
-                            (Helper.textFieldInline form.ipfsServer IpfsServerChange)
-                        , Helper.viewButton "Add header" AddHeaderButtonClicked
-                        , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
+                        [ Html.h4 [ HA.class "text-xl mt-4 mb-2" ] [ text "IPFS Method" ]
+                        , div [ HA.class "flex items-center mb-2" ]
+                            [ Html.input
+                                [ HA.type_ "radio"
+                                , HA.name "ipfs-method"
+                                , HA.checked (form.storageMethod == StandardIPFS)
+                                , onClick (StorageMethodSelected StandardIPFS)
+                                , HA.class "mr-2"
+                                ]
+                                []
+                            , Html.label [ HA.class "text-base" ] [ text "Standard IPFS (Cardano Foundation)" ]
+                            ]
+                        , div [ HA.class "flex items-center mb-4" ]
+                            [ Html.input
+                                [ HA.type_ "radio"
+                                , HA.name "ipfs-method"
+                                , HA.checked (form.storageMethod == CustomIPFS)
+                                , onClick (StorageMethodSelected CustomIPFS)
+                                , HA.class "mr-2"
+                                ]
+                                []
+                            , Html.label [ HA.class "text-base" ] [ text "Custom IPFS Provider" ]
+                            ]
+                        , if form.storageMethod == CustomIPFS then
+                            div []
+                                [ Helper.labeledField "IPFS RPC server:"
+                                    (Helper.textFieldInline form.ipfsServer IpfsServerChange)
+                                , div [ HA.class "mt-4" ]
+                                    [ Helper.viewButton "Add header" AddHeaderButtonClicked ]
+                                , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
+                                , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
+                                    [ text "For example, use "
+                                    , Html.a
+                                        [ HA.href "https://blockfrost.dev/start-building/ipfs/"
+                                        , HA.target "_blank"
+                                        , HA.rel "noopener noreferrer"
+                                        , HA.style "color" "#2563eb"
+                                        , HA.style "text-decoration" "underline"
+                                        ]
+                                        [ text "Blockfrost" ]
+                                    , text " or other IPFS providers."
+                                    ]
+                                ]
+
+                          else
+                            text ""
                         ]
-                    , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Skip IPFS storage" PinJsonIpfsButtonClicked ]
+                    , Html.p [] [ Helper.viewButton "Add to IPFS" PinJsonIpfsButtonClicked ]
                     , viewError form.error
                     ]
 
@@ -3358,8 +3435,8 @@ viewHeader n ( field, value ) =
                     (Helper.textFieldInline field (StorageHeaderFieldChange n))
                 , Helper.labeledField "IPFS"
                     (Helper.textFieldInline value (StorageHeaderValueChange n))
+                , Helper.viewButton "Delete" (DeleteHeaderButtonClicked n)
                 ]
-            , Helper.viewButton "Delete" (DeleteHeaderButtonClicked n)
             ]
         ]
 

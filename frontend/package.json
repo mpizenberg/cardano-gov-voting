@@ -5,13 +5,15 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "make": "elm-cardano make src/Main.elm --output static/main.js",
-    "compress": "esbuild static/main.js --minify --allow-overwrite --outfile=static/main.js && brotli -f -Z static/main.js static/elm-cardano.js static/elm-concurrent-task.js static/storage.js static/json-ld-contexts.js static/pkg-uplc-wasm/pkg-web/uplc_wasm_bg.wasm",
+    "compress": "esbuild static/main.js --minify --allow-overwrite --outfile=static/main.js && brotli -f -Z static/main.js static/elm-cardano.js static/elm-concurrent-task.js static/storage.js static/json-ld-contexts.js static/pkg-uplc-wasm/pkg-web/uplc_wasm_bg.wasm static/css/output.css",
     "watch": "elm-watch hot",
     "lint": "elm-review",
     "lint:fix": "elm-review --fix",
     "format": "elm-format src/",
     "format:validate": "elm-format --validate src/",
-    "docs": "elm-doc-preview --port 8911"
+    "docs": "elm-doc-preview --port 8911",
+    "css": "tailwindcss -i ./src/index.css -o ./static/css/output.css",
+    "css:watch": "tailwindcss -i ./src/index.css -o ./static/css/output.css --watch"
   },
   "keywords": [
     "Cardano"
@@ -22,12 +24,15 @@
   },
   "devDependencies": {
     "@lydell/elm": "^0.19.1-14",
+    "autoprefixer": "^10.4.20",
     "elm-cardano": "^0.3.0",
     "elm-doc-preview": "^6.0.1",
     "elm-format": "^0.8.7",
     "elm-review": "^2.12.0",
     "elm-test": "^0.19.1-revision12",
     "elm-watch": "^2.0.0-beta.6",
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.3.3"
   }
 }

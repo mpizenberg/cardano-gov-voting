@@ -72,7 +72,7 @@ view config =
                         , style "align-items" "center"
                         ]
                         [ img
-                            [ src "/logo/foundation-logo.png"
+                            [ src "/logo/foundation-logo.svg"
                             , alt "Logo"
                             , style "width" "auto"
                             , style "margin-right" "8px"

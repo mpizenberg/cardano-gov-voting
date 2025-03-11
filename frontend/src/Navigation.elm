@@ -22,7 +22,7 @@ type alias NavState =
 
 type Msg
     = ToggleMobileMenu
-    | ToggleWalletDropdown -- Add this message
+    | ToggleWalletDropdown
     | ConnectWalletClicked { id : String }
     | DisconnectWalletClicked
 
@@ -30,7 +30,7 @@ type Msg
 init : NavState
 init =
     { isOpen = False
-    , walletDropdownOpen = False -- Initialize as closed
+    , walletDropdownOpen = False
     }
 
 
@@ -43,11 +43,9 @@ update msg state =
         ToggleWalletDropdown ->
             ( { state | walletDropdownOpen = not state.walletDropdownOpen }, Cmd.none )
 
-        -- These will be handled by Main.elm
         ConnectWalletClicked _ ->
             ( { state | walletDropdownOpen = False }, Cmd.none )
 
-        -- Close dropdown after selection
         DisconnectWalletClicked ->
             ( state, Cmd.none )
 

@@ -1,4 +1,4 @@
-port module Main exposing (Model, Msg(..), Page, Route(..), TaskCompleted, main)
+port module Main exposing (main)
 
 {-| Main application module for the Cardano Governance Voting web app.
 

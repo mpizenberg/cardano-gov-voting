@@ -8,7 +8,7 @@ module Navigation exposing
 
 import Cardano.Address exposing (Address)
 import Cardano.Cip30 as Cip30
-import Helper exposing (applyDropdownContainerStyle, applyDropdownItemStyle, applyWalletIconContainerStyle, applyWalletIconStyle, prettyAddr, viewButton, viewWalletButton)
+import Helper exposing (applyDropdownContainerStyle, applyDropdownItemStyle, applyWalletIconContainerStyle, applyWalletIconStyle, prettyAddr, viewWalletButton)
 import Html exposing (Html, a, button, div, img, li, nav, span, text, ul)
 import Html.Attributes exposing (alt, class, href, src, style)
 import Html.Events exposing (onClick)

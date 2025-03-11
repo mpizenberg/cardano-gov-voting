@@ -24,7 +24,6 @@ view { copyright, disclaimerLink, githubLink } =
             [ p [ class "text-gray-700 text-sm" ]
                 [ text copyright ]
             , div [ class "flex space-x-8" ]
-                -- Changed from space-x-4 to space-x-8 for more spacing
                 [ a
                     [ href disclaimerLink
                     , class "text-sm transition-colors duration-200"

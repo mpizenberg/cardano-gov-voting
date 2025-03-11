@@ -12,8 +12,8 @@
     "format": "elm-format src/",
     "format:validate": "elm-format --validate src/",
     "docs": "elm-doc-preview --port 8911",
-    "build:css": "npx tailwindcss -i ./static/css/input.css -o ./static/css/output.css",
-    "watch:css": "npx tailwindcss -i ./static/css/input.css -o ./static/css/output.css --watch"
+    "css": "tailwindcss -i ./src/index.css -o ./static/css/output.css",
+    "css:watch": "tailwindcss -i ./src/index.css -o ./static/css/output.css --watch"
   },
   "keywords": [
     "Cardano"

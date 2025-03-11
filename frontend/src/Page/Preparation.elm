@@ -1,4 +1,4 @@
-module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, MsgToParent(..), Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType(..), Step, StorageForm, TaskCompleted, UpdateContext, ViewContext, VoterPreparationForm, handleTaskCompleted, init, noInternalVote, pinRationaleFile, update, view)
+module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, MsgToParent(..), Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType(..), Step, StorageForm, StorageMethod, TaskCompleted, UpdateContext, ViewContext, VoterPreparationForm, handleTaskCompleted, init, noInternalVote, pinRationaleFile, update, view)
 
 {-| This module handles the complete vote preparation workflow, from identifying
 the voter to signing the transaction, which is handled by another page.
@@ -1702,26 +1702,6 @@ editRationale step =
 
 
 -- Rationale Signature Step
-
-
-resetRationaleSignatures : Rationale -> Step RationaleSignatureForm {} RationaleSignature -> RationaleSignatureForm
-resetRationaleSignatures rationale step =
-    let
-        newRatSig authors =
-            { authors = List.map (\a -> { a | signature = Nothing }) authors
-            , rationale = rationale
-            , error = Nothing
-            }
-    in
-    case step of
-        Preparing { authors } ->
-            newRatSig authors
-
-        Validating { authors } _ ->
-            newRatSig authors
-
-        Done _ { authors } ->
-            newRatSig authors
 
 
 encodeJsonLdRationale : Rationale -> JE.Value

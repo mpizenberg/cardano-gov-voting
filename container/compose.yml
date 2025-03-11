@@ -5,3 +5,7 @@ services:
       dockerfile: container/Dockerfile
     ports:
       - "8000:8000"
+    environment:
+      - IPFS_RPC_URL=${IPFS_RPC_URL}
+      - IPFS_RPC_USER=${IPFS_RPC_USER}
+      - IPFS_RPC_PASSWORD=${IPFS_RPC_PASSWORD}

@@ -53,6 +53,7 @@ type alias ApiProvider msg =
     , getCcInfo : NetworkId -> Credential -> (Result Http.Error CcInfo -> msg) -> Cmd msg
     , getPoolLiveStake : NetworkId -> Bytes Pool.Id -> (Result Http.Error PoolInfo -> msg) -> Cmd msg
     , ipfsAdd : { rpc : String, headers : List ( String, String ), file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
+    , ipfsCfAdd : { file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     , convertToPdf : String -> (Result Http.Error ElmBytes.Bytes -> msg) -> Cmd msg
     }
 
@@ -523,6 +524,19 @@ defaultApiProvider =
                 { method = "POST"
                 , headers = List.map (\( k, v ) -> Http.header k v) headers
                 , url = rpc ++ "/add"
+                , body = Http.multipartBody [ Http.filePart "file" file ]
+                , expect = Http.expectStringResponse toMsg responseToIpfsAnswer
+                , timeout = Nothing
+                , tracker = Nothing
+                }
+
+    -- Make a request to an IPFS server at the CF
+    , ipfsCfAdd =
+        \{ file } toMsg ->
+            Http.request
+                { method = "POST"
+                , headers = []
+                , url = "/ipfs-pin/file"
                 , body = Http.multipartBody [ Http.filePart "file" file ]
                 , expect = Http.expectStringResponse toMsg responseToIpfsAnswer
                 , timeout = Nothing

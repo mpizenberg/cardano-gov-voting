@@ -2037,10 +2037,8 @@ pinRationaleFile fileAsValue model =
 
         ( Ok file, Validating storageForm _ ) ->
             ( model
-            , Api.defaultApiProvider.ipfsAdd
-                { rpc = storageForm.ipfsServer
-                , headers = storageForm.headers
-                , file = file
+            , Api.defaultApiProvider.ipfsCfAdd
+                { file = file
                 }
                 GotIpfsAnswer
             )

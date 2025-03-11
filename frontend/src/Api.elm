@@ -5,7 +5,7 @@ module Api exposing (ActiveProposal, ApiProvider, CcInfo, DrepInfo, IpfsAnswer(.
 
 import Bytes as ElmBytes
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano.Address exposing (Credential(..), CredentialHash)
+import Cardano.Address exposing (Credential(..), CredentialHash, NetworkId(..))
 import Cardano.Gov exposing (ActionId, CostModels)
 import Cardano.Pool as Pool
 import Cardano.Transaction exposing (Transaction)
@@ -44,14 +44,14 @@ So this is how there is a mix of regular `(...) -> Cmd msg` and `ConcurrentTask 
 
 -}
 type alias ApiProvider msg =
-    { loadProtocolParams : (Result Http.Error ProtocolParams -> msg) -> Cmd msg
-    , loadGovProposals : (Result Http.Error (List ActiveProposal) -> msg) -> Cmd msg
+    { loadProtocolParams : NetworkId -> (Result Http.Error ProtocolParams -> msg) -> Cmd msg
+    , loadGovProposals : NetworkId -> (Result Http.Error (List ActiveProposal) -> msg) -> Cmd msg
     , loadProposalMetadata : String -> ConcurrentTask String ProposalMetadata
-    , retrieveTx : Bytes TransactionId -> ConcurrentTask ConcurrentTask.Http.Error (Bytes Transaction)
-    , getScriptInfo : Bytes CredentialHash -> ConcurrentTask ConcurrentTask.Http.Error ScriptInfo
-    , getDrepInfo : Credential -> (Result Http.Error DrepInfo -> msg) -> Cmd msg
-    , getCcInfo : Credential -> (Result Http.Error CcInfo -> msg) -> Cmd msg
-    , getPoolLiveStake : Bytes Pool.Id -> (Result Http.Error PoolInfo -> msg) -> Cmd msg
+    , retrieveTx : NetworkId -> Bytes TransactionId -> ConcurrentTask ConcurrentTask.Http.Error (Bytes Transaction)
+    , getScriptInfo : NetworkId -> Bytes CredentialHash -> ConcurrentTask ConcurrentTask.Http.Error ScriptInfo
+    , getDrepInfo : NetworkId -> Credential -> (Result Http.Error DrepInfo -> msg) -> Cmd msg
+    , getCcInfo : NetworkId -> Credential -> (Result Http.Error CcInfo -> msg) -> Cmd msg
+    , getPoolLiveStake : NetworkId -> Bytes Pool.Id -> (Result Http.Error PoolInfo -> msg) -> Cmd msg
     , ipfsAdd : { rpc : String, headers : List ( String, String ), file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     , convertToPdf : String -> (Result Http.Error ElmBytes.Bytes -> msg) -> Cmd msg
     }
@@ -385,12 +385,21 @@ Most of them are relying on Koios infrastructure.
 -}
 defaultApiProvider : ApiProvider msg
 defaultApiProvider =
+    let
+        koiosUrl networkId =
+            case networkId of
+                Testnet ->
+                    "https://preview.koios.rest/api/v1"
+
+                Mainnet ->
+                    "https://api.koios.rest/api/v1"
+    in
     -- Get protocol parameters via Koios
     { loadProtocolParams =
-        \toMsg ->
+        \networkId toMsg ->
             Http.request
                 { method = "POST"
-                , url = "https://preview.koios.rest/api/v1/ogmios"
+                , url = koiosUrl networkId ++ "/ogmios"
                 , headers = [ Http.header "Authorization" <| "Bearer " ++ koiosApiToken ]
                 , body =
                     Http.jsonBody
@@ -406,10 +415,10 @@ defaultApiProvider =
 
     -- Get governance proposals via Koios
     , loadGovProposals =
-        \toMsg ->
+        \networkId toMsg ->
             Http.request
                 { method = "POST"
-                , url = "https://preview.koios.rest/api/v1/ogmios"
+                , url = koiosUrl networkId ++ "/ogmios"
                 , headers = [ Http.header "Authorization" <| "Bearer " ++ koiosApiToken ]
                 , body =
                     Http.jsonBody
@@ -434,10 +443,10 @@ defaultApiProvider =
 
     -- Retrieve DRep info via Koios using an Ogmios endpoint
     , getDrepInfo =
-        \cred toMsg ->
+        \networkId cred toMsg ->
             Http.request
                 { method = "POST"
-                , url = "https://preview.koios.rest/api/v1/ogmios"
+                , url = koiosUrl networkId ++ "/ogmios"
                 , headers = [ Http.header "Authorization" <| "Bearer " ++ koiosApiToken ]
                 , body =
                     Http.jsonBody
@@ -461,10 +470,10 @@ defaultApiProvider =
 
     -- Retrieve CC member info
     , getCcInfo =
-        \cred toMsg ->
+        \networkId cred toMsg ->
             Http.request
                 { method = "POST"
-                , url = "https://preview.koios.rest/api/v1/ogmios"
+                , url = koiosUrl networkId ++ "/ogmios"
                 , headers = [ Http.header "Authorization" <| "Bearer " ++ koiosApiToken ]
                 , body =
                     Http.jsonBody
@@ -480,10 +489,10 @@ defaultApiProvider =
 
     -- Retrieve Pool live stake (end of previous epoch)
     , getPoolLiveStake =
-        \poolId toMsg ->
+        \networkId poolId toMsg ->
             Http.request
                 { method = "POST"
-                , url = "https://preview.koios.rest/api/v1/ogmios"
+                , url = koiosUrl networkId ++ "/ogmios"
                 , headers = [ Http.header "Authorization" <| "Bearer " ++ koiosApiToken ]
                 , body =
                     Http.jsonBody
@@ -620,8 +629,8 @@ taskLoadProposalMetadata url =
 {-| Task to retrieve the raw CBOR of a given Tx.
 It uses the Koios API, proxied through the app server (because CORS).
 -}
-taskRetrieveTx : Bytes TransactionId -> ConcurrentTask ConcurrentTask.Http.Error (Bytes a)
-taskRetrieveTx txId =
+taskRetrieveTx : NetworkId -> Bytes TransactionId -> ConcurrentTask ConcurrentTask.Http.Error (Bytes a)
+taskRetrieveTx networkId txId =
     let
         thisTxDecoder : Decoder (Bytes a)
         thisTxDecoder =
@@ -634,6 +643,14 @@ taskRetrieveTx txId =
                         else
                             JD.fail <| "The retrieved Tx (" ++ Bytes.toHex tx.txId ++ ") does not correspond to the expected one (" ++ Bytes.toHex txId ++ ")"
                     )
+
+        koiosUrl =
+            case networkId of
+                Testnet ->
+                    "https://preview.koios.rest/api/v1"
+
+                Mainnet ->
+                    "https://api.koios.rest/api/v1"
     in
     -- TODO: change to authenticated free tier Koios request
     ConcurrentTask.Http.post
@@ -642,7 +659,7 @@ taskRetrieveTx txId =
         , body =
             ConcurrentTask.Http.jsonBody
                 (JE.object
-                    [ ( "url", JE.string "https://preview.koios.rest/api/v1/tx_cbor" )
+                    [ ( "url", JE.string <| koiosUrl ++ "/tx_cbor" )
                     , ( "method", JE.string "POST" )
                     , ( "body", JE.object [ ( "_tx_hashes", JE.list (JE.string << Bytes.toHex) [ txId ] ) ] )
                     ]
@@ -655,8 +672,17 @@ taskRetrieveTx txId =
 {-| Task to retrieve relevant script info for the app.
 It uses the Koios API, proxied through the app server (because CORS).
 -}
-taskGetScriptInfo : Bytes CredentialHash -> ConcurrentTask ConcurrentTask.Http.Error ScriptInfo
-taskGetScriptInfo scriptHash =
+taskGetScriptInfo : NetworkId -> Bytes CredentialHash -> ConcurrentTask ConcurrentTask.Http.Error ScriptInfo
+taskGetScriptInfo networkId scriptHash =
+    let
+        koiosUrl =
+            case networkId of
+                Testnet ->
+                    "https://preview.koios.rest/api/v1"
+
+                Mainnet ->
+                    "https://api.koios.rest/api/v1"
+    in
     -- TODO: change to authenticated free tier Koios request
     ConcurrentTask.Http.post
         { url = "/proxy/json"
@@ -664,7 +690,7 @@ taskGetScriptInfo scriptHash =
         , body =
             ConcurrentTask.Http.jsonBody
                 (JE.object
-                    [ ( "url", JE.string "https://preview.koios.rest/api/v1/script_info" )
+                    [ ( "url", JE.string <| koiosUrl ++ "/script_info" )
                     , ( "method", JE.string "POST" )
                     , ( "body", JE.object [ ( "_script_hashes", JE.list (JE.string << Bytes.toHex) [ scriptHash ] ) ] )
                     ]

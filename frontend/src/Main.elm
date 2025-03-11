@@ -50,7 +50,7 @@ import Api exposing (ActiveProposal, CcInfo, DrepInfo, PoolInfo, ProtocolParams)
 import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano.Address as Address exposing (Address, CredentialHash)
+import Cardano.Address as Address exposing (Address, CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30 exposing (WalletDescriptor)
 import Cardano.Gov as Gov
 import Cardano.Transaction as Transaction exposing (Transaction)
@@ -79,7 +79,7 @@ import Storage
 import Url
 
 
-main : Program { url : String, jsonLdContexts : JsonLdContexts, db : Value } Model Msg
+main : Program { url : String, jsonLdContexts : JsonLdContexts, db : Value, networkId : Int } Model Msg
 main =
     -- The main entry point of our app
     -- More info about that in the Browser package docs:
@@ -153,6 +153,7 @@ type alias Model =
     , jsonLdContexts : JsonLdContexts
     , taskPool : ConcurrentTask.Pool Msg String TaskCompleted
     , db : Value
+    , networkId : NetworkId
     , errors : List String
     , navigationState : Navigation.NavState
     }
@@ -172,8 +173,12 @@ type TaskCompleted
     | PreparationTaskCompleted Page.Preparation.TaskCompleted
 
 
-init : { url : String, jsonLdContexts : JsonLdContexts, db : Value } -> ( Model, Cmd Msg )
-init { url, jsonLdContexts, db } =
+init : { url : String, jsonLdContexts : JsonLdContexts, db : Value, networkId : Int } -> ( Model, Cmd Msg )
+init { url, jsonLdContexts, db, networkId } =
+    let
+        networkIdTyped =
+            Address.networkIdFromInt networkId |> Maybe.withDefault Testnet
+    in
     handleUrlChange (locationHrefToRoute url)
         { page = LandingPage
         , walletsDiscovered = []
@@ -189,6 +194,7 @@ init { url, jsonLdContexts, db } =
         , jsonLdContexts = jsonLdContexts
         , taskPool = ConcurrentTask.pool
         , db = db
+        , networkId = networkIdTyped
         , errors = []
         , navigationState = Navigation.init
         }
@@ -197,7 +203,7 @@ init { url, jsonLdContexts, db } =
                 , Cmd.batch
                     [ cmd
                     , toWallet (Cip30.encodeRequest Cip30.discoverWallets)
-                    , Api.defaultApiProvider.loadProtocolParams GotProtocolParams
+                    , Api.defaultApiProvider.loadProtocolParams networkIdTyped GotProtocolParams
                     ]
                 )
            )
@@ -387,6 +393,7 @@ update msg model =
                             , jsonLdContexts = model.jsonLdContexts
                             , jsonRationaleToFile = jsonRationaleToFile
                             , costModels = Maybe.map .costModels model.protocolParams
+                            , networkId = model.networkId
                             }
 
                         ( newPageModel, cmds, msgToParent ) =
@@ -566,7 +573,7 @@ handleUrlChange route model =
                 ( { newModel | proposals = RemoteData.Loading }
                 , Cmd.batch
                     [ updateUrlCmd
-                    , Api.defaultApiProvider.loadGovProposals GotProposals
+                    , Api.defaultApiProvider.loadGovProposals model.networkId GotProposals
                     ]
                 )
 
@@ -915,6 +922,7 @@ viewContent model =
                 , proposals = model.proposals
                 , jsonLdContexts = model.jsonLdContexts
                 , costModels = Maybe.map .costModels model.protocolParams
+                , networkId = model.networkId
                 , signingLink =
                     \tx expectedSigners ->
                         link (RouteSigning { tx = Just tx, expectedSigners = expectedSigners }) []

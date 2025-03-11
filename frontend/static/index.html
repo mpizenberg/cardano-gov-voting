@@ -34,7 +34,12 @@
         });
         var mainApp = Elm.Main.init({
             node: document.getElementById("main-app"),
-            flags: { url: window.location.href, jsonLdContexts, db },
+            flags: {
+                url: window.location.href,
+                jsonLdContexts,
+                db,
+                networkId: 0, // 0: Preview, 1: Mainnet
+            },
         });
         ElmCardano.init({
             portFromElmToWallet: mainApp.ports.toWallet,

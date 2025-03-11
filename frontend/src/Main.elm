@@ -58,12 +58,15 @@ import Cardano.Utxo as Utxo exposing (Output)
 import ConcurrentTask exposing (ConcurrentTask)
 import ConcurrentTask.Extra
 import Dict exposing (Dict)
-import Helper exposing (prettyAddr)
-import Html exposing (Html, button, div, text)
-import Html.Attributes as HA exposing (height, src)
-import Html.Events exposing (onClick, preventDefaultOn)
+import Footer
+import Helper
+import Html exposing (Html, div, text)
+import Html.Attributes as HA
+import Html.Events exposing (preventDefaultOn)
 import Http
 import Json.Decode as JD exposing (Decoder, Value)
+import Navigation
+import Page.Disclaimer
 import Page.MultisigRegistration
 import Page.Pdf
 import Page.Preparation exposing (JsonLdContexts)
@@ -151,6 +154,7 @@ type alias Model =
     , taskPool : ConcurrentTask.Pool Msg String TaskCompleted
     , db : Value
     , errors : List String
+    , navigationState : Navigation.NavState
     }
 
 
@@ -160,6 +164,7 @@ type Page
     | SigningPage Page.Signing.Model
     | MultisigRegistrationPage Page.MultisigRegistration.Model
     | PdfPage Page.Pdf.Model
+    | DisclaimerPage
 
 
 type TaskCompleted
@@ -185,6 +190,7 @@ init { url, jsonLdContexts, db } =
         , taskPool = ConcurrentTask.pool
         , db = db
         , errors = []
+        , navigationState = Navigation.init
         }
         |> (\( model, cmd ) ->
                 ( model
@@ -207,8 +213,6 @@ type Msg
     = NoMsg
     | UrlChanged Route
     | WalletMsg Value
-    | ConnectButtonClicked { id : String }
-    | DisconnectWalletButtonClicked
     | GotProtocolParams (Result Http.Error ProtocolParams)
     | GotProposals (Result Http.Error (List ActiveProposal))
       -- Preparation page
@@ -220,6 +224,8 @@ type Msg
     | MultisigPageMsg Page.MultisigRegistration.Msg
       -- PDF page
     | PdfPageMsg Page.Pdf.Msg
+      -- Navigation
+    | NavigationMsg Navigation.Msg
       -- Task port
     | OnTaskProgress ( ConcurrentTask.Pool Msg String TaskCompleted, Cmd Msg )
     | OnTaskComplete (ConcurrentTask.Response String TaskCompleted)
@@ -231,6 +237,7 @@ type Route
     | RouteSigning { expectedSigners : List (Bytes CredentialHash), tx : Maybe Transaction }
     | RouteMultisigRegistration
     | RoutePdf
+    | RouteDisclaimer
     | Route404
 
 
@@ -293,6 +300,9 @@ locationHrefToRoute locationHref =
                 [ "page", "pdf" ] ->
                     RoutePdf
 
+                [ "page", "disclaimer" ] ->
+                    RouteDisclaimer
+
                 _ ->
                     Route404
 
@@ -321,6 +331,9 @@ routeToAppUrl route =
         RoutePdf ->
             AppUrl.fromPath [ "page", "pdf" ]
 
+        RouteDisclaimer ->
+            AppUrl.fromPath [ "page", "disclaimer" ]
+
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -338,14 +351,6 @@ update msg model =
 
                 Err err ->
                     ( { model | errors = Debug.toString err :: model.errors }, Cmd.none )
-
-        ( ConnectButtonClicked { id }, _ ) ->
-            ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = [] })) )
-
-        ( DisconnectWalletButtonClicked, _ ) ->
-            ( { model | wallet = Nothing, walletChangeAddress = Nothing, walletUtxos = Nothing }
-            , Cmd.none
-            )
 
         ( WalletMsg value, _ ) ->
             case JD.decodeValue Cip30.responseDecoder value of
@@ -468,7 +473,6 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        -- Result Http.Error (List Page.Preparation.ActiveProposal)
         ( GotProposals result, _ ) ->
             case result of
                 Err httpError ->
@@ -509,6 +513,28 @@ update msg model =
 
         ( OnTaskComplete taskCompleted, _ ) ->
             handleCompletedTask taskCompleted model
+
+        ( NavigationMsg navMsg, _ ) ->
+            case navMsg of
+                Navigation.ConnectWalletClicked { id } ->
+                    -- Reuse your existing wallet connection code
+                    ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = [] })) )
+
+                Navigation.DisconnectWalletClicked ->
+                    -- Reuse your existing disconnect code
+                    ( { model | wallet = Nothing, walletChangeAddress = Nothing, walletUtxos = Nothing }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    -- Handle other navigation messages
+                    let
+                        ( newNavState, navCmd ) =
+                            Navigation.update navMsg model.navigationState
+                    in
+                    ( { model | navigationState = newNavState }
+                    , Cmd.map NavigationMsg navCmd
+                    )
 
 
 handleUrlChange : Route -> Model -> ( Model, Cmd Msg )
@@ -564,6 +590,14 @@ handleUrlChange route model =
             ( { model
                 | errors = []
                 , page = PdfPage Page.Pdf.initialModel
+              }
+            , pushUrl <| AppUrl.toString <| routeToAppUrl route
+            )
+
+        RouteDisclaimer ->
+            ( { model
+                | errors = []
+                , page = DisclaimerPage
               }
             , pushUrl <| AppUrl.toString <| routeToAppUrl route
             )
@@ -742,58 +776,127 @@ handleCompletedTask response model =
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ viewHeader model
+    let
+        backgroundStyle =
+            if model.page == LandingPage then
+                -- Use transparent background on landing page to show gradients
+                HA.style "background" "transparent"
+
+            else
+                -- Use gray background on other pages
+                HA.style "background" "#d9d9d9"
+    in
+    div
+        [ HA.style "min-height" "100vh"
+        , HA.style "position" "relative"
+        , HA.style "padding-bottom" "100px"
+        , backgroundStyle -- Apply the conditional background
+        ]
+        [ -- Gradient circles (only on landing page)
+          if model.page == LandingPage then
+            viewGradientBackgrounds
+
+          else
+            text ""
+        , viewHeader model
         , viewContent model
         , viewErrors model.errors
-        , Html.hr [] []
-        , Html.p [] [ text "Built with <3 by the CF, using elm-cardano, data provided by Koios" ]
+        , Footer.view
+            { copyright = "© 2025 Cardano Stiftung"
+            , disclaimerLink = "/page/disclaimer"
+            , githubLink = "https://github.com/mpizenberg/cardano-gov-voting"
+            }
+        ]
+
+
+
+-- Separate function for gradient backgrounds
+
+
+viewGradientBackgrounds : Html Msg
+viewGradientBackgrounds =
+    div
+        [ HA.style "position" "absolute"
+        , HA.style "right" "0"
+        , HA.style "top" "0"
+        , HA.style "z-index" "-1"
+        ]
+        [ -- Blue gradient circle
+          div
+            [ HA.style "width" "75vw"
+            , HA.style "height" "75vh"
+            , HA.style "border-radius" "75rem"
+            , HA.style "background" "linear-gradient(270deg, #00e0ff, #0084ff 100%)"
+            , HA.style "filter" "blur(128px)"
+            , HA.style "transform-origin" "center center"
+            , HA.style "position" "absolute"
+            , HA.style "right" "-7.5vw"
+            , HA.style "top" "-30vh"
+            , HA.class "blue-gradient-animation"
+            ]
+            []
+
+        -- Red-Yellow gradient circle
+        , div
+            [ HA.style "width" "22rem"
+            , HA.style "height" "22rem"
+            , HA.style "border-radius" "22rem"
+            , HA.style "background" "linear-gradient(90deg, #d1085c -0.01%, #ffad0f 55.09%)"
+            , HA.style "filter" "blur(4rem)"
+            , HA.style "transform-origin" "center center"
+            , HA.style "position" "absolute"
+            , HA.style "right" "0vh"
+            , HA.style "top" "5vh"
+            , HA.class "red-yellow-gradient-animation"
+            ]
+            []
         ]
 
 
 viewHeader : Model -> Html Msg
 viewHeader model =
-    div []
-        [ Html.h1 [] [ text "Cardano Governance Voting" ]
-        , Html.p [] (text "Pages: " :: viewPagesLinks)
-        , viewWalletSection model
-        ]
+    Navigation.view
+        { state = model.navigationState
+        , toMsg = NavigationMsg
+        , brand = ""
+        , items =
+            [ { label = "Home", url = AppUrl.toString <| routeToAppUrl RouteLanding, isActive = model.page == LandingPage }
+            , { label = "Vote Preparation"
+              , url = AppUrl.toString <| routeToAppUrl RoutePreparation
+              , isActive =
+                    case model.page of
+                        PreparationPage _ ->
+                            True
 
+                        _ ->
+                            False
+              }
 
-viewPagesLinks : List (Html Msg)
-viewPagesLinks =
-    [ link RouteLanding [] [ text "Home" ]
-    , text " | "
-    , link RoutePreparation [] [ text "Vote Preparation" ]
-    , text " | "
-    , link RouteMultisigRegistration [] [ text "Multisig Registration" ]
-    , text " | "
-    , link RoutePdf [] [ text "PDFs" ]
-    ]
+            -- Remove Multisig registration for now
+            -- , { label = "Multisig Registration"
+            --   , url = AppUrl.toString <| routeToAppUrl RouteMultisigRegistration
+            --   , isActive =
+            --         case model.page of
+            --             MultisigRegistrationPage _ ->
+            --                 True
+            --             _ ->
+            --                 False
+            --   }
+            , { label = "PDFs"
+              , url = AppUrl.toString <| routeToAppUrl RoutePdf
+              , isActive =
+                    case model.page of
+                        PdfPage _ ->
+                            True
 
-
-viewWalletSection : Model -> Html Msg
-viewWalletSection model =
-    case model.wallet of
-        Nothing ->
-            viewAvailableWallets model.walletsDiscovered
-
-        Just wallet ->
-            viewConnectedWallet wallet model.walletChangeAddress
-
-
-viewConnectedWallet : Cip30.Wallet -> Maybe Address -> Html Msg
-viewConnectedWallet wallet maybeChangeAddress =
-    div []
-        [ text <| "Connected Wallet: " ++ (Cip30.walletDescriptor wallet).name
-        , case maybeChangeAddress of
-            Just addr ->
-                text <| " (" ++ prettyAddr addr ++ ") "
-
-            Nothing ->
-                text " "
-        , button [ onClick DisconnectWalletButtonClicked ] [ text "Disconnect" ]
-        ]
+                        _ ->
+                            False
+              }
+            ]
+        , wallet = model.wallet
+        , walletsDiscovered = model.walletsDiscovered
+        , walletChangeAddress = model.walletChangeAddress
+        }
 
 
 viewContent : Model -> Html Msg
@@ -801,6 +904,9 @@ viewContent model =
     case model.page of
         LandingPage ->
             viewLandingPage
+
+        DisclaimerPage ->
+            Page.Disclaimer.view
 
         PreparationPage prepModel ->
             Page.Preparation.view
@@ -841,12 +947,29 @@ viewContent model =
 
 viewLandingPage : Html Msg
 viewLandingPage =
-    div []
-        [ Html.h2 [] [ text "Welcome to the Voting App" ]
-        , Html.p [] [ link RoutePreparation [] [ text "Start vote preparation" ] ]
-        , Html.p [] [ link (RouteSigning { expectedSigners = [], tx = Nothing }) [] [ text "Sign an already prepared Tx" ] ]
-        , Html.p [] [ link RouteMultisigRegistration [] [ text "Register as a Multisig DRep" ] ]
-        , Html.p [] [ link RoutePdf [] [ text "Generate PDFs for governance metadata" ] ]
+    div [ HA.class "container mx-auto px-4" ]
+        [ Html.h2
+            [ HA.style "font-size" "2.5rem"
+            , HA.style "font-size" "min(5.5rem, 8vw)"
+            , HA.style "line-height" "1.2"
+            , HA.style "max-width" "50rem"
+            , HA.style "margin-top" "3rem"
+            , HA.style "margin-bottom" "0.5rem"
+            ]
+            [ text "Welcome to Cardano Governance Voting" ]
+        , Html.p
+            [ HA.style "font-size" "1rem"
+            , HA.style "font-size" "min(1.3rem, 4.5vw)"
+            , HA.style "max-width" "45rem"
+            , HA.class "mb-2"
+            ]
+            [ text "Leverage blockchain to build future-proof solutions. This page aims to help generate pretty PDFs for different kinds of governance metadata JSON files."
+            ]
+        , Html.p [ HA.class "mt-4" ]
+            [ link RoutePreparation
+                [ HA.class "inline-block" ]
+                [ Helper.viewButton "Get Started" NoMsg ]
+            ]
         ]
 
 
@@ -864,27 +987,3 @@ viewErrors errors =
             [ Html.h3 [] [ text "Errors" ]
             , Html.ul [] (List.map (\err -> Html.li [] [ Html.pre [] [ text err ] ]) errors)
             ]
-
-
-viewAvailableWallets : List Cip30.WalletDescriptor -> Html Msg
-viewAvailableWallets wallets =
-    if List.isEmpty wallets then
-        Html.p [] [ text "It seems like you don’t have any CIP30 wallet?" ]
-
-    else
-        let
-            walletDescription : Cip30.WalletDescriptor -> String
-            walletDescription w =
-                "id: " ++ w.id ++ ", name: " ++ w.name
-
-            walletIcon : Cip30.WalletDescriptor -> Html Msg
-            walletIcon { icon } =
-                Html.img [ src icon, height 32 ] []
-
-            connectButton { id } =
-                Html.button [ onClick (ConnectButtonClicked { id = id }) ] [ text "connect" ]
-
-            walletRow w =
-                div [] [ walletIcon w, text (walletDescription w), text " ", connectButton w ]
-        in
-        div [] (List.map walletRow wallets)

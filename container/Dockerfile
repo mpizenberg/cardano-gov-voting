@@ -58,6 +58,7 @@ RUN --mount=type=bind,source=frontend/package.json,target=package.json \
 # Then add the code and build the frontend app
 ADD frontend .
 RUN npm run make
+RUN npm run css
 RUN npm run compress
 
 # ---------------------------------------------------------

@@ -2856,12 +2856,12 @@ viewInternalVoteForm { constitutional, unconstitutional, abstain, didNotVote, ag
         [ Html.h4 [ HA.class "text-xl font-medium" ] [ text "Internal Vote" ]
         , Html.p [ HA.class "text-sm text-gray-600 mt-2 mb-4" ]
             [ text "If you vote as a group, you can report the group internal votes." ]
-        , div [ HA.class "grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6" ]
-            [ Helper.viewNumberInput "Constitutional" constitutional InternalConstitutionalVoteChange
-            , Helper.viewNumberInput "Unconstitutional" unconstitutional InternalUnconstitutionalVoteChange
-            , Helper.viewNumberInput "Abstain" abstain InternalAbstainVoteChange
-            , Helper.viewNumberInput "Did not vote" didNotVote InternalDidNotVoteChange
-            , Helper.viewNumberInput "Against voting" against InternalAgainstVoteChange
+        , div [ HA.class "flex flex-wrap gap-4" ]
+            [ div [ HA.class "mr-4" ] [ Helper.viewNumberInput "Constitutional" constitutional InternalConstitutionalVoteChange ]
+            , div [ HA.class "mr-4" ] [ Helper.viewNumberInput "Unconstitutional" unconstitutional InternalUnconstitutionalVoteChange ]
+            , div [ HA.class "mr-4" ] [ Helper.viewNumberInput "Abstain" abstain InternalAbstainVoteChange ]
+            , div [ HA.class "mr-4" ] [ Helper.viewNumberInput "Did not vote" didNotVote InternalDidNotVoteChange ]
+            , div [ HA.class "mr-4" ] [ Helper.viewNumberInput "Against voting" against InternalAgainstVoteChange ]
             ]
         ]
 

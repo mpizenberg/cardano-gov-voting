@@ -837,9 +837,8 @@ viewGradientBackgrounds =
             , HA.style "filter" "blur(128px)"
             , HA.style "transform-origin" "center center"
             , HA.style "position" "absolute"
-            , HA.style "right" "-7.5vw"
+            , HA.style "right" "0vh"
             , HA.style "top" "-30vh"
-            , HA.class "blue-gradient-animation"
             ]
             []
 
@@ -854,7 +853,6 @@ viewGradientBackgrounds =
             , HA.style "position" "absolute"
             , HA.style "right" "0vh"
             , HA.style "top" "5vh"
-            , HA.class "red-yellow-gradient-animation"
             ]
             []
         ]

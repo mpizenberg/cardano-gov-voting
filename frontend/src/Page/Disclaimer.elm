@@ -28,7 +28,7 @@ import Html.Attributes as HA
 -}
 view : Html msg
 view =
-    div [ HA.style "max-width" "1024px", HA.style "margin" "0 auto", HA.style "padding" "0 1rem" ]
+    div [ HA.style "max-width" "1024px", HA.style "margin" "0 auto", HA.style "padding" "0rem 2rem" ]
         [ h2
             [ HA.style "font-size" "1.875rem"
             , HA.style "font-weight" "500"

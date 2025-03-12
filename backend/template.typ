@@ -8,6 +8,12 @@
 // JSON data
 #let data = json("metadata.json")
 
+// Set page layout
+#set page(
+  paper: "a4",
+  margin: (x: 2.2cm, y: 2cm),
+)
+
 // Title
 #align(center, text(22pt)[
   *Vote Rationale*
@@ -90,5 +96,27 @@ This document is automatically generated from the CIP-0136 JSON file attached to
 
   #for reference in data.body.references [
     - #reference.at("@type"): #link(reference.uri)[#reference.label]
+  ]
+]
+
+// Display author signatures if provided
+#let hasWitness(author) = {
+  if "witness" in author { true } else { false }
+}
+#if "authors" in data and data.authors.len() > 0 and data.authors.any(hasWitness) [
+  = Author Signatures
+
+  #for author in data.authors [
+
+    === #author.name:
+
+    #if hasWitness(author) [
+      #set text(size: 8pt)
+      - Witness algorithm: #author.witness.witnessAlgorithm
+      - Public key: #author.witness.publicKey
+      - Signature: #author.witness.signature
+    ] else [
+      Signature not provided.
+    ]
   ]
 ]

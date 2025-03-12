@@ -11,9 +11,10 @@ from typing import List, Optional, Tuple
 import httpx
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from fastapi import Body, FastAPI, HTTPException, UploadFile
+from fastapi import Body, FastAPI, HTTPException, UploadFile, Request
 from fastapi.responses import HTMLResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 from brotli_asgi import BrotliMiddleware
 
@@ -27,8 +28,9 @@ logger = logging.getLogger(__name__)
 # Load environment variables from .env file
 # Add environment variable validation at startup
 load_dotenv()
-required_vars = ["IPFS_RPC_URL", "IPFS_RPC_USER", "IPFS_RPC_PASSWORD"]
+required_vars = ["IPFS_RPC_URL", "IPFS_RPC_USER", "IPFS_RPC_PASSWORD", "NETWORK_ID"]
 missing_vars = [var for var in required_vars if not os.getenv(var)]
+NETWORK_ID = os.getenv("NETWORK_ID", "0")  # defaults to 0 if not set
 if missing_vars:
     logger.warn(f"Missing environment variables: {', '.join(missing_vars)}")
     logger.warn("All IPFS requests will need to provide RPC config or will fail")
@@ -53,16 +55,21 @@ app.add_middleware(BrotliMiddleware)
 
 # Statically served directory (contains the frontend build)
 static_dir = Path("../frontend/static")
+templates = Jinja2Templates(directory=static_dir)
 
 
 @app.get("/", response_class=HTMLResponse)
-async def read_root():
-    return FileResponse(static_dir / "index.html")
+async def read_root(request: Request):
+    return templates.TemplateResponse(
+        "index.html", {"request": request, "network_id": NETWORK_ID}
+    )
 
 
 @app.get("/page/{full_path:path}", response_class=HTMLResponse)
-async def get_page(full_path: str):
-    return FileResponse(static_dir / "index.html")
+async def get_page(full_path: str, request: Request):
+    return templates.TemplateResponse(
+        "index.html", {"request": request, "network_id": NETWORK_ID}
+    )
 
 
 @app.post("/pretty-gov-pdf")

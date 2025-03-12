@@ -10,9 +10,12 @@ First create and modify the `.env` file containing the IPFS node access config.
 > since IPFS RPC config can be done directly in the frontend.
 
 ```
+# IPFS RPC config
 IPFS_RPC_URL=https://ipfs-rpc.mycompany.org/api/v0
 IPFS_RPC_USER=user
 IPFS_RPC_PASSWORD=password
+# Network config: 0 for Preview, 1 for Mainnet
+NETWORK_ID=0
 ```
 
 Then you can start the python server.

@@ -775,22 +775,18 @@ update ctx msg model =
             case validateRationaleForm model.rationaleCreationStep of
                 Done prep newRationale ->
                     let
-                        -- Initialize the form
+                        -- Initialize with no rationale signature
+                        form =
+                            { authors = []
+                            , rationale = newRationale
+                            , error = Nothing
+                            }
+
                         updatedModel =
                             { model
                                 | rationaleCreationStep = Done prep newRationale
                                 , rationaleSignatureStep =
-                                    Done
-                                        { authors = []
-                                        , rationale = newRationale
-                                        , error = Nothing
-                                        }
-                                        (rationaleSignatureFromForm ctx.jsonLdContexts
-                                            { authors = []
-                                            , rationale = newRationale
-                                            , error = Nothing
-                                            }
-                                        )
+                                    Done form (rationaleSignatureFromForm ctx.jsonLdContexts form)
                             }
                     in
                     ( updatedModel, Cmd.none, Nothing )
@@ -3108,7 +3104,7 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                         [ Html.h4 [ HA.class "text-3xl font-medium" ] [ text "Rationale Signature" ]
                         , Html.p [ HA.class "mt-4 mb-4" ] [ downloadButton ]
                         , Html.p [] [ text "No registered author." ]
-                        , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Update autohors" ChangeAuthorsButtonClicked ]
+                        , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Update authors" ChangeAuthorsButtonClicked ]
                         ]
 
             else

@@ -86,6 +86,7 @@ type alias Model =
     , feeProviderStep : Step FeeProviderForm FeeProviderTemp FeeProvider
     , buildTxStep : Step BuildTxPrep {} TxFinalized
     , signTxStep : Step { error : Maybe String } SigningTx SignedTx
+    , visibleProposalCount : Maybe Int
     }
 
 
@@ -115,6 +116,7 @@ init =
     , feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing })
     , buildTxStep = Preparing { error = Nothing }
     , signTxStep = Preparing { error = Nothing }
+    , visibleProposalCount = Just 10
     }
 
 
@@ -422,7 +424,6 @@ type TaskCompleted
 type Msg
     = NoMsg
       -- Voter Step
-    | StorageMethodSelected StorageMethod
     | VoterGovIdChange String
     | GotDrepInfo (Result Http.Error DrepInfo)
     | GotCcInfo (Result Http.Error CcInfo)
@@ -434,6 +435,7 @@ type Msg
       -- Pick Proposal Step
     | PickProposalButtonClicked String
     | ChangeProposalButtonClicked
+    | ShowMoreProposals Int
       -- Rationale
     | RationaleSummaryChange String
     | RationaleStatementChange String
@@ -463,6 +465,7 @@ type Msg
     | ValidateRationaleSignaturesButtonClicked
     | ChangeAuthorsButtonClicked
       -- Storage
+    | StorageMethodSelected StorageMethod
     | IpfsServerChange String
     | AddHeaderButtonClicked
     | DeleteHeaderButtonClicked Int
@@ -522,6 +525,12 @@ type alias LoadedWallet =
 update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg, Maybe MsgToParent )
 update ctx msg model =
     case msg of
+        ShowMoreProposals currentCount ->
+            ( { model | visibleProposalCount = Just (currentCount + 10) }
+            , Cmd.none
+            , Nothing
+            )
+
         StorageMethodSelected method ->
             ( updateStorageForm (\form -> { form | storageMethod = method }) model
             , Cmd.none
@@ -2583,14 +2592,24 @@ viewProposalSelectionStep : ViewContext msg -> Model -> Html msg
 viewProposalSelectionStep ctx model =
     case model.pickProposalStep of
         Preparing _ ->
+            let
+                visibleCount =
+                    case model.visibleProposalCount of
+                        Just count ->
+                            count
+
+                        Nothing ->
+                            10
+            in
             div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
-                [ Html.h2 [ HA.class "text-3xl font-medium  mb-4" ] [ text "Pick a Proposal" ]
+                [ Html.h2 [ HA.class "text-3xl font-medium mb-4" ] [ text "Pick a Proposal" ]
                 , case ctx.proposals of
                     RemoteData.NotAsked ->
                         text "Proposals are not loading, please report this error."
 
                     RemoteData.Loading ->
-                        text "Proposals loading ..."
+                        div [ HA.style "display" "flex", HA.style "justify-content" "center", HA.style "padding" "2rem" ]
+                            [ text "Loading proposals..." ]
 
                     RemoteData.Failure httpError ->
                         Html.pre []
@@ -2599,17 +2618,51 @@ viewProposalSelectionStep ctx model =
                             ]
 
                     RemoteData.Success proposalsDict ->
-                        let
-                            proposalOptions =
-                                Dict.values proposalsDict
-                                    |> List.map viewProposalOption
-                                    |> List.map (Html.map ctx.wrapMsg)
-                        in
-                        div []
-                            [ Helper.viewSelect
-                                [ Html.Events.onInput (PickProposalButtonClicked >> ctx.wrapMsg) ]
-                                (Html.option [ HA.value "" ] [ text "Choose a proposal to vote on..." ] :: proposalOptions)
-                            ]
+                        if Dict.isEmpty proposalsDict then
+                            div [ HA.style "text-align" "center", HA.style "padding" "2rem", HA.style "color" "#666" ]
+                                [ text "No active proposals found." ]
+
+                        else
+                            let
+                                allProposals =
+                                    Dict.values proposalsDict
+
+                                totalCount =
+                                    List.length allProposals
+
+                                visibleProposals =
+                                    List.take visibleCount allProposals
+
+                                hasMore =
+                                    totalCount > visibleCount
+                            in
+                            div []
+                                [ Html.p [ HA.style "margin-bottom" "1rem" ]
+                                    [ text <| "Select a proposal to vote on (" ++ String.fromInt totalCount ++ " available):" ]
+                                , div [ HA.style "display" "grid", HA.style "grid-template-columns" "repeat(auto-fill, minmax(250px, 1fr))", HA.style "gap" "1.5rem" ]
+                                    (List.map (viewProposalCard ctx.wrapMsg ctx.networkId) visibleProposals)
+                                , if hasMore then
+                                    div
+                                        [ HA.style "text-align" "center"
+                                        , HA.style "margin-top" "2rem"
+                                        ]
+                                        [ button
+                                            [ HA.style "background-color" "#f9fafb"
+                                            , HA.style "color" "#272727"
+                                            , HA.style "font-weight" "500"
+                                            , HA.style "border" "1px solid #e2e8f0"
+                                            , HA.style "border-radius" "0.5rem"
+                                            , HA.style "padding" "0.75rem 1.5rem"
+                                            , HA.style "cursor" "pointer"
+                                            , HA.style "transition" "all 0.2s ease"
+                                            , onClick (ctx.wrapMsg (ShowMoreProposals visibleCount))
+                                            ]
+                                            [ text <| "Show More (" ++ String.fromInt (min 10 (totalCount - visibleCount)) ++ " of " ++ String.fromInt (totalCount - visibleCount) ++ " remaining)" ]
+                                        ]
+
+                                  else
+                                    text ""
+                                ]
                 ]
 
         Validating _ _ ->
@@ -2639,9 +2692,6 @@ viewProposalSelectionStep ctx model =
                                 div []
                                     [ Html.strong [] [ text "Abstract: " ]
                                     , text <| Maybe.withDefault "Unknown abstract (unexpected metadata format)" meta.body.abstract
-
-                                    -- , Html.p [] [ text "Raw metadata:" ]
-                                    -- , Html.pre [] [ text meta.raw ]
                                     ]
                             )
             in
@@ -2672,24 +2722,122 @@ viewProposalSelectionStep ctx model =
                 ]
 
 
-viewProposalOption : ActiveProposal -> Html Msg
-viewProposalOption { id, metadata, metadataUrl } =
-    Html.option
-        [ HA.value (Gov.actionIdToString id) ]
-        [ text <|
-            case metadata of
-                RemoteData.NotAsked ->
-                    "not loading"
+viewProposalCard : (Msg -> msg) -> NetworkId -> ActiveProposal -> Html msg
+viewProposalCard wrapMsg networkId proposal =
+    let
+        idString =
+            Gov.actionIdToString proposal.id
+
+        title =
+            case proposal.metadata of
+                RemoteData.Success meta ->
+                    meta.body.title |> Maybe.withDefault "Untitled Proposal"
+
+                _ ->
+                    "Loading..."
+
+        abstract =
+            case proposal.metadata of
+                RemoteData.Success meta ->
+                    meta.body.abstract |> Maybe.withDefault "No abstract available"
 
                 RemoteData.Loading ->
-                    "loading ..."
+                    "Loading proposal details..."
 
-                RemoteData.Failure error ->
-                    "ERROR for " ++ metadataUrl ++ ": " ++ Debug.toString error
+                RemoteData.Failure _ ->
+                    "Error loading proposal details"
 
-                RemoteData.Success meta ->
-                    meta.body.title
-                        |> Maybe.withDefault "unknown (unexpected metadata format)"
+                RemoteData.NotAsked ->
+                    "Proposal details not available"
+    in
+    div
+        [ HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.75rem"
+        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+        , HA.style "background-color" "#FFFFFF"
+        , HA.style "display" "flex"
+        , HA.style "flex-direction" "column"
+        , HA.style "height" "100%"
+        , HA.style "transition" "all 0.3s ease"
+        , HA.style "transform-origin" "center"
+        , HA.style "position" "relative"
+        , HA.style "overflow" "hidden"
+        ]
+        [ div
+            [ HA.style "background-color" "#F7FAFC"
+            , HA.style "padding" "1rem 1.25rem"
+            , HA.style "border-bottom" "1px solid #EDF2F7"
+            ]
+            [ Html.h3
+                [ HA.style "font-weight" "600"
+                , HA.style "font-size" "1.125rem"
+                , HA.style "white-space" "nowrap"
+                , HA.style "overflow" "hidden"
+                , HA.style "text-overflow" "ellipsis"
+                , HA.style "color" "#1A202C"
+                ]
+                [ text title ]
+            ]
+        , div
+            [ HA.style "padding" "1.25rem"
+            , HA.style "flex-grow" "1"
+            , HA.style "display" "flex"
+            , HA.style "flex-direction" "column"
+            ]
+            [ Html.p
+                [ HA.style "font-size" "0.875rem"
+                , HA.style "color" "#4A5568"
+                , HA.style "line-height" "1.6"
+                , HA.style "display" "-webkit-box"
+                , HA.style "-webkit-line-clamp" "4"
+                , HA.style "-webkit-box-orient" "vertical"
+                , HA.style "overflow" "hidden"
+                , HA.style "margin-bottom" "1.5rem"
+                ]
+                [ text abstract ]
+            , div
+                [ HA.style "font-size" "0.75rem"
+                , HA.style "color" "#718096"
+                , HA.style "margin-top" "auto"
+                , HA.style "padding-top" "1rem"
+                , HA.style "border-top" "1px solid #EDF2F7"
+                ]
+                [ Html.div
+                    [ HA.style "display" "flex"
+                    , HA.style "flex-wrap" "wrap"
+                    , HA.style "justify-content" "space-between"
+                    , HA.style "align-items" "center"
+                    , HA.style "margin-bottom" "0.75rem"
+                    ]
+                    [ cardanoScanActionLink networkId proposal.id
+                    , div
+                        [ HA.style "font-size" "0.75rem"
+                        , HA.style "font-weight" "500"
+                        , HA.style "color" "#4A5568"
+                        , HA.style "background-color" "#EDF2F7"
+                        , HA.style "padding" "0.25rem 0.5rem"
+                        , HA.style "border-radius" "9999px"
+                        , HA.style "margin-left" "0.5rem"
+                        ]
+                        [ text proposal.actionType ]
+                    ]
+                ]
+            , Html.button
+                [ HA.style "width" "100%"
+                , HA.style "background-color" "#272727"
+                , HA.style "color" "white"
+                , HA.style "font-weight" "500"
+                , HA.style "font-size" "0.875rem"
+                , HA.style "padding" "0.75rem 0"
+                , HA.style "border" "none"
+                , HA.style "border-radius" "0.5rem"
+                , HA.style "cursor" "pointer"
+                , HA.style "transition" "background-color 0.2s"
+                , HA.style "margin-top" "1rem"
+                , onClick (wrapMsg (PickProposalButtonClicked idString))
+                ]
+                [ text "Select Proposal" ]
+            ]
         ]
 
 

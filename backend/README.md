@@ -7,7 +7,7 @@ First create and modify the `.env` file containing the IPFS node access config.
 > Remark: This is required for direct usage of this server endpoints.
 > However, if you use the frontend web app to communicate with this server,
 > you can fill this `.env` file with the default (incorrect) values below,
-> since IPFS RPC config is done directly in the frontend.
+> since IPFS RPC config can be done directly in the frontend.
 
 ```
 IPFS_RPC_URL=https://ipfs-rpc.mycompany.org/api/v0

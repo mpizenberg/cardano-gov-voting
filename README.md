@@ -14,7 +14,8 @@ Then simply open the app at http://localhost:8000
 
 ```sh
 # Use a pre-built container hosted on GitHub Container Registry (GHCR)
-docker run --rm -p 8000:8000 ghcr.io/mpizenberg/cardano-gov-voting:main
+# The --env-file argument is optional, see backend/README.md
+docker run --rm -p 8000:8000 --env-file ../backend/.env ghcr.io/mpizenberg/cardano-gov-voting:main
 ```
 
 Alternatively, you can build the container yourself.
@@ -24,7 +25,8 @@ A container config is provided for convenience in the `container/` directory.
 # Build the container yourself
 git clone --recursive https://github.com/mpizenberg/cardano-gov-voting.git
 cd cardano-gov-voting/container/
-docker compose up --build
+# The --env-file argument is optional, see backend/README.md
+docker compose --env-file ../backend/.env up --build
 ```
 
 ## Getting Started (code)

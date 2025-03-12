@@ -954,27 +954,35 @@ viewContent model =
 viewLandingPage : Html Msg
 viewLandingPage =
     div [ HA.class "container mx-auto px-4" ]
-        [ Html.h2
-            [ HA.style "font-size" "2.5rem"
-            , HA.style "font-size" "min(5.5rem, 8vw)"
-            , HA.style "line-height" "1.2"
-            , HA.style "max-width" "50rem"
-            , HA.style "margin-top" "3rem"
-            , HA.style "margin-bottom" "0.5rem"
-            ]
-            [ text "Welcome to Cardano Governance Voting" ]
-        , Html.p
-            [ HA.style "font-size" "1rem"
-            , HA.style "font-size" "min(1.3rem, 4.5vw)"
-            , HA.style "max-width" "45rem"
-            , HA.class "mb-2"
-            ]
-            [ text "Leverage blockchain to build future-proof solutions. This page aims to help generate pretty PDFs for different kinds of governance metadata JSON files."
-            ]
-        , Html.p [ HA.class "mt-4" ]
-            [ link RoutePreparation
-                [ HA.class "inline-block" ]
-                [ Helper.viewButton "Get Started" NoMsg ]
+        [ div [ HA.style "max-width" "800px", HA.style "margin" "0 auto" ]
+            [ Html.h2
+                [ HA.style "font-size" "min(4.5rem, 10vw)"
+                , HA.style "line-height" "1.2"
+                , HA.style "margin-top" "3rem"
+                , HA.style "margin-bottom" "1.5rem"
+                , HA.style "font-weight" "600"
+                , HA.style "color" "#272727"
+                ]
+                [ text "Cardano Governance Voting Tool" ]
+            , Html.p
+                [ HA.style "font-size" "min(1.5rem, 5vw)"
+                , HA.style "line-height" "1.5"
+                , HA.style "margin-bottom" "2rem"
+                , HA.style "color" "#333"
+                ]
+                [ text "A simple tool to help every Cardano stakeholder participate in on-chain governance with confidence." ]
+            , Html.p
+                [ HA.style "font-size" "min(1.2rem, 4vw)"
+                , HA.style "line-height" "1.6"
+                , HA.style "margin-bottom" "2.5rem"
+                , HA.style "color" "#555"
+                ]
+                [ text "Create, sign, and submit governance votes with proper rationale documentation. Generate formatted PDFs for transparency and record-keeping." ]
+            , Html.p [ HA.style "margin-bottom" "4rem" ]
+                [ link RoutePreparation
+                    [ HA.class "inline-block" ]
+                    [ Helper.viewButton "Start Voting Process" NoMsg ]
+                ]
             ]
         ]
 

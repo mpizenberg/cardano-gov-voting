@@ -8,6 +8,12 @@
 // JSON data
 #let data = json("metadata.json")
 
+// Set page layout
+#set page(
+  paper: "a4",
+  margin: (x: 2.2cm, y: 2cm),
+)
+
 // Title
 #align(center, text(22pt)[
   *Vote Rationale*
@@ -29,6 +35,11 @@
 #v(1em) // add some vertical space
 
 This document is automatically generated from the CIP-0136 JSON file attached to the vote.
+
+// If the governance action ID is provided, display it.
+#if "govActionId" in data.body [
+  Governance Action ID: #data.body.govActionId
+]
 
 #set par(justify: true)
 
@@ -65,10 +76,21 @@ This document is automatically generated from the CIP-0136 JSON file attached to
 #if "internalVote" in data.body [
   = Internal Vote
 
-  - Constitutional: #data.body.internalVote.constitutional
-  - Unconstitutional: #data.body.internalVote.unconstitutional
-  - Abstain: #data.body.internalVote.abstain
-  - Did not vote: #data.body.internalVote.didNotVote
+  #if "constitutional" in data.body.internalVote [
+    - Constitutional: #data.body.internalVote.constitutional
+  ]
+  #if "unconstitutional" in data.body.internalVote [
+    - Unconstitutional: #data.body.internalVote.unconstitutional
+  ]
+  #if "abstain" in data.body.internalVote [
+    - Abstain: #data.body.internalVote.abstain
+  ]
+  #if "didNotVote" in data.body.internalVote [
+    - Did not vote: #data.body.internalVote.didNotVote
+  ]
+  #if "againstVote" in data.body.internalVote [
+    - Against vote: #data.body.internalVote.againstVote
+  ]
 ]
 
 // Optional References
@@ -79,5 +101,27 @@ This document is automatically generated from the CIP-0136 JSON file attached to
 
   #for reference in data.body.references [
     - #reference.at("@type"): #link(reference.uri)[#reference.label]
+  ]
+]
+
+// Display author signatures if provided
+#let hasWitness(author) = {
+  if "witness" in author { true } else { false }
+}
+#if "authors" in data and data.authors.len() > 0 and data.authors.any(hasWitness) [
+  = Author Signatures
+
+  #for author in data.authors [
+
+    === #author.name:
+
+    #if hasWitness(author) [
+      #set text(size: 8pt)
+      - Witness algorithm: #author.witness.witnessAlgorithm
+      - Public key: #author.witness.publicKey
+      - Signature: #author.witness.signature
+    ] else [
+      Signature not provided.
+    ]
   ]
 ]

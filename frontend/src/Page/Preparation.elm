@@ -86,7 +86,7 @@ type alias Model =
     , feeProviderStep : Step FeeProviderForm FeeProviderTemp FeeProvider
     , buildTxStep : Step BuildTxPrep {} TxFinalized
     , signTxStep : Step { error : Maybe String } SigningTx SignedTx
-    , visibleProposalCount : Maybe Int
+    , visibleProposalCount : Int
     }
 
 
@@ -116,7 +116,7 @@ init =
     , feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing })
     , buildTxStep = Preparing { error = Nothing }
     , signTxStep = Preparing { error = Nothing }
-    , visibleProposalCount = Just 10
+    , visibleProposalCount = 10
     }
 
 
@@ -526,7 +526,7 @@ update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg, Maybe MsgToParen
 update ctx msg model =
     case msg of
         ShowMoreProposals currentCount ->
-            ( { model | visibleProposalCount = Just (currentCount + 10) }
+            ( { model | visibleProposalCount = currentCount + 10 }
             , Cmd.none
             , Nothing
             )
@@ -2594,12 +2594,7 @@ viewProposalSelectionStep ctx model =
         Preparing _ ->
             let
                 visibleCount =
-                    case model.visibleProposalCount of
-                        Just count ->
-                            count
-
-                        Nothing ->
-                            10
+                    model.visibleProposalCount
             in
             div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
                 [ Html.h2 [ HA.class "text-3xl font-medium mb-4" ] [ text "Pick a Proposal" ]

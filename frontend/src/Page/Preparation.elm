@@ -3296,7 +3296,7 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                                 , HA.class "mr-2"
                                 ]
                                 []
-                            , Html.label [ HA.class "text-base" ] [ text "Standard IPFS (Cardano Foundation)" ]
+                            , Html.label [ HA.class "text-base" ] [ text "Pre-configured IPFS" ]
                             ]
                         , div [ HA.class "flex items-center mb-4" ]
                             [ Html.input

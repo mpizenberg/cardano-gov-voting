@@ -25,7 +25,7 @@
   "devDependencies": {
     "@lydell/elm": "^0.19.1-14",
     "autoprefixer": "^10.4.20",
-    "elm-cardano": "^0.3.0",
+    "elm-cardano": "^0.4.0",
     "elm-doc-preview": "^6.0.1",
     "elm-format": "^0.8.7",
     "elm-review": "^2.12.0",

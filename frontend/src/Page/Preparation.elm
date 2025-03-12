@@ -2628,7 +2628,7 @@ viewProposalSelectionStep ctx model =
                                     Dict.values proposalsDict
 
                                 totalCount =
-                                    List.length allProposals
+                                    Dict.size proposalsDict
 
                                 visibleProposals =
                                     List.take visibleCount allProposals

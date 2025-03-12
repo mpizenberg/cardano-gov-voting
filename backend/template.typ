@@ -36,6 +36,11 @@
 
 This document is automatically generated from the CIP-0136 JSON file attached to the vote.
 
+// If the governance action ID is provided, display it.
+#if "govActionId" in data.body [
+  Governance Action ID: #data.body.govActionId
+]
+
 #set par(justify: true)
 
 = Summary

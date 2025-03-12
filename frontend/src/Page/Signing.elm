@@ -389,7 +389,7 @@ view ctx model =
                             , gatheredSignaturesSection
                             , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Transaction Submission" ]
                             , Helper.formContainer
-                                [ Html.p [ HA.class "text-green-600 mb-4" ] [ text "All required signatures have been collected." ]
+                                [ Html.p [ HA.class "mb-4" ] [ text "All required signatures have been collected." ]
                                 , Helper.viewButton "Submit Transaction" (ctx.wrapMsg SubmitTxButtonClicked)
                                 ]
                             ]
@@ -401,7 +401,7 @@ view ctx model =
                             , signSection
                             , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Transaction Submission" ]
                             , Helper.formContainer
-                                [ Html.p [ HA.class "text-amber-600 mb-4" ] [ text "Not all expected signatures are gathered yet, but you can still submit if ready." ]
+                                [ Html.p [ HA.class "mb-4" ] [ text "Not all expected signatures are gathered yet, but you can still submit if ready." ]
                                 , Helper.viewButton "Submit Transaction Anyway" (ctx.wrapMsg SubmitTxButtonClicked)
                                 ]
                             ]

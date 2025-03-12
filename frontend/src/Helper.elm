@@ -161,7 +161,7 @@ labeledField labelText field =
 
 formContainer : List (Html msg) -> Html msg
 formContainer content =
-    Html.div [ HA.class "py-4 border-b", HA.style "border-color" "#C6C6C6" ] content
+    Html.div [ HA.class "py-4" ] content
 
 
 

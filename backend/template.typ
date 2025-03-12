@@ -65,10 +65,18 @@ This document is automatically generated from the CIP-0136 JSON file attached to
 #if "internalVote" in data.body [
   = Internal Vote
 
-  - Constitutional: #data.body.internalVote.constitutional
-  - Unconstitutional: #data.body.internalVote.unconstitutional
-  - Abstain: #data.body.internalVote.abstain
-  - Did not vote: #data.body.internalVote.didNotVote
+  #if "constitutional" in data.body.internalVote [
+    - Constitutional: #data.body.internalVote.constitutional
+  ]
+  #if "unconstitutional" in data.body.internalVote [
+    - Unconstitutional: #data.body.internalVote.unconstitutional
+  ]
+  #if "abstain" in data.body.internalVote [
+    - Abstain: #data.body.internalVote.abstain
+  ]
+  #if "didNotVote" in data.body.internalVote [
+    - Did not vote: #data.body.internalVote.didNotVote
+  ]
 ]
 
 // Optional References

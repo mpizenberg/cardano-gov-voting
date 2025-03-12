@@ -931,6 +931,7 @@ viewContent model =
             Page.Signing.view
                 { wrapMsg = SigningPageMsg
                 , wallet = model.wallet
+                , networkId = model.networkId
                 }
                 signingModel
 

@@ -13,7 +13,7 @@ Key design features:
 -}
 
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano.Address exposing (CredentialHash)
+import Cardano.Address exposing (CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30
 import Cardano.Transaction as Transaction exposing (Transaction, VKeyWitness)
 import Cardano.TxExamples exposing (prettyTx)
@@ -274,6 +274,7 @@ resetSubmission error model =
 type alias ViewContext msg =
     { wrapMsg : Msg -> msg
     , wallet : Maybe Cip30.Wallet
+    , networkId : NetworkId
     }
 
 
@@ -445,8 +446,17 @@ view ctx model =
                                         ]
                                         [ text "Track your transaction:" ]
                                     , div [ HA.style "display" "flex", HA.style "gap" "1rem", HA.style "flex-wrap" "wrap" ]
-                                        [ a
-                                            [ HA.href ("https://preview.cardanoscan.io/transaction/" ++ Bytes.toHex txId)
+                                        [ let
+                                            cardanoScanBaseUrl =
+                                                case ctx.networkId of
+                                                    Mainnet ->
+                                                        "https://cardanoscan.io/transaction/"
+
+                                                    Testnet ->
+                                                        "https://preview.cardanoscan.io/transaction/"
+                                          in
+                                          a
+                                            [ HA.href (cardanoScanBaseUrl ++ Bytes.toHex txId)
                                             , HA.target "_blank"
                                             , HA.style "display" "inline-flex"
                                             , HA.style "align-items" "center"
@@ -462,23 +472,6 @@ view ctx model =
                                             , HA.style "padding" "0.75rem 1.5rem"
                                             ]
                                             [ text "View on CardanoScan" ]
-                                        , a
-                                            [ HA.href ("https://adastat.net/transactions/" ++ Bytes.toHex txId)
-                                            , HA.target "_blank"
-                                            , HA.style "display" "inline-flex"
-                                            , HA.style "align-items" "center"
-                                            , HA.style "justify-content" "center"
-                                            , HA.style "white-space" "nowrap"
-                                            , HA.style "border-radius" "9999px"
-                                            , HA.style "font-size" "0.875rem"
-                                            , HA.style "font-weight" "500"
-                                            , HA.style "transition" "all 0.2s"
-                                            , HA.style "outline" "none"
-                                            , HA.style "background-color" "#272727"
-                                            , HA.style "color" "#f7fafc"
-                                            , HA.style "padding" "0.75rem 1.5rem"
-                                            ]
-                                            [ text "View on AdaStat" ]
                                         ]
                                     ]
                                 ]

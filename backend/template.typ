@@ -77,6 +77,9 @@ This document is automatically generated from the CIP-0136 JSON file attached to
   #if "didNotVote" in data.body.internalVote [
     - Did not vote: #data.body.internalVote.didNotVote
   ]
+  #if "againstVote" in data.body.internalVote [
+    - Against vote: #data.body.internalVote.againstVote
+  ]
 ]
 
 // Optional References

@@ -3216,7 +3216,7 @@ markdownRenderer =
 
 
 customHeadingRenderer : { level : Markdown.Block.HeadingLevel, rawText : String, children : List (Html msg) } -> Html msg
-customHeadingRenderer { level, rawText, children } =
+customHeadingRenderer { level, children } =
     case level of
         Markdown.Block.H1 ->
             Html.h1

@@ -148,7 +148,7 @@ textFieldInline value toMsg =
 
 labeledField : String -> Html msg -> Html msg
 labeledField labelText field =
-    Html.div [ HA.class "w-1/3 pl-4 first:pl-0" ]
+    Html.div [ HA.class " pl-4 first:pl-0" ]
         [ Html.label [ HA.class "block mb-1 text-sm" ] [ text labelText ]
         , field
         ]

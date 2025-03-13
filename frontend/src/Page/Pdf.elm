@@ -252,7 +252,6 @@ view ctx model =
                 ]
                 [ text content ]
 
-        -- Hero section component
         heroSection =
             div
                 [ HA.style "position" "relative"
@@ -261,8 +260,7 @@ view ctx model =
                 , HA.style "padding-bottom" "6rem"
                 , HA.style "margin-bottom" "2rem"
                 ]
-                [ -- Main hero content
-                  div
+                [ div
                     [ HA.style "position" "relative"
                     , HA.style "z-index" "10"
                     , HA.style "max-width" "840px"
@@ -295,8 +293,6 @@ view ctx model =
                         ]
                         [ Helper.viewButton "Load JSON-LD File" LoadJsonButtonClicked ]
                     ]
-
-                -- Desktop gradient (always visible since we can't do media queries easily in Elm)
                 , div
                     [ HA.style "position" "absolute"
                     , HA.style "z-index" "1"
@@ -304,13 +300,13 @@ view ctx model =
                     , HA.style "right" "0"
                     , HA.style "left" "0"
                     , HA.style "overflow" "hidden"
-                    , HA.style "transform" "translateZ(0)" -- gpu acceleration
+                    , HA.style "transform" "translateZ(0)"
                     , HA.style "filter" "blur(64px)"
                     ]
                     [ div
                         [ HA.style "position" "relative"
                         , HA.style "width" "100%"
-                        , HA.style "padding-bottom" "58.7%" -- aspect ratio 1155/678
+                        , HA.style "padding-bottom" "58.7%"
                         , HA.style "background" "linear-gradient(90deg, #00E0FF, #0084FF)"
                         , HA.style "opacity" "0.8"
                         , HA.style "clip-path" "polygon(19% 5%, 36% 8%, 55% 15%, 76% 5%, 100% 16%, 100% 100%, 0 100%, 0 14%)"
@@ -325,7 +321,7 @@ view ctx model =
                     Helper.formContainer
                         [ Html.h3 [ HA.style "font-size" "1.25rem", HA.style "font-weight" "500", HA.style "margin-bottom" "0.5rem" ]
                             [ text "File Status" ]
-                        , Html.p [ HA.style "color" "#666666", HA.style "font-style" "italic" ]
+                        , Html.p [ HA.style "color" "#666666" ]
                             [ text "No file loaded yet" ]
                         ]
 

@@ -901,7 +901,7 @@ update ctx msg model =
 
                         Ok elmBytes ->
                             ( model
-                            , File.Download.bytes "metadata.pdf" "application/pdf" elmBytes
+                            , File.Download.bytes "rationale.pdf" "application/pdf" elmBytes
                             , Nothing
                             )
 

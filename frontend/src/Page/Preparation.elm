@@ -1789,6 +1789,10 @@ editRationale step =
             Preparing prep
 
 
+
+-- Rationale Signature Step
+
+
 encodeJsonLdRationale : Rationale -> JE.Value
 encodeJsonLdRationale rationale =
     JE.object <|

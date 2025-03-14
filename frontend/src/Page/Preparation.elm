@@ -1567,30 +1567,20 @@ updateRationaleInternalVoteForm updateF numberStr model =
     updateRationaleForm rationaleUpdate model
 
 
-validateMarkdownHeadings : String -> Result String ()
-validateMarkdownHeadings markdown =
-    case Md.parse markdown of
-        Err _ ->
-            Err "Invalid markdown syntax. Please check your formatting."
+validateMarkdownHeadings : List Markdown.Block.Block -> Result String ()
+validateMarkdownHeadings blocks =
+    if List.any isH1Block blocks then
+        Err "Please use heading level 2 (##) or higher. Level 1 headings (#) are reserved for the level 1 sections, such as summary, rationale statement, discussion, etc."
 
-        Ok blocks ->
-            if hasH1Heading blocks then
-                Err "Please use heading level 2 (##) or higher. Level 1 headings (#) are reserved for the page title."
-
-            else
-                Ok ()
-
-
-hasH1Heading : List Markdown.Block.Block -> Bool
-hasH1Heading blocks =
-    List.any isH1Block blocks
+    else
+        Ok ()
 
 
 isH1Block : Markdown.Block.Block -> Bool
 isH1Block block =
     case block of
-        Markdown.Block.Heading level _ ->
-            level == Markdown.Block.H1
+        Markdown.Block.Heading Markdown.Block.H1 _ ->
+            True
 
         _ ->
             False
@@ -1647,39 +1637,30 @@ validateRationaleStatement statement =
 
         str ->
             checkValidMarkdown str
-                |> Result.andThen (\_ -> validateMarkdownHeadings str)
+                |> Result.andThen validateMarkdownHeadings
 
 
-checkValidMarkdown : String -> Result String ()
+checkValidMarkdown : String -> Result String (List Markdown.Block.Block)
 checkValidMarkdown str =
-    case Md.parse str of
-        Ok _ ->
-            Ok ()
-
-        Err deadEnds ->
+    let
+        errorToString deadEnds =
             List.map Md.deadEndToString deadEnds
-                |> String.join "\n"
-                |> Err
+                |> String.join "\n\n"
+    in
+    Md.parse str
+        |> Result.mapError errorToString
 
 
 validateRationaleDiscussion : MarkdownForm -> Result String ()
 validateRationaleDiscussion discussion =
-    let
-        trimmed =
-            String.trim discussion
-    in
-    checkValidMarkdown trimmed
-        |> Result.andThen (\_ -> validateMarkdownHeadings trimmed)
+    checkValidMarkdown (String.trim discussion)
+        |> Result.andThen validateMarkdownHeadings
 
 
 validateRationaleCounterArg : MarkdownForm -> Result String ()
 validateRationaleCounterArg counterArg =
-    let
-        trimmed =
-            String.trim counterArg
-    in
-    checkValidMarkdown trimmed
-        |> Result.andThen (\_ -> validateMarkdownHeadings trimmed)
+    checkValidMarkdown (String.trim counterArg)
+        |> Result.andThen validateMarkdownHeadings
 
 
 validateRationaleConclusion : MarkdownForm -> Result String ()

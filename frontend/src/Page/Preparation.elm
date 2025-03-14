@@ -1581,7 +1581,6 @@ validateMarkdownHeadings markdown =
                             String.trim line
                     in
                     String.startsWith "# " trimmed
-                        && not (String.startsWith "## " trimmed)
                 )
                 lines
     in
@@ -1664,12 +1663,8 @@ validateRationaleDiscussion discussion =
         trimmed =
             String.trim discussion
     in
-    if String.isEmpty trimmed then
-        Ok ()
-
-    else
-        checkValidMarkdown trimmed
-            |> Result.andThen (\_ -> validateMarkdownHeadings trimmed)
+    checkValidMarkdown trimmed
+        |> Result.andThen (\_ -> validateMarkdownHeadings trimmed)
 
 
 validateRationaleCounterArg : MarkdownForm -> Result String ()
@@ -1678,26 +1673,13 @@ validateRationaleCounterArg counterArg =
         trimmed =
             String.trim counterArg
     in
-    if String.isEmpty trimmed then
-        Ok ()
-
-    else
-        checkValidMarkdown trimmed
-            |> Result.andThen (\_ -> validateMarkdownHeadings trimmed)
+    checkValidMarkdown trimmed
+        |> Result.andThen (\_ -> validateMarkdownHeadings trimmed)
 
 
 validateRationaleConclusion : MarkdownForm -> Result String ()
-validateRationaleConclusion conclusion =
-    let
-        trimmed =
-            String.trim conclusion
-    in
-    if String.isEmpty trimmed then
-        Ok ()
-
-    else
-        checkValidMarkdown trimmed
-            |> Result.andThen (\_ -> validateMarkdownHeadings trimmed)
+validateRationaleConclusion _ =
+    Ok ()
 
 
 validateRationaleInternVote : InternalVote -> Result String ()
@@ -3104,7 +3086,7 @@ viewConclusionForm form =
         [ Html.h4 [ HA.class "text-xl font-medium" ] [ text "Conclusion" ]
         , div [ HA.class "mt-2 mb-4" ]
             [ Html.p [ HA.class "text-sm text-gray-600" ] [ text "Optional" ]
-            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "No size limit and markdown is supported (preview below)." ]
+            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "No size limit, does NOT support markdown." ]
             ]
         , Helper.viewTextarea form ConclusionChange
         ]
@@ -3312,7 +3294,7 @@ viewConclusion maybeConclusion =
         Just conclusion ->
             div []
                 [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "Conclusion" ]
-                , viewMd conclusion
+                , Html.p [ HA.class "text-gray-800" ] [ text conclusion ]
                 ]
 
 
@@ -3427,8 +3409,12 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                 Html.map ctx.wrapMsg <|
                     div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                         [ Html.h4 [ HA.class "text-3xl font-medium" ] [ text "Rationale Signature" ]
-                        , Html.p [] [ downloadButton ]
-                        , Helper.viewButton "Generate PDF" (ConvertToPdfButtonClicked ratSig.signedJson)
+                        , div [ HA.style "display" "flex", HA.style "align-items" "center" ]
+                            [ div [ HA.style "margin-right" "12px" ]
+                                [ downloadButton ]
+                            , div [ HA.style "margin-right" "12px" ]
+                                [ Helper.viewButton "Generate PDF" (ConvertToPdfButtonClicked ratSig.signedJson) ]
+                            ]
                         , Html.ul [] (List.map viewSigner ratSig.authors)
                         , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Update authors" ChangeAuthorsButtonClicked ]
                         ]
@@ -4004,7 +3990,7 @@ viewSignTxStep ctx buildTxStep =
                 , Helper.formContainer
                     [ Html.h5 [ HA.class "text-xl font-medium mb-4" ] [ text "Finalize Your Vote" ]
                     , Html.p [ HA.class "mb-4" ] [ text "Expecting signatures for the following public key hashes:" ]
-                    , div [ HA.class "bg-gray-50 p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
+                    , div [ HA.class "p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
                         [ Html.ul [ HA.class "font-mono text-sm space-y-2" ]
                             (List.map
                                 (\hash ->

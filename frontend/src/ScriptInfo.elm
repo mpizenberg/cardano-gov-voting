@@ -131,7 +131,7 @@ koiosScriptInfoDecoder =
                             ( Ok version, Just bytes ) ->
                                 Ok
                                     { scriptHash = hash
-                                    , script = Script.Plutus { version = version, script = bytes }
+                                    , script = Script.Plutus <| Script.plutusScriptFromBytes version bytes
                                     , nativeCborEncodingMatchesHash = Nothing
                                     }
 

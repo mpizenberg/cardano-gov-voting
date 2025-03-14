@@ -1451,10 +1451,10 @@ validateScriptVoter ctx form loadedRefUtxos toVoter scriptInfo =
                         -- If the native script isn’t encoded correctly we can’t vote
                         justError "For technical reasons you need to provide a reference UTxO for the script."
 
-                Script.Plutus { version, script } ->
+                Script.Plutus plutusScript ->
                     let
                         witness =
-                            { script = ( version, WitnessValue script )
+                            { script = ( Script.plutusVersion plutusScript, WitnessValue <| Script.cborWrappedBytes plutusScript )
                             , redeemerData = Debug.todo "Add forms for the redeemer Data"
                             , requiredSigners = Debug.todo "Add a required signers form for Plutus"
                             }
@@ -2518,8 +2518,8 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
 
                 Script.Plutus plutusScript ->
                     div []
-                        [ Html.p [] [ text <| "Plutus script version: " ++ Debug.toString plutusScript.version ]
-                        , Html.p [] [ text <| "Script size: " ++ (String.fromInt <| Bytes.width plutusScript.script) ++ " Bytes" ]
+                        [ Html.p [] [ text <| "Plutus script version: " ++ Debug.toString (Script.plutusVersion plutusScript) ]
+                        , Html.p [] [ text <| "Script size: " ++ (String.fromInt <| Bytes.width <| Script.cborWrappedBytes plutusScript) ++ " Bytes" ]
                         , refScriptSuggestion
                         , Html.p [] [ text "WIP: we are waiting for someone needing this to implement Plutus voters" ]
                         ]

@@ -59,13 +59,13 @@ import ConcurrentTask exposing (ConcurrentTask)
 import ConcurrentTask.Extra
 import Dict exposing (Dict)
 import Footer
+import Header
 import Helper
 import Html exposing (Html, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (preventDefaultOn)
 import Http
 import Json.Decode as JD exposing (Decoder, Value)
-import Navigation
 import Page.Disclaimer
 import Page.MultisigRegistration
 import Page.Pdf
@@ -140,6 +140,8 @@ port receiveTask : (Value -> msg) -> Sub msg
 
 type alias Model =
     { page : Page
+    , mobileMenuIsOpen : Bool
+    , walletDropdownIsOpen : Bool
     , walletsDiscovered : List WalletDescriptor
     , wallet : Maybe Cip30.Wallet
     , walletChangeAddress : Maybe Address
@@ -155,7 +157,6 @@ type alias Model =
     , db : Value
     , networkId : NetworkId
     , errors : List String
-    , navigationState : Navigation.NavState
     }
 
 
@@ -181,6 +182,8 @@ init { url, jsonLdContexts, db, networkId } =
     in
     handleUrlChange (locationHrefToRoute url)
         { page = LandingPage
+        , mobileMenuIsOpen = False
+        , walletDropdownIsOpen = False
         , walletsDiscovered = []
         , wallet = Nothing
         , walletUtxos = Nothing
@@ -196,7 +199,6 @@ init { url, jsonLdContexts, db, networkId } =
         , db = db
         , networkId = networkIdTyped
         , errors = []
-        , navigationState = Navigation.init
         }
         |> (\( model, cmd ) ->
                 ( model
@@ -221,6 +223,11 @@ type Msg
     | WalletMsg Value
     | GotProtocolParams (Result Http.Error ProtocolParams)
     | GotProposals (Result Http.Error (List ActiveProposal))
+      -- Header
+    | ToggleMobileMenu
+    | ToggleWalletDropdown
+    | ConnectWalletClicked { id : String }
+    | DisconnectWalletClicked
       -- Preparation page
     | PreparationPageMsg Page.Preparation.Msg
     | GotRationaleAsFile Value
@@ -230,8 +237,6 @@ type Msg
     | MultisigPageMsg Page.MultisigRegistration.Msg
       -- PDF page
     | PdfPageMsg Page.Pdf.Msg
-      -- Navigation
-    | NavigationMsg Navigation.Msg
       -- Task port
     | OnTaskProgress ( ConcurrentTask.Pool Msg String TaskCompleted, Cmd Msg )
     | OnTaskComplete (ConcurrentTask.Response String TaskCompleted)
@@ -521,27 +526,19 @@ update msg model =
         ( OnTaskComplete taskCompleted, _ ) ->
             handleCompletedTask taskCompleted model
 
-        ( NavigationMsg navMsg, _ ) ->
-            case navMsg of
-                Navigation.ConnectWalletClicked { id } ->
-                    -- Reuse your existing wallet connection code
-                    ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = [] })) )
+        ( ToggleMobileMenu, _ ) ->
+            ( { model | mobileMenuIsOpen = not model.mobileMenuIsOpen }, Cmd.none )
 
-                Navigation.DisconnectWalletClicked ->
-                    -- Reuse your existing disconnect code
-                    ( { model | wallet = Nothing, walletChangeAddress = Nothing, walletUtxos = Nothing }
-                    , Cmd.none
-                    )
+        ( ToggleWalletDropdown, _ ) ->
+            ( { model | walletDropdownIsOpen = not model.walletDropdownIsOpen }, Cmd.none )
 
-                _ ->
-                    -- Handle other navigation messages
-                    let
-                        ( newNavState, navCmd ) =
-                            Navigation.update navMsg model.navigationState
-                    in
-                    ( { model | navigationState = newNavState }
-                    , Cmd.map NavigationMsg navCmd
-                    )
+        ( ConnectWalletClicked { id }, _ ) ->
+            ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = [] })) )
+
+        ( DisconnectWalletClicked, _ ) ->
+            ( { model | wallet = Nothing, walletChangeAddress = Nothing, walletUtxos = Nothing }
+            , Cmd.none
+            )
 
 
 handleUrlChange : Route -> Model -> ( Model, Cmd Msg )
@@ -854,11 +851,8 @@ viewGradientBackgrounds =
 
 viewHeader : Model -> Html Msg
 viewHeader model =
-    Navigation.view
-        { state = model.navigationState
-        , toMsg = NavigationMsg
-        , brand = ""
-        , items =
+    let
+        navigationItems =
             [ { label = "Home", url = AppUrl.toString <| routeToAppUrl RouteLanding, isActive = model.page == LandingPage }
             , { label = "Vote Preparation"
               , url = AppUrl.toString <| routeToAppUrl RoutePreparation
@@ -870,17 +864,6 @@ viewHeader model =
                         _ ->
                             False
               }
-
-            -- Remove Multisig registration for now
-            -- , { label = "Multisig Registration"
-            --   , url = AppUrl.toString <| routeToAppUrl RouteMultisigRegistration
-            --   , isActive =
-            --         case model.page of
-            --             MultisigRegistrationPage _ ->
-            --                 True
-            --             _ ->
-            --                 False
-            --   }
             , { label = "PDFs"
               , url = AppUrl.toString <| routeToAppUrl RoutePdf
               , isActive =
@@ -892,10 +875,30 @@ viewHeader model =
                             False
               }
             ]
-        , wallet = model.wallet
-        , walletsDiscovered = model.walletsDiscovered
-        , walletChangeAddress = model.walletChangeAddress
+
+        walletConnectorState =
+            { walletDropdownIsOpen = model.walletDropdownIsOpen
+            , walletsDiscovered = model.walletsDiscovered
+            , wallet = model.wallet
+            , walletChangeAddress = model.walletChangeAddress
+            }
+
+        walletConnectorMsgs =
+            { toggleWalletDropdown = ToggleWalletDropdown
+            , connectWalletClicked = ConnectWalletClicked
+            , disconnectWalletClicked = DisconnectWalletClicked
+            }
+    in
+    Header.view
+        -- mobile menu stuff
+        { mobileMenuIsOpen = model.mobileMenuIsOpen
+        , toggleMobileMenu = ToggleMobileMenu
+
+        -- wallet connector stuff
+        , walletConnector = walletConnectorState
+        , walletConnectorMsgs = walletConnectorMsgs
         }
+        navigationItems
 
 
 viewContent : Model -> Html Msg

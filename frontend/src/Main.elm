@@ -853,9 +853,12 @@ viewHeader : Model -> Html Msg
 viewHeader model =
     let
         navigationItems =
-            [ { label = "Home", url = AppUrl.toString <| routeToAppUrl RouteLanding, isActive = model.page == LandingPage }
+            [ { label = "Home"
+              , link = link RouteLanding
+              , isActive = model.page == LandingPage
+              }
             , { label = "Vote Preparation"
-              , url = AppUrl.toString <| routeToAppUrl RoutePreparation
+              , link = link RoutePreparation
               , isActive =
                     case model.page of
                         PreparationPage _ ->
@@ -865,7 +868,7 @@ viewHeader model =
                             False
               }
             , { label = "PDFs"
-              , url = AppUrl.toString <| routeToAppUrl RoutePdf
+              , link = link RoutePdf
               , isActive =
                     case model.page of
                         PdfPage _ ->

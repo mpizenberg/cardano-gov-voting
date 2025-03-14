@@ -21,7 +21,12 @@ type alias ViewContext msg =
 
 view :
     ViewContext msg
-    -> List { label : String, url : String, isActive : Bool }
+    ->
+        List
+            { link : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+            , label : String
+            , isActive : Bool
+            }
     -> Html msg
 view { mobileMenuIsOpen, toggleMobileMenu, walletConnector, walletConnectorMsgs } items =
     nav [ class "relative z-10 w-full bg-transparent" ]
@@ -135,11 +140,15 @@ view { mobileMenuIsOpen, toggleMobileMenu, walletConnector, walletConnectorMsgs 
         ]
 
 
-viewDesktopMenuItem : { label : String, url : String, isActive : Bool } -> Html msg
+viewDesktopMenuItem :
+    { link : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+    , label : String
+    , isActive : Bool
+    }
+    -> Html msg
 viewDesktopMenuItem item =
-    a
-        [ href item.url
-        , class
+    item.link
+        [ class
             ("px-4 py-2 font-medium transition-all duration-200 "
                 ++ (if item.isActive then
                         "text-gray-900 border-b-2 border-gray-800"
@@ -152,12 +161,16 @@ viewDesktopMenuItem item =
         [ text item.label ]
 
 
-viewMobileMenuItem : { label : String, url : String, isActive : Bool } -> Html msg
+viewMobileMenuItem :
+    { link : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+    , label : String
+    , isActive : Bool
+    }
+    -> Html msg
 viewMobileMenuItem item =
     li []
-        [ a
-            [ href item.url
-            , class
+        [ item.link
+            [ class
                 ("block px-4 py-2 rounded-md transition-colors duration-200 "
                     ++ (if item.isActive then
                             "text-gray-900 bg-gray-100"

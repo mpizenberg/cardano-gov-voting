@@ -786,18 +786,16 @@ view model =
     let
         backgroundStyle =
             if model.page == LandingPage then
-                -- Use transparent background on landing page to show gradients
                 HA.style "background" "transparent"
 
             else
-                -- Use gray background on other pages
                 HA.style "background" "#d9d9d9"
     in
     div
         [ HA.style "min-height" "100vh"
         , HA.style "position" "relative"
-        , HA.style "padding-bottom" "100px"
-        , backgroundStyle -- Apply the conditional background
+        , HA.style "padding-bottom" "80px"
+        , backgroundStyle
         ]
         [ -- Gradient circles (only on landing page)
           if model.page == LandingPage then
@@ -814,10 +812,6 @@ view model =
             , githubLink = "https://github.com/mpizenberg/cardano-gov-voting"
             }
         ]
-
-
-
--- Separate function for gradient backgrounds
 
 
 viewGradientBackgrounds : Html Msg

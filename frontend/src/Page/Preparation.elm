@@ -1569,26 +1569,31 @@ updateRationaleInternalVoteForm updateF numberStr model =
 
 validateMarkdownHeadings : String -> Result String ()
 validateMarkdownHeadings markdown =
-    let
-        lines =
-            String.lines markdown
+    case Md.parse markdown of
+        Err _ ->
+            Err "Invalid markdown syntax. Please check your formatting."
 
-        hasH1Heading =
-            List.any
-                (\line ->
-                    let
-                        trimmed =
-                            String.trim line
-                    in
-                    String.startsWith "# " trimmed
-                )
-                lines
-    in
-    if hasH1Heading then
-        Err "Please use heading level 2 (##) or higher. Level 1 headings (#) are reserved for the page title."
+        Ok blocks ->
+            if hasH1Heading blocks then
+                Err "Please use heading level 2 (##) or higher. Level 1 headings (#) are reserved for the page title."
 
-    else
-        Ok ()
+            else
+                Ok ()
+
+
+hasH1Heading : List Markdown.Block.Block -> Bool
+hasH1Heading blocks =
+    List.any isH1Block blocks
+
+
+isH1Block : Markdown.Block.Block -> Bool
+isH1Block block =
+    case block of
+        Markdown.Block.Heading level _ ->
+            level == Markdown.Block.H1
+
+        _ ->
+            False
 
 
 validateRationaleForm : Step RationaleForm {} Rationale -> Step RationaleForm {} Rationale
@@ -3294,7 +3299,7 @@ viewConclusion maybeConclusion =
         Just conclusion ->
             div []
                 [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "Conclusion" ]
-                , Html.p [ HA.class "text-gray-800" ] [ text conclusion ]
+                , Html.p [ HA.class "text-gray-800 whitespace-pre-wrap" ] [ text conclusion ]
                 ]
 
 

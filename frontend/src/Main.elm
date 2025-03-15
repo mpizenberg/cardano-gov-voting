@@ -822,8 +822,8 @@ view model =
         , viewErrors model.errors
         , Footer.view
             { copyright = "© 2025 Cardano Stiftung"
-            , disclaimerLink = "/page/disclaimer"
             , githubLink = "https://github.com/mpizenberg/cardano-gov-voting"
+            , disclaimerLink = link RouteDisclaimer
             }
         ]
 
@@ -917,8 +917,11 @@ viewHeader model =
         -- wallet connector stuff
         , walletConnector = walletConnectorState
         , walletConnectorMsgs = walletConnectorMsgs
+
+        -- links stuff
+        , logoLink = link RouteLanding
+        , navigationItems = navigationItems
         }
-        navigationItems
 
 
 viewContent : Model -> Html Msg

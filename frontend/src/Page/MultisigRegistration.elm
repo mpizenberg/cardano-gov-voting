@@ -1,4 +1,4 @@
-module Page.MultisigRegistration exposing (LoadedWallet, Model, Msg(..), RegisterTxSummary, UnregisterTxSummary, UpdateContext, ViewContext, initialModel, update, view)
+module Page.MultisigRegistration exposing (LoadedWallet, Model, Msg, RegisterTxSummary, UnregisterTxSummary, UpdateContext, ViewContext, initialModel, update, view)
 
 {-| This module handles the registration and unregistration of multisig DReps (Delegated Representatives)
 in the Cardano governance system.

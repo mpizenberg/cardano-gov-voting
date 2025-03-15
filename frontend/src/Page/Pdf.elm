@@ -1,4 +1,4 @@
-module Page.Pdf exposing (GovMetadataFile(..), Model, Msg(..), UpdateContext, ViewContext, initialModel, update, view)
+module Page.Pdf exposing (GovMetadataFile, Model, Msg, UpdateContext, ViewContext, initialModel, update, view)
 
 {-| This module handles the conversion of governance metadata JSON-LD files to PDF format.
 It specifically supports CIP-136 vote rationale documents, with potential for extension

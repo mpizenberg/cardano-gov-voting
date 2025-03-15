@@ -2674,7 +2674,9 @@ viewProposalSelectionStep ctx model =
                                     Dict.size proposalsDict
 
                                 visibleProposals =
-                                    List.take visibleCount allProposals
+                                    -- Sort proposals by expiration date
+                                    List.sortBy (\proposal -> proposal.epoch_validity.end) allProposals
+                                        |> List.take visibleCount
 
                                 hasMore =
                                     totalCount > visibleCount

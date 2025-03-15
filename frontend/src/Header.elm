@@ -3,8 +3,8 @@ module Header exposing
     , view
     )
 
-import Html exposing (Html, a, button, div, img, li, nav, span, text, ul)
-import Html.Attributes exposing (alt, class, href, src, style)
+import Html exposing (Html, button, div, img, li, nav, span, text, ul)
+import Html.Attributes exposing (alt, class, src, style)
 import Html.Events exposing (onClick)
 import WalletConnector
 
@@ -16,27 +16,27 @@ type alias ViewContext msg =
     -- Wallet connector stuff
     , walletConnector : WalletConnector.State
     , walletConnectorMsgs : WalletConnector.Msgs msg
-    }
 
-
-view :
-    ViewContext msg
-    ->
+    -- Links stuff
+    , logoLink : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+    , navigationItems :
         List
             { link : List (Html.Attribute msg) -> List (Html msg) -> Html msg
             , label : String
             , isActive : Bool
             }
-    -> Html msg
-view { mobileMenuIsOpen, toggleMobileMenu, walletConnector, walletConnectorMsgs } items =
+    }
+
+
+view : ViewContext msg -> Html msg
+view { mobileMenuIsOpen, toggleMobileMenu, walletConnector, walletConnectorMsgs, logoLink, navigationItems } =
     nav [ class "relative z-10 w-full bg-transparent" ]
         [ div [ class "container mx-auto py-6", style "padding-right" "6px" ]
             [ div [ class "flex items-center justify-between" ]
                 -- Logo section
                 [ div [ style "flex-shrink" "0" ]
-                    [ a
-                        [ href "/"
-                        , style "display" "flex"
+                    [ logoLink
+                        [ style "display" "flex"
                         , style "align-items" "center"
                         ]
                         [ img
@@ -58,7 +58,7 @@ view { mobileMenuIsOpen, toggleMobileMenu, walletConnector, walletConnectorMsgs 
 
                 -- Desktop menu
                 , div [ class "hidden md:flex space-x-8" ]
-                    (List.map viewDesktopMenuItem items)
+                    (List.map viewDesktopMenuItem navigationItems)
 
                 -- Wallet section (on the right)
                 , div [ class "hidden md:flex" ]
@@ -129,7 +129,7 @@ view { mobileMenuIsOpen, toggleMobileMenu, walletConnector, walletConnectorMsgs 
                 ]
                 [ div [ class "py-2" ]
                     [ ul [ class "flex flex-col space-y-4 mt-4" ]
-                        (List.map viewMobileMenuItem items)
+                        (List.map viewMobileMenuItem navigationItems)
                     , div [ class "mt-4 px-4" ]
                         [ div [ class "flex-shrink-0 min-w-[150px]" ]
                             [ WalletConnector.view walletConnectorMsgs walletConnector ]

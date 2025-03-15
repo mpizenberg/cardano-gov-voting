@@ -1,4 +1,4 @@
-module Page.MultisigRegistration exposing (LoadedWallet, Model, Msg, RegisterTxSummary, UnregisterTxSummary, UpdateContext, ViewContext, initialModel, update, view)
+module Page.MultisigRegistration exposing (LoadedWallet, Model, Msg, UpdateContext, ViewContext, initialModel, update, view)
 
 {-| This module handles the registration and unregistration of multisig DReps (Delegated Representatives)
 in the Cardano governance system.
@@ -47,6 +47,10 @@ import Natural
 -- ###################################################################
 
 
+type Model
+    = Model InnerModel
+
+
 {-| Core configuration for a multisig DRep:
 
   - minCount: Minimum number of required signatures (M in M-of-N)
@@ -55,7 +59,7 @@ import Natural
   - createOutputRef: Whether to create a reference script output
 
 -}
-type alias Model =
+type alias InnerModel =
     { minCount : Int
     , hashes : List String
     , register : Bool
@@ -93,14 +97,15 @@ type alias UnregisterTxSummary =
 
 initialModel : Model
 initialModel =
-    { minCount = 1
-    , hashes = []
-    , register = True
-    , createOutputRef = False
-    , registerTxSummary = Nothing
-    , unregisterTxSummary = Nothing
-    , error = Nothing
-    }
+    Model
+        { minCount = 1
+        , hashes = []
+        , register = True
+        , createOutputRef = False
+        , registerTxSummary = Nothing
+        , unregisterTxSummary = Nothing
+        , error = Nothing
+        }
 
 
 
@@ -135,7 +140,13 @@ type alias LoadedWallet =
 
 
 update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg )
-update ctx msg model =
+update ctx msg (Model model) =
+    innerUpdate ctx msg model
+        |> Tuple.mapFirst Model
+
+
+innerUpdate : UpdateContext msg -> Msg -> InnerModel -> ( InnerModel, Cmd msg )
+innerUpdate ctx msg model =
     case msg of
         MinCountChange countAsString ->
             case String.toInt countAsString of
@@ -179,7 +190,7 @@ update ctx msg model =
             validateFormAndBuildUnregister ctx model
 
 
-validateFormAndBuildRegister : UpdateContext msg -> Model -> ( Model, Cmd msg )
+validateFormAndBuildRegister : UpdateContext msg -> InnerModel -> ( InnerModel, Cmd msg )
 validateFormAndBuildRegister ctx model =
     let
         keyCount =
@@ -231,7 +242,7 @@ validateFormAndBuildRegister ctx model =
                 ( { model | error = Just "Cost models are missing, something went wrong sorry" }, Cmd.none )
 
 
-validateFormAndBuildUnregister : UpdateContext msg -> Model -> ( Model, Cmd msg )
+validateFormAndBuildUnregister : UpdateContext msg -> InnerModel -> ( InnerModel, Cmd msg )
 validateFormAndBuildUnregister ctx model =
     let
         keyCount =
@@ -317,7 +328,7 @@ Key aspects:
       - Uses ScriptNofK for M-of-N
 
 -}
-nativeMultisig : List (Bytes CredentialHash) -> Model -> MultisigConfig
+nativeMultisig : List (Bytes CredentialHash) -> InnerModel -> MultisigConfig
 nativeMultisig unsortedCreds model =
     let
         -- Sort the credentials to be deterministic, regardless of the keys orders
@@ -354,7 +365,7 @@ nativeMultisig unsortedCreds model =
     }
 
 
-buildRegisterTx : LoadedWallet -> CostModels -> List (Bytes CredentialHash) -> Model -> Result String ( TxFinalized, NativeScript, Bytes CredentialHash )
+buildRegisterTx : LoadedWallet -> CostModels -> List (Bytes CredentialHash) -> InnerModel -> Result String ( TxFinalized, NativeScript, Bytes CredentialHash )
 buildRegisterTx w costModels unsortedCreds model =
     let
         { sortedCredentials, nativeScript, scriptHash, drepCred } =
@@ -464,7 +475,7 @@ buildRegisterTx w costModels unsortedCreds model =
         |> Result.map (\tx -> ( tx, nativeScript, scriptHash ))
 
 
-buildUnregisterTx : LoadedWallet -> CostModels -> List (Bytes CredentialHash) -> Model -> Result String ( TxFinalized, NativeScript, Bytes CredentialHash )
+buildUnregisterTx : LoadedWallet -> CostModels -> List (Bytes CredentialHash) -> InnerModel -> Result String ( TxFinalized, NativeScript, Bytes CredentialHash )
 buildUnregisterTx w costModels unsortedCreds model =
     let
         { sortedCredentials, nativeScript, scriptHash } =
@@ -517,7 +528,7 @@ type alias ViewContext msg =
 
 
 view : ViewContext msg -> Model -> Html msg
-view ctx model =
+view ctx (Model model) =
     div [ HA.style "max-width" "1440px", HA.style "margin" "0 auto" ]
         [ div
             [ HA.style "position" "relative"
@@ -659,7 +670,7 @@ view ctx model =
         ]
 
 
-viewMultisigConfigForm : Model -> Html Msg
+viewMultisigConfigForm : InnerModel -> Html Msg
 viewMultisigConfigForm { minCount, hashes } =
     Helper.formContainer
         [ Html.div [ HA.class "flex items-center mb-4" ]
@@ -683,7 +694,7 @@ viewMultisigConfigForm { minCount, hashes } =
         ]
 
 
-viewRegisterForm : Model -> Html Msg
+viewRegisterForm : InnerModel -> Html Msg
 viewRegisterForm { register, createOutputRef } =
     Helper.formContainer
         [ Html.div [ HA.class "space-y-3 mb-4" ]

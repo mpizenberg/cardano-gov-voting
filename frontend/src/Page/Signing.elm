@@ -1,4 +1,4 @@
-module Page.Signing exposing (LoadedTxModel, Model(..), Msg(..), UpdateContext, ViewContext, addWalletSignatures, initialModel, recordSubmittedTx, resetSubmission, update, view)
+module Page.Signing exposing (LoadedTxModel, Model(..), Msg(..), UpdateContext, ViewContext, addWalletSignatures, getTxInfo, initialModel, recordSubmittedTx, resetSubmission, update, view)
 
 {-| This module handles the signing process for Cardano transactions, particularly
 focusing on complex scenarios like Native or Plutus script multi-signatures.
@@ -79,6 +79,16 @@ initialModel expectedSigners maybeTx =
 
         Nothing ->
             MissingTx
+
+
+getTxInfo : Model -> Maybe { tx : Transaction, txId : Bytes TransactionId }
+getTxInfo model =
+    case model of
+        LoadedTx loadedTxModel ->
+            Just { tx = loadedTxModel.tx, txId = loadedTxModel.txId }
+
+        _ ->
+            Nothing
 
 
 

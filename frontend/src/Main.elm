@@ -50,11 +50,12 @@ import Api exposing (ActiveProposal, CcInfo, DrepInfo, PoolInfo, ProtocolParams)
 import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
+import Cardano
 import Cardano.Address as Address exposing (Address, CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30 exposing (WalletDescriptor)
 import Cardano.Gov as Gov
 import Cardano.Transaction as Transaction exposing (Transaction)
-import Cardano.Utxo as Utxo exposing (Output)
+import Cardano.Utxo as Utxo exposing (Output, TransactionId)
 import ConcurrentTask exposing (ConcurrentTask)
 import ConcurrentTask.Extra
 import Dict exposing (Dict)
@@ -658,7 +659,15 @@ handleWalletResponse response model =
         Cip30.ApiResponse _ (Cip30.SubmittedTx txId) ->
             case model.page of
                 SigningPage pageModel ->
-                    ( { model | page = SigningPage <| Page.Signing.recordSubmittedTx txId pageModel }
+                    ( { model
+                        | page = SigningPage <| Page.Signing.recordSubmittedTx txId pageModel
+
+                        -- Update the wallet’s UTxOs
+                        , walletUtxos =
+                            Maybe.map2 updateWalletUtxosWithTx
+                                (Page.Signing.getTxInfo pageModel)
+                                model.walletUtxos
+                      }
                     , Cmd.none
                     )
 
@@ -688,6 +697,14 @@ handleWalletResponse response model =
             ( { model | errors = error :: model.errors }
             , Cmd.none
             )
+
+
+{-| Update the known state of the wallet’s UTxOs
+knowing the given transaction was just submitted to the network.
+-}
+updateWalletUtxosWithTx : { tx : Transaction, txId : Bytes TransactionId } -> Utxo.RefDict Output -> Utxo.RefDict Output
+updateWalletUtxosWithTx { tx, txId } utxos =
+    (Cardano.updateLocalState txId tx utxos).updatedState
 
 
 updateModelWithPrepToParentMsg : Maybe Page.Preparation.MsgToParent -> Model -> ( Model, Cmd Msg )

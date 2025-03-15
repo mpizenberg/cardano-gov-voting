@@ -1,4 +1,4 @@
-module Page.Pdf exposing (GovMetadataFile, Model, Msg, UpdateContext, ViewContext, initialModel, update, view)
+module Page.Pdf exposing (Model, Msg, UpdateContext, ViewContext, initialModel, update, view)
 
 {-| This module handles the conversion of governance metadata JSON-LD files to PDF format.
 It specifically supports CIP-136 vote rationale documents, with potential for extension
@@ -33,6 +33,10 @@ import Task
 -- ###################################################################
 
 
+type Model
+    = Model InnerModel
+
+
 {-| The application state, tracking:
 
   - The loaded JSON file content and its decoded representation
@@ -40,7 +44,7 @@ import Task
   - Any error messages that need to be displayed
 
 -}
-type alias Model =
+type alias InnerModel =
     { fileContent : Maybe { raw : String, name : String, decoded : GovMetadataFile }
     , pdfBytes : Maybe ElmBytes.Bytes
     , error : Maybe String
@@ -49,6 +53,11 @@ type alias Model =
 
 initialModel : Model
 initialModel =
+    Model innerInitialModel
+
+
+innerInitialModel : InnerModel
+innerInitialModel =
     { fileContent = Nothing
     , pdfBytes = Nothing
     , error = Nothing
@@ -84,7 +93,13 @@ type alias UpdateContext msg =
 
 
 update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg )
-update ctx msg model =
+update ctx msg (Model model) =
+    innerUpdate ctx msg model
+        |> Tuple.mapFirst Model
+
+
+innerUpdate : UpdateContext msg -> Msg -> InnerModel -> ( InnerModel, Cmd msg )
+innerUpdate ctx msg model =
     case msg of
         NoMsg ->
             ( model, Cmd.none )
@@ -104,7 +119,7 @@ update ctx msg model =
         LoadedJson filename fileContent ->
             case checkJsonMetadataType fileContent of
                 Err error ->
-                    ( { initialModel | error = Just <| "Unrecognized JSON LD metadata: " ++ error }
+                    ( { innerInitialModel | error = Just <| "Unrecognized JSON LD metadata: " ++ error }
                     , Cmd.none
                     )
 
@@ -239,7 +254,7 @@ type alias ViewContext msg =
 
 
 view : ViewContext msg -> Model -> Html msg
-view ctx model =
+view ctx (Model model) =
     let
         extLink href content =
             Html.a

@@ -98,6 +98,7 @@ type alias ActiveProposal =
     , actionType : String
     , metadataUrl : String
     , metadataHash : String
+    , epoch_validity : { start : Int, end : Int }
     , metadata : RemoteData String ProposalMetadata
     }
 
@@ -106,7 +107,7 @@ ogmiosGovProposalsDecoder : Decoder (List ActiveProposal)
 ogmiosGovProposalsDecoder =
     JD.field "result" <|
         JD.list <|
-            JD.map5 ActiveProposal
+            JD.map6 ActiveProposal
                 (JD.map2
                     (\id index ->
                         { transactionId = Bytes.fromHexUnchecked id
@@ -119,6 +120,11 @@ ogmiosGovProposalsDecoder =
                 (JD.at [ "action", "type" ] JD.string)
                 (JD.at [ "metadata", "url" ] JD.string)
                 (JD.at [ "metadata", "hash" ] JD.string)
+                (JD.map2
+                    (\start end -> { start = start, end = end })
+                    (JD.at [ "since", "epoch" ] JD.int)
+                    (JD.at [ "until", "epoch" ] JD.int)
+                )
                 (JD.succeed RemoteData.Loading)
 
 

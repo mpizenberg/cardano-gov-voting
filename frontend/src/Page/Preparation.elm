@@ -1,4 +1,4 @@
-module Page.Preparation exposing (AuthorWitness, BuildTxPrep, FeeProvider, FeeProviderForm, FeeProviderTemp, InternalVote, JsonLdContexts, LoadedWallet, MarkdownForm, Model, Msg, MsgToParent(..), Rationale, RationaleForm, RationaleSignatureForm, Reference, ReferenceType(..), Step, StorageForm, StorageMethod, TaskCompleted, UpdateContext, ViewContext, VoterPreparationForm, handleTaskCompleted, init, noInternalVote, pinRationaleFile, update, view)
+module Page.Preparation exposing (InternalVote, JsonLdContexts, LoadedWallet, Model, Msg, MsgToParent(..), Rationale, Reference, ReferenceType(..), TaskCompleted, UpdateContext, ViewContext, handleTaskCompleted, init, noInternalVote, pinRationaleFile, update, view)
 
 {-| This module handles the complete vote preparation workflow, from identifying
 the voter to signing the transaction, which is handled by another page.
@@ -76,10 +76,14 @@ import Url
 -- ###################################################################
 
 
+type Model
+    = Model InnerModel
+
+
 {-| Main model containing the state for all preparation steps.
 Each step uses the Step type to track its progress.
 -}
-type alias Model =
+type alias InnerModel =
     { someRefUtxos : Utxo.RefDict Output
     , voterStep : Step VoterPreparationForm VoterWitness VoterWitness
     , pickProposalStep : Step {} {} ActiveProposal
@@ -110,17 +114,18 @@ type Step prep validating done
 
 init : Model
 init =
-    { someRefUtxos = Utxo.emptyRefDict
-    , voterStep = Preparing initVoterForm
-    , pickProposalStep = Preparing {}
-    , rationaleCreationStep = Preparing initRationaleForm
-    , rationaleSignatureStep = Preparing initRationaleSignatureForm
-    , permanentStorageStep = Preparing initStorageForm
-    , feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing })
-    , buildTxStep = Preparing { error = Nothing }
-    , signTxStep = Preparing { error = Nothing }
-    , visibleProposalCount = 10
-    }
+    Model
+        { someRefUtxos = Utxo.emptyRefDict
+        , voterStep = Preparing initVoterForm
+        , pickProposalStep = Preparing {}
+        , rationaleCreationStep = Preparing initRationaleForm
+        , rationaleSignatureStep = Preparing initRationaleSignatureForm
+        , permanentStorageStep = Preparing initStorageForm
+        , feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing })
+        , buildTxStep = Preparing { error = Nothing }
+        , signTxStep = Preparing { error = Nothing }
+        , visibleProposalCount = 10
+        }
 
 
 
@@ -529,7 +534,16 @@ type alias LoadedWallet =
 
 
 update : UpdateContext msg -> Msg -> Model -> ( Model, Cmd msg, Maybe MsgToParent )
-update ctx msg model =
+update ctx msg (Model model) =
+    let
+        ( updatedModel, cmd, toParent ) =
+            innerUpdate ctx msg model
+    in
+    ( Model updatedModel, cmd, toParent )
+
+
+innerUpdate : UpdateContext msg -> Msg -> InnerModel -> ( InnerModel, Cmd msg, Maybe MsgToParent )
+innerUpdate ctx msg model =
     case msg of
         ShowMoreProposals currentCount ->
             ( { model | visibleProposalCount = currentCount + 10 }
@@ -1085,7 +1099,7 @@ update ctx msg model =
 
 
 handleTaskCompleted : TaskCompleted -> Model -> ( Model, Cmd Msg, Maybe MsgToParent )
-handleTaskCompleted task model =
+handleTaskCompleted task (Model model) =
     case task of
         GotRefUtxoTxBytes outputRef bytesResult ->
             case ( model.voterStep, bytesResult ) of
@@ -1099,7 +1113,7 @@ handleTaskCompleted task model =
                                         ++ ": "
                                         ++ Bytes.toHex txBytes
                             in
-                            ( { model | voterStep = Preparing { form | error = Just errorMsg } }
+                            ( Model { model | voterStep = Preparing { form | error = Just errorMsg } }
                             , Cmd.none
                             , Nothing
                             )
@@ -1114,53 +1128,55 @@ handleTaskCompleted task model =
                                                 ++ ") doesn’t seem to have an output at position "
                                                 ++ String.fromInt outputRef.outputIndex
                                     in
-                                    ( { model | voterStep = Preparing { form | error = Just errorMsg } }
+                                    ( Model { model | voterStep = Preparing { form | error = Just errorMsg } }
                                     , Cmd.none
                                     , Nothing
                                     )
 
                                 Just output ->
-                                    ( { model
-                                        | voterStep = Done { form | error = Nothing } voterWitness
-                                        , someRefUtxos = Dict.Any.insert outputRef output model.someRefUtxos
-                                      }
+                                    ( Model
+                                        { model
+                                            | voterStep = Done { form | error = Nothing } voterWitness
+                                            , someRefUtxos = Dict.Any.insert outputRef output model.someRefUtxos
+                                        }
                                     , Cmd.none
                                     , Nothing
                                     )
 
                 ( Validating form _, Err httpError ) ->
-                    ( { model | voterStep = Preparing { form | error = Just (Debug.toString httpError) } }
+                    ( Model { model | voterStep = Preparing { form | error = Just (Debug.toString httpError) } }
                     , Cmd.none
                     , Nothing
                     )
 
                 _ ->
-                    ( model, Cmd.none, Nothing )
+                    ( Model model, Cmd.none, Nothing )
 
         GotScriptInfoTask scriptInfoResult ->
             case scriptInfoResult of
                 Err error ->
-                    ( updateVoterForm (\form -> { form | scriptInfo = RemoteData.Failure error }) model
+                    ( Model <| updateVoterForm (\form -> { form | scriptInfo = RemoteData.Failure error }) model
                     , Cmd.none
                     , Nothing
                     )
 
                 Ok scriptInfo ->
-                    ( updateVoterForm
-                        (\form ->
-                            { form
-                                | scriptInfo = RemoteData.Success scriptInfo
-                                , expectedSigners =
-                                    case scriptInfo.script of
-                                        Script.Native nativeScript ->
-                                            Script.extractSigners nativeScript
-                                                |> Dict.map (\_ key -> { expected = True, key = key })
+                    ( Model <|
+                        updateVoterForm
+                            (\form ->
+                                { form
+                                    | scriptInfo = RemoteData.Success scriptInfo
+                                    , expectedSigners =
+                                        case scriptInfo.script of
+                                            Script.Native nativeScript ->
+                                                Script.extractSigners nativeScript
+                                                    |> Dict.map (\_ key -> { expected = True, key = key })
 
-                                        Script.Plutus _ ->
-                                            Dict.empty
-                            }
-                        )
-                        model
+                                            Script.Plutus _ ->
+                                                Dict.empty
+                                }
+                            )
+                            model
                     , Cmd.none
                     , Just <| CacheScriptInfo scriptInfo
                     )
@@ -1170,7 +1186,7 @@ handleTaskCompleted task model =
 -- Voter Step
 
 
-updateVoterForm : (VoterPreparationForm -> VoterPreparationForm) -> Model -> Model
+updateVoterForm : (VoterPreparationForm -> VoterPreparationForm) -> InnerModel -> InnerModel
 updateVoterForm f ({ voterStep } as model) =
     case voterStep of
         Preparing form ->
@@ -1545,7 +1561,7 @@ utxoRefFromStr str =
 -- Rationale Step
 
 
-updateRationaleForm : (RationaleForm -> RationaleForm) -> Model -> Model
+updateRationaleForm : (RationaleForm -> RationaleForm) -> InnerModel -> InnerModel
 updateRationaleForm f ({ rationaleCreationStep } as model) =
     case rationaleCreationStep of
         Preparing form ->
@@ -1555,7 +1571,7 @@ updateRationaleForm f ({ rationaleCreationStep } as model) =
             model
 
 
-updateRationaleInternalVoteForm : (Int -> InternalVote -> InternalVote) -> String -> Model -> Model
+updateRationaleInternalVoteForm : (Int -> InternalVote -> InternalVote) -> String -> InnerModel -> InnerModel
 updateRationaleInternalVoteForm updateF numberStr model =
     let
         rationaleUpdate : RationaleForm -> RationaleForm
@@ -1816,7 +1832,7 @@ encodeRefType refType =
             JE.string "RelevantArticles"
 
 
-updateAuthorsForm : (List AuthorWitness -> List AuthorWitness) -> Model -> Model
+updateAuthorsForm : (List AuthorWitness -> List AuthorWitness) -> InnerModel -> InnerModel
 updateAuthorsForm f ({ rationaleSignatureStep } as model) =
     case rationaleSignatureStep of
         Preparing form ->
@@ -1906,7 +1922,7 @@ skipRationaleSignature jsonLdContexts step =
             step
 
 
-validateRationaleSignature : JsonLdContexts -> Model -> ( Model, Cmd msg, Maybe MsgToParent )
+validateRationaleSignature : JsonLdContexts -> InnerModel -> ( InnerModel, Cmd msg, Maybe MsgToParent )
 validateRationaleSignature jsonLdContexts model =
     case model.rationaleSignatureStep of
         Preparing ({ authors } as form) ->
@@ -2029,7 +2045,7 @@ reduceResults results =
 -- Permanent Storage Step
 
 
-updateStorageForm : (StorageForm -> StorageForm) -> Model -> Model
+updateStorageForm : (StorageForm -> StorageForm) -> InnerModel -> InnerModel
 updateStorageForm formUpdate model =
     case model.permanentStorageStep of
         Preparing form ->
@@ -2042,7 +2058,7 @@ updateStorageForm formUpdate model =
             model
 
 
-validateIpfsFormAndSendPinRequest : UpdateContext msg -> StorageForm -> Model -> ( Model, Cmd msg, Maybe MsgToParent )
+validateIpfsFormAndSendPinRequest : UpdateContext msg -> StorageForm -> InnerModel -> ( InnerModel, Cmd msg, Maybe MsgToParent )
 validateIpfsFormAndSendPinRequest ctx form model =
     case ( model.rationaleSignatureStep, validateIpfsForm form ) of
         ( Done _ ratSig, Ok _ ) ->
@@ -2098,15 +2114,15 @@ validateIpfsForm form =
 
 
 pinRationaleFile : JD.Value -> Model -> ( Model, Cmd Msg )
-pinRationaleFile fileAsValue model =
+pinRationaleFile fileAsValue (Model model) =
     case ( JD.decodeValue File.decoder fileAsValue, model.permanentStorageStep ) of
         ( Err error, Validating form _ ) ->
-            ( { model | permanentStorageStep = Preparing { form | error = Just <| JD.errorToString error } }
+            ( Model { model | permanentStorageStep = Preparing { form | error = Just <| JD.errorToString error } }
             , Cmd.none
             )
 
         ( Ok file, Validating storageForm _ ) ->
-            ( model
+            ( Model model
             , case storageForm.storageMethod of
                 StandardIPFS ->
                     Api.defaultApiProvider.ipfsCfAdd
@@ -2124,10 +2140,10 @@ pinRationaleFile fileAsValue model =
 
         -- Ignore if we aren't validating the permanent storage step
         _ ->
-            ( model, Cmd.none )
+            ( Model model, Cmd.none )
 
 
-handleIpfsAnswer : Model -> StorageForm -> IpfsAnswer -> ( Model, Cmd msg, Maybe MsgToParent )
+handleIpfsAnswer : InnerModel -> StorageForm -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
 handleIpfsAnswer model form ipfsAnswer =
     case ipfsAnswer of
         IpfsError error ->
@@ -2147,7 +2163,7 @@ handleIpfsAnswer model form ipfsAnswer =
 -- Fee Provider Step
 
 
-updateFeeProviderForm : FeeProviderForm -> Model -> Model
+updateFeeProviderForm : FeeProviderForm -> InnerModel -> InnerModel
 updateFeeProviderForm form model =
     case model.feeProviderStep of
         Preparing _ ->
@@ -2200,7 +2216,7 @@ type alias TxRequirements =
     }
 
 
-allPrepSteps : Maybe CostModels -> Model -> Result String TxRequirements
+allPrepSteps : Maybe CostModels -> InnerModel -> Result String TxRequirements
 allPrepSteps maybeCostModels m =
     case ( maybeCostModels, ( m.voterStep, m.pickProposalStep, m.rationaleSignatureStep ), ( m.permanentStorageStep, m.feeProviderStep ) ) of
         ( Just costModels, ( Done _ voter, Done _ p, Done _ r ), ( Done _ s, Done _ f ) ) ->
@@ -2255,7 +2271,7 @@ type alias ViewContext msg =
 
 
 view : ViewContext msg -> Model -> Html msg
-view ctx model =
+view ctx (Model model) =
     div [ HA.style "max-width" "1440px", HA.style "margin" "0 auto" ]
         [ div
             [ HA.style "position" "relative"
@@ -2636,7 +2652,7 @@ viewIdentifiedVoter form voter =
 --
 
 
-viewProposalSelectionStep : ViewContext msg -> Model -> Html msg
+viewProposalSelectionStep : ViewContext msg -> InnerModel -> Html msg
 viewProposalSelectionStep ctx model =
     case model.pickProposalStep of
         Preparing _ ->
@@ -3820,7 +3836,7 @@ viewFeeProviderForm feeProviderForm =
 --
 
 
-viewBuildTxStep : ViewContext msg -> Model -> Html msg
+viewBuildTxStep : ViewContext msg -> InnerModel -> Html msg
 viewBuildTxStep ctx model =
     case ( allPrepSteps ctx.costModels model, model.buildTxStep ) of
         ( Err error, _ ) ->

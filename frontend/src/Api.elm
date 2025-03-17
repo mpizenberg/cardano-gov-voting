@@ -45,6 +45,7 @@ So this is how there is a mix of regular `(...) -> Cmd msg` and `ConcurrentTask 
 -}
 type alias ApiProvider msg =
     { loadProtocolParams : NetworkId -> (Result Http.Error ProtocolParams -> msg) -> Cmd msg
+    , queryEpoch : NetworkId -> (Result Http.Error Int -> msg) -> Cmd msg
     , loadGovProposals : NetworkId -> (Result Http.Error (List ActiveProposal) -> msg) -> Cmd msg
     , loadProposalMetadata : String -> ConcurrentTask String ProposalMetadata
     , retrieveTx : NetworkId -> Bytes TransactionId -> ConcurrentTask ConcurrentTask.Http.Error (Bytes Transaction)
@@ -82,6 +83,15 @@ protocolParamsDecoder =
         (JD.at [ "result", "plutusCostModels", "plutus:v2" ] <| JD.list JD.int)
         (JD.at [ "result", "plutusCostModels", "plutus:v3" ] <| JD.list JD.int)
         (JD.at [ "result", "delegateRepresentativeDeposit", "ada", "lovelace" ] <| JD.map Natural.fromSafeInt JD.int)
+
+
+
+-- Epoch
+
+
+ogmiosEpochDecoder : Decoder Int
+ogmiosEpochDecoder =
+    JD.field "result" JD.int
 
 
 
@@ -416,6 +426,25 @@ defaultApiProvider =
                             ]
                         )
                 , expect = Http.expectJson toMsg protocolParamsDecoder
+                , timeout = Nothing
+                , tracker = Nothing
+                }
+
+    -- Query epoch via Koios
+    , queryEpoch =
+        \networkId toMsg ->
+            Http.request
+                { method = "POST"
+                , url = koiosUrl networkId ++ "/ogmios"
+                , headers = [ Http.header "Authorization" <| "Bearer " ++ koiosApiToken ]
+                , body =
+                    Http.jsonBody
+                        (JE.object
+                            [ ( "jsonrpc", JE.string "2.0" )
+                            , ( "method", JE.string "queryLedgerState/epoch" )
+                            ]
+                        )
+                , expect = Http.expectJson toMsg ogmiosEpochDecoder
                 , timeout = Nothing
                 , tracker = Nothing
                 }

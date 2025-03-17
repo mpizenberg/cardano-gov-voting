@@ -48,7 +48,7 @@ import Dict.Any
 import File exposing (File)
 import File.Download
 import File.Select
-import Helper exposing (prettyAdaLovelace, prettyAddr)
+import Helper exposing (prettyAdaLovelace)
 import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onCheck, onClick)
@@ -90,7 +90,6 @@ type alias InnerModel =
     , rationaleCreationStep : Step RationaleForm {} Rationale
     , rationaleSignatureStep : Step RationaleSignatureForm {} RationaleSignature
     , permanentStorageStep : Step StorageForm {} Storage
-    , feeProviderStep : Step FeeProviderForm FeeProviderTemp FeeProvider
     , buildTxStep : Step BuildTxPrep {} TxFinalized
     , signTxStep : Step { error : Maybe String } SigningTx SignedTx
     , visibleProposalCount : Int
@@ -121,7 +120,6 @@ init =
         , rationaleCreationStep = Preparing initRationaleForm
         , rationaleSignatureStep = Preparing initRationaleSignatureForm
         , permanentStorageStep = Preparing initStorageForm
-        , feeProviderStep = Preparing (ConnectedWalletFeeProvider { error = Nothing })
         , buildTxStep = Preparing { error = Nothing }
         , signTxStep = Preparing { error = Nothing }
         , visibleProposalCount = 10
@@ -353,27 +351,6 @@ type alias IpfsFile =
 
 
 
--- Fee Provider Step
-
-
-type FeeProviderForm
-    = ConnectedWalletFeeProvider { error : Maybe String }
-    | ExternalFeeProvider { endpoint : String, error : Maybe String }
-
-
-type alias FeeProviderTemp =
-    { address : Maybe Address
-    , utxos : Maybe (Utxo.RefDict Output)
-    }
-
-
-type alias FeeProvider =
-    { address : Address
-    , utxos : Utxo.RefDict Output
-    }
-
-
-
 -- Build Tx Step
 
 
@@ -485,11 +462,6 @@ type Msg
     | PinJsonIpfsButtonClicked
     | GotIpfsAnswer (Result String IpfsAnswer)
     | AddOtherStorageButtonCLicked
-      -- Fee Provider Step
-    | FeeProviderUpdated FeeProviderForm
-    | ValidateFeeProviderFormButtonClicked
-    | ReceivedFeeProviderUtxos FeeProvider
-    | ChangeFeeProviderButtonClicked
       -- Build Tx Step
     | BuildTxButtonClicked Vote
     | ChangeVoteButtonClicked
@@ -514,7 +486,6 @@ type alias UpdateContext msg =
     , ccsInfo : Dict String CcInfo
     , poolsInfo : Dict String PoolInfo
     , loadedWallet : Maybe LoadedWallet
-    , feeProviderAskUtxosCmd : Cmd msg
     , jsonLdContexts : JsonLdContexts
     , jsonRationaleToFile : { fileContent : String, fileName : String } -> Cmd msg
     , costModels : Maybe CostModels
@@ -672,7 +643,6 @@ innerUpdate ctx msg model =
                       -- |> resetRationaleCreation
                       -- |> resetRationaleSignature
                       -- |> resetStorage
-                      -- |> resetFeeProvider
                       -- |> resetTxBuilding
                       -- |> resetTxSigning
                     , Cmd.none
@@ -1006,64 +976,17 @@ innerUpdate ctx msg model =
                     )
 
         --
-        -- Fee Provider Step
-        --
-        FeeProviderUpdated feeProviderForm ->
-            ( updateFeeProviderForm feeProviderForm model
-            , Cmd.none
-            , Nothing
-            )
-
-        ValidateFeeProviderFormButtonClicked ->
-            case model.feeProviderStep of
-                Preparing form ->
-                    case validateFeeProviderForm ctx.loadedWallet form of
-                        (Validating _ _) as validating ->
-                            ( { model | feeProviderStep = validating }
-                            , ctx.feeProviderAskUtxosCmd
-                            , Nothing
-                            )
-
-                        validated ->
-                            ( { model | feeProviderStep = validated }, Cmd.none, Nothing )
-
-                _ ->
-                    ( model, Cmd.none, Nothing )
-
-        ReceivedFeeProviderUtxos feeProvider ->
-            case model.feeProviderStep of
-                Validating form _ ->
-                    ( { model | feeProviderStep = Done form feeProvider }
-                    , Cmd.none
-                    , Nothing
-                    )
-
-                _ ->
-                    ( model, Cmd.none, Nothing )
-
-        ChangeFeeProviderButtonClicked ->
-            case model.feeProviderStep of
-                Done prep _ ->
-                    ( { model | feeProviderStep = Preparing prep }
-                    , Cmd.none
-                    , Nothing
-                    )
-
-                _ ->
-                    ( model, Cmd.none, Nothing )
-
-        --
         -- Build Tx Step
         --
         BuildTxButtonClicked vote ->
-            case allPrepSteps ctx.costModels model of
+            case allPrepSteps ctx model of
                 Err error ->
                     ( { model | buildTxStep = Preparing { error = Just error } }
                     , Cmd.none
                     , Nothing
                     )
 
-                Ok { voter, actionId, rationaleAnchor, localStateUtxos, feeProviderAddress, costModels } ->
+                Ok { voter, actionId, rationaleAnchor, localStateUtxos, walletAddress, costModels } ->
                     let
                         tryTx =
                             [ Cardano.Vote voter [ { actionId = actionId, vote = vote, rationale = Just rationaleAnchor } ]
@@ -1075,7 +998,7 @@ innerUpdate ctx msg model =
                                     , evalScriptsCosts = Uplc.evalScriptsCosts Uplc.defaultVmConfig
                                     , costModels = costModels
                                     }
-                                    (Cardano.AutoFee { paymentSource = feeProviderAddress })
+                                    (Cardano.AutoFee { paymentSource = walletAddress })
                                     []
                     in
                     case tryTx of
@@ -2160,40 +2083,6 @@ handleIpfsAnswer model form ipfsAnswer =
 
 
 
--- Fee Provider Step
-
-
-updateFeeProviderForm : FeeProviderForm -> InnerModel -> InnerModel
-updateFeeProviderForm form model =
-    case model.feeProviderStep of
-        Preparing _ ->
-            { model | feeProviderStep = Preparing form }
-
-        _ ->
-            model
-
-
-{-| Check if the external endpoint seems legit.
--}
-validateFeeProviderForm : Maybe LoadedWallet -> FeeProviderForm -> Step FeeProviderForm FeeProviderTemp FeeProvider
-validateFeeProviderForm maybeWallet feeProviderForm =
-    case ( maybeWallet, feeProviderForm ) of
-        ( Nothing, ConnectedWalletFeeProvider _ ) ->
-            Preparing (ConnectedWalletFeeProvider { error = Just "No wallet connected, please connect a wallet first." })
-
-        ( Just { changeAddress, utxos }, ConnectedWalletFeeProvider _ ) ->
-            Done feeProviderForm { address = changeAddress, utxos = utxos }
-
-        ( _, ExternalFeeProvider { endpoint } ) ->
-            case Url.fromString endpoint of
-                Just _ ->
-                    Validating feeProviderForm { address = Nothing, utxos = Nothing }
-
-                Nothing ->
-                    Preparing (ExternalFeeProvider { endpoint = endpoint, error = Just <| "The endpoint does not look like a valid URL: " ++ endpoint })
-
-
-
 -- Build Tx Step
 
 
@@ -2211,15 +2100,15 @@ type alias TxRequirements =
     , actionId : ActionId
     , rationaleAnchor : Anchor
     , localStateUtxos : Utxo.RefDict Output
-    , feeProviderAddress : Address
+    , walletAddress : Address
     , costModels : CostModels
     }
 
 
-allPrepSteps : Maybe CostModels -> InnerModel -> Result String TxRequirements
-allPrepSteps maybeCostModels m =
-    case ( maybeCostModels, ( m.voterStep, m.pickProposalStep, m.rationaleSignatureStep ), ( m.permanentStorageStep, m.feeProviderStep ) ) of
-        ( Just costModels, ( Done _ voter, Done _ p, Done _ r ), ( Done _ s, Done _ f ) ) ->
+allPrepSteps : { a | loadedWallet : Maybe LoadedWallet, costModels : Maybe CostModels } -> InnerModel -> Result String TxRequirements
+allPrepSteps { loadedWallet, costModels } m =
+    case ( costModels, ( m.voterStep, m.pickProposalStep, m.rationaleSignatureStep ), ( m.permanentStorageStep, loadedWallet ) ) of
+        ( Just theCostModels, ( Done _ voter, Done _ p, Done _ r ), ( Done _ s, Just { utxos, changeAddress } ) ) ->
             Ok
                 { voter = voter
                 , actionId = p.id
@@ -2231,9 +2120,9 @@ allPrepSteps maybeCostModels m =
                             |> blake2b256 Nothing
                             |> Bytes.fromU8
                     }
-                , localStateUtxos = Dict.Any.union m.someRefUtxos f.utxos
-                , feeProviderAddress = f.address
-                , costModels = costModels
+                , localStateUtxos = Dict.Any.union m.someRefUtxos utxos
+                , walletAddress = changeAddress
+                , costModels = theCostModels
                 }
 
         ( Nothing, _, _ ) ->
@@ -2261,7 +2150,7 @@ allPrepSteps maybeCostModels m =
 -}
 type alias ViewContext msg =
     { wrapMsg : Msg -> msg
-    , walletChangeAddress : Maybe Address
+    , loadedWallet : Maybe LoadedWallet
     , proposals : WebData (Dict String ActiveProposal)
     , jsonLdContexts : JsonLdContexts
     , costModels : Maybe CostModels
@@ -2338,8 +2227,6 @@ view ctx (Model model) =
             , viewRationaleSignatureStep ctx model.rationaleCreationStep model.rationaleSignatureStep
             , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
             , viewPermanentStorageStep ctx model.rationaleSignatureStep model.permanentStorageStep
-            , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
-            , viewFeeProviderStep ctx model.feeProviderStep
             , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
             , viewBuildTxStep ctx model
             , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
@@ -3726,120 +3613,14 @@ viewHeader n ( field, value ) =
 
 
 --
--- Fee Provider Step
---
-
-
-viewFeeProviderStep : ViewContext msg -> Step FeeProviderForm FeeProviderTemp FeeProvider -> Html msg
-viewFeeProviderStep ctx step =
-    case step of
-        Preparing form ->
-            div [ HA.class "container mx-auto mb-4" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Fee Provider" ]
-                , Html.map ctx.wrapMsg <| viewFeeProviderForm form
-                , Html.p [] [ Helper.viewButton "Confirm Fee Provider" (ctx.wrapMsg ValidateFeeProviderFormButtonClicked) ]
-                , let
-                    maybeError =
-                        case form of
-                            ConnectedWalletFeeProvider { error } ->
-                                error
-
-                            ExternalFeeProvider { error } ->
-                                error
-                  in
-                  case maybeError of
-                    Just error ->
-                        Html.p [] [ Html.pre [] [ text error ] ]
-
-                    Nothing ->
-                        text ""
-                ]
-
-        Validating _ _ ->
-            div [ HA.class "container mx-auto mb-4" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Fee Provider" ]
-                , Html.p [] [ text "validating fee provider information ..." ]
-                ]
-
-        Done _ { address, utxos } ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Fee Provider" ]
-                , Helper.formContainer
-                    [ Html.p [ HA.class "mb-4" ]
-                        [ Html.strong [ HA.class "font-medium" ] [ text "Fee provider configured successfully:" ]
-                        ]
-                    , div [ HA.class "p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
-                        [ Html.div [ HA.class "mb-2" ]
-                            [ Html.span [ HA.class "font-bold mr-2" ] [ text "Address:" ]
-                            , Html.span [ HA.class "font-mono break-all" ] [ text <| prettyAddr address ]
-                            ]
-                        , Html.div []
-                            [ Html.span [ HA.class "font-bold mr-2" ] [ text "Available UTxO count:" ]
-                            , Html.span [ HA.class "font-mono" ] [ text <| String.fromInt (Dict.Any.size utxos) ]
-                            ]
-                        ]
-                    , Html.p [] [ Helper.viewButton "Change fee provider" (ctx.wrapMsg ChangeFeeProviderButtonClicked) ]
-                    ]
-                ]
-
-
-viewFeeProviderForm : FeeProviderForm -> Html Msg
-viewFeeProviderForm feeProviderForm =
-    let
-        isUsingWalletForFees =
-            case feeProviderForm of
-                ConnectedWalletFeeProvider _ ->
-                    True
-
-                _ ->
-                    False
-    in
-    div []
-        [ Html.h4 [ HA.class "text-xl mt-4 mb-2" ] [ text "Payment Method" ]
-        , Helper.formContainer
-            [ div [ HA.class "flex items-center mb-2" ]
-                [ Html.input
-                    [ HA.type_ "radio"
-                    , HA.name "fee-provider"
-                    , HA.checked isUsingWalletForFees
-                    , onClick (FeeProviderUpdated (ConnectedWalletFeeProvider { error = Nothing }))
-                    , HA.class "mr-2"
-                    ]
-                    []
-                , Html.label [ HA.class "text-base" ] [ text "Use connected wallet" ]
-                ]
-            , div [ HA.class "flex items-center mb-4" ]
-                [ Html.input
-                    [ HA.type_ "radio"
-                    , HA.name "fee-provider"
-                    , HA.checked (not isUsingWalletForFees)
-                    , onClick (FeeProviderUpdated (ExternalFeeProvider { endpoint = "", error = Nothing }))
-                    , HA.class "mr-2"
-                    ]
-                    []
-                , Html.label [ HA.class "text-base" ] [ text "(WIP) Use external fee provider" ]
-                ]
-            , case feeProviderForm of
-                ExternalFeeProvider { endpoint, error } ->
-                    Helper.labeledField "External Provider Endpoint"
-                        (Helper.textFieldInline endpoint (\s -> FeeProviderUpdated (ExternalFeeProvider { endpoint = s, error = error })))
-
-                _ ->
-                    text ""
-            ]
-        ]
-
-
-
---
 -- Tx Building Step
 --
 
 
 viewBuildTxStep : ViewContext msg -> InnerModel -> Html msg
 viewBuildTxStep ctx model =
-    case ( allPrepSteps ctx.costModels model, model.buildTxStep ) of
-        ( Err error, _ ) ->
+    case ( allPrepSteps ctx model, model.buildTxStep ) of
+        ( Err _, _ ) ->
             let
                 missingStepsDisplay =
                     case model.voterStep of
@@ -3885,15 +3666,12 @@ viewBuildTxStep ctx model =
                         Done _ _ ->
                             text ""
 
-                feeProviderStepDisplay =
-                    case model.feeProviderStep of
-                        Preparing _ ->
-                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "Fee provider not set" ]
+                connectedWalletDisplay =
+                    case ctx.loadedWallet of
+                        Nothing ->
+                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "Connect the wallet please" ]
 
-                        Validating _ _ ->
-                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "Fee provider validation in progress" ]
-
-                        Done _ _ ->
+                        Just _ ->
                             text ""
 
                 costModelsDisplay =
@@ -3913,16 +3691,8 @@ viewBuildTxStep ctx model =
                         , proposalStepDisplay
                         , rationaleStepDisplay
                         , storageStepDisplay
-                        , feeProviderStepDisplay
+                        , connectedWalletDisplay
                         , costModelsDisplay
-                        , if String.isEmpty error then
-                            text ""
-
-                          else
-                            Html.div [ HA.class "text-red-600 mt-4 pt-4" ]
-                                [ Html.strong [] [ text "Error: " ]
-                                , text error
-                                ]
                         ]
                     ]
                 ]

@@ -395,7 +395,6 @@ update msg model =
                             , ccsInfo = model.ccsInfo
                             , poolsInfo = model.poolsInfo
                             , loadedWallet = loadedWallet
-                            , feeProviderAskUtxosCmd = Cmd.none -- TODO
                             , jsonLdContexts = model.jsonLdContexts
                             , jsonRationaleToFile = jsonRationaleToFile
                             , costModels = Maybe.map .costModels model.protocolParams
@@ -934,9 +933,18 @@ viewContent model =
             Page.Disclaimer.view
 
         PreparationPage prepModel ->
+            let
+                loadedWallet =
+                    case ( model.wallet, model.walletChangeAddress, model.walletUtxos ) of
+                        ( Just wallet, Just address, Just utxos ) ->
+                            Just { wallet = wallet, changeAddress = address, utxos = utxos }
+
+                        _ ->
+                            Nothing
+            in
             Page.Preparation.view
                 { wrapMsg = PreparationPageMsg
-                , walletChangeAddress = model.walletChangeAddress
+                , loadedWallet = loadedWallet
                 , proposals = model.proposals
                 , jsonLdContexts = model.jsonLdContexts
                 , costModels = Maybe.map .costModels model.protocolParams

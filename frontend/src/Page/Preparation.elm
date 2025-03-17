@@ -2548,18 +2548,6 @@ viewProposalSelectionStep ctx model =
                 visibleCount =
                     model.visibleProposalCount
 
-                networkBadge =
-                    case ctx.networkId of
-                        Mainnet ->
-                            div
-                                [ HA.class "inline-flex items-center bg-green-100 text-green-800 px-2 py-1 rounded text-sm font-medium ml-2" ]
-                                [ text "Mainnet" ]
-
-                        Testnet ->
-                            div
-                                [ HA.class "inline-flex items-center bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm font-medium ml-2" ]
-                                [ text "Testnet" ]
-
                 networkBadgeStyle =
                     case ctx.networkId of
                         Mainnet ->

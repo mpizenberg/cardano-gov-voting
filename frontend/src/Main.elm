@@ -1001,8 +1001,7 @@ viewLandingPage =
                 ]
                 [ text "A simple tool to help every Cardano stakeholder participate in on-chain governance with confidence." ]
             , Html.p
-                [ HA.style "font-size" "min(1.2rem, 4vw)"
-                , HA.style "line-height" "1.6"
+                [ HA.style "line-height" "1.6"
                 , HA.style "margin-bottom" "2.5rem"
                 , HA.style "color" "#555"
                 ]
@@ -1012,6 +1011,111 @@ viewLandingPage =
                     [ HA.class "inline-block" ]
                     [ Helper.viewButton "Start Voting Process" NoMsg ]
                 ]
+            , div
+                [ HA.style "margin-bottom" "4rem"
+                ]
+                [ Html.h3
+                    [ HA.style "font-size" "1.5rem"
+                    , HA.style "font-weight" "600"
+                    , HA.style "margin-bottom" "1.5rem"
+                    , HA.style "color" "#272727"
+                    ]
+                    [ text "Cardano Governance Ecosystem" ]
+                , Html.p
+                    [ HA.style "font-size" "1.1rem"
+                    , HA.style "margin-bottom" "1.5rem"
+                    , HA.style "color" "#444"
+                    ]
+                    [ text "While this tool focuses specifically on voting, you may also find value in other platforms that support different aspects of Cardano governance. Below is a non-exhaustive list of alternatives, each with its own purpose and features:" ]
+                , div
+                    [ HA.style "display" "grid"
+                    , HA.style "grid-template-columns" "repeat(auto-fill, minmax(240px, 1fr))"
+                    , HA.style "gap" "1rem"
+                    ]
+                    (List.map viewGovernanceTool governanceTools)
+                ]
+            ]
+        ]
+
+
+governanceTools : List { name : String, url : String, description : String }
+governanceTools =
+    [ { name = "gov.tools"
+      , url = "https://gov.tools"
+      , description = "The original governance platform for Cardano. Register as a DRep, delegate your voting power, explore proposals, and cast your votes."
+      }
+    , { name = "tempo.vote"
+      , url = "https://tempo.vote"
+      , description = "An alternative comprehensive platform aiming to support all aspects of Cardano governance."
+      }
+    , { name = "governancespace.com"
+      , url = "https://governancespace.com"
+      , description = "Another alternative comprehensive platform for Cardano governance, still WIP."
+      }
+    , { name = "forum.cardano.org"
+      , url = "https://forum.cardano.org"
+      , description = "A community forum for discussions on all things Cardano, including governance topics."
+      }
+    , { name = "1694.io"
+      , url = "https://1694.io"
+      , description = "A knowledge hub dedicated to Cardano's governance processes."
+      }
+    , { name = "changwatch.com"
+      , url = "https://changwatch.com"
+      , description = "A governance dashboard providing insights and tracking."
+      }
+    , { name = "cgov.app"
+      , url = "https://cgov.app"
+      , description = "An information and analytics platform focused on Cardano governance."
+      }
+    , { name = "DRep-Collective"
+      , url = "https://github.com/DRep-Collective"
+      , description = "A community initiative created to provide greater visibility and availability of governance DReps across the broader Cardano block-chain community."
+      }
+    ]
+
+
+viewGovernanceTool : { name : String, url : String, description : String } -> Html Msg
+viewGovernanceTool tool =
+    div
+        [ HA.style "background-color" "rgba(255, 255, 255, 0.9)"
+        , HA.style "border-radius" "8px"
+        , HA.style "padding" "1.25rem"
+        , HA.style "transition" "transform 0.2s, box-shadow 0.2s"
+        , HA.style "box-shadow" "0 2px 4px rgba(0, 0, 0, 0.05)"
+        , HA.style "height" "100%"
+        , HA.style "display" "flex"
+        , HA.style "flex-direction" "column"
+        ]
+        [ Html.h4
+            [ HA.style "font-weight" "600"
+            , HA.style "font-size" "1.1rem"
+            , HA.style "margin-bottom" "0.75rem"
+            ]
+            [ text tool.name ]
+        , Html.p
+            [ HA.style "font-size" "0.9rem"
+            , HA.style "line-height" "1.5"
+            , HA.style "color" "#555"
+            , HA.style "flex-grow" "1"
+            , HA.style "margin-bottom" "1rem"
+            ]
+            [ text tool.description ]
+        , Html.a
+            [ HA.href tool.url
+            , HA.target "_blank"
+            , HA.rel "noopener noreferrer"
+            , HA.style "font-size" "0.9rem"
+            , HA.style "text-decoration" "none"
+            , HA.style "font-weight" "500"
+            , HA.style "display" "inline-flex"
+            , HA.style "align-items" "center"
+            , HA.style "color" "#0084ff"
+            ]
+            [ text ("Visit " ++ tool.name ++ " ")
+            , Html.span
+                [ HA.style "margin-left" "4px" ]
+                [ text "→" ]
             ]
         ]
 

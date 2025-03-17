@@ -1,6 +1,7 @@
 module Helper exposing
     ( applyDropdownContainerStyle
     , applyDropdownItemStyle
+    , applyMobileDropdownContainerStyle
     , applyWalletIconContainerStyle
     , applyWalletIconStyle
     , firstTextField
@@ -310,6 +311,23 @@ applyDropdownContainerStyle =
     , HA.style "right" "0"
     , HA.style "margin-top" "0.5rem"
     , HA.style "width" "220px"
+    , HA.style "background-color" "#f8f9fa"
+    , HA.style "border" "1px solid #e2e8f0"
+    , HA.style "border-radius" "0.5rem"
+    , HA.style "box-shadow" "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)"
+    , HA.style "z-index" "50"
+    , HA.style "padding" "0.5rem 0"
+    , HA.style "max-height" "300px"
+    , HA.style "overflow-y" "auto"
+    ]
+
+
+applyMobileDropdownContainerStyle : List (Html.Attribute msg)
+applyMobileDropdownContainerStyle =
+    [ HA.style "position" "relative"
+    , HA.style "position" "absolute"
+    , HA.style "width" "100%"
+    , HA.style "margin-top" "0.5rem"
     , HA.style "background-color" "#f8f9fa"
     , HA.style "border" "1px solid #e2e8f0"
     , HA.style "border-radius" "0.5rem"

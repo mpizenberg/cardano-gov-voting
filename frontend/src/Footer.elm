@@ -1,7 +1,7 @@
 module Footer exposing (ViewContext, view)
 
 import Html exposing (Html, a, div, footer, p, text)
-import Html.Attributes exposing (class, href, style)
+import Html.Attributes exposing (class, href, style, target)
 
 
 type alias ViewContext msg =
@@ -27,16 +27,26 @@ view { copyright, githubLink, disclaimerLink } =
         , style "bottom" "0"
         , style "width" "100%"
         ]
-        [ div [ class "container mx-auto flex justify-between items-center" ]
+        [ div [ class "container mx-auto flex flex-col md:flex-row justify-between items-center space-y-2 md:space-y-0" ]
             [ p [ class "text-gray-700 text-sm" ]
                 [ text copyright ]
-            , div [ class "flex space-x-8" ]
-                [ disclaimerLink
-                    [ class "text-sm transition-colors duration-200" ]
+            , div [ class "flex flex-col md:flex-row items-center" ]
+                [ p [ class "text-gray-600 text-sm mb-2", style "margin-right" "8px" ]
+                    [ text "Powered by "
+                    , a
+                        [ href "https://api.koios.rest/"
+                        , class "text-gray-700 underline"
+                        , target "_blank"
+                        ]
+                        [ text "Koios API" ]
+                    ]
+                , disclaimerLink
+                    [ class "text-sm mb-2", style "margin-right" "8px" ]
                     [ text "Legal Disclaimer" ]
                 , a
                     [ href githubLink
-                    , class "text-sm transition-colors duration-200"
+                    , class "text-sm mb-2"
+                    , target "_blank"
                     ]
                     [ text "Github" ]
                 ]

@@ -2247,8 +2247,8 @@ viewVoterIdentificationStep ctx step =
         Preparing form ->
             Html.map ctx.wrapMsg <|
                 div []
-                    [ Html.h2 [ HA.class "text-3xl font-medium  mb-4" ] [ text "Vote Preparation" ]
-                    , Html.p [] [ Helper.firstTextField "Voter governance ID (drep/pool/cc_hot)" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
+                    [ Html.h2 [ HA.class "text-3xl font-medium  mb-4" ] [ text "Voter governance ID (drep/pool/cc_hot)" ]
+                    , Html.p [] [ Helper.firstTextField "" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
                     , Html.Lazy.lazy viewValidGovIdForm form
                     , Html.p [ HA.class "my-4" ] [ Helper.viewButton "Confirm Voter" ValidateVoterFormButtonClicked ]
                     , viewError form.error

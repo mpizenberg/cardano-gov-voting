@@ -2151,6 +2151,7 @@ allPrepSteps { loadedWallet, costModels } m =
 type alias ViewContext msg =
     { wrapMsg : Msg -> msg
     , loadedWallet : Maybe LoadedWallet
+    , epoch : Maybe Int
     , proposals : WebData (Dict String ActiveProposal)
     , jsonLdContexts : JsonLdContexts
     , costModels : Maybe CostModels
@@ -2570,11 +2571,16 @@ viewProposalSelectionStep ctx model =
 
                         else
                             let
+                                epochVisibility =
+                                    Maybe.withDefault 0 ctx.epoch
+
                                 allProposals =
                                     Dict.values proposalsDict
+                                        -- only keep those that aren’t expired
+                                        |> List.filter (\p -> p.epoch_validity.end >= epochVisibility)
 
                                 totalCount =
-                                    Dict.size proposalsDict
+                                    List.length allProposals
 
                                 visibleProposals =
                                     -- Sort proposals by expiration date

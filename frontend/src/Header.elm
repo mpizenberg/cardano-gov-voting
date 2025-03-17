@@ -31,7 +31,7 @@ type alias ViewContext msg =
 view : ViewContext msg -> Html msg
 view { mobileMenuIsOpen, toggleMobileMenu, walletConnector, walletConnectorMsgs, logoLink, navigationItems } =
     nav [ class "relative z-10 w-full bg-transparent" ]
-        [ div [ class "container mx-auto py-6", style "padding-right" "6px" ]
+        [ div [ class "container mx-auto py-6 overflow-visible", style "padding-right" "6px" ]
             [ div [ class "flex items-center justify-between" ]
                 -- Logo section
                 [ div [ style "flex-shrink" "0" ]
@@ -118,21 +118,21 @@ view { mobileMenuIsOpen, toggleMobileMenu, walletConnector, walletConnectorMsgs,
             -- Mobile menu (responsive)
             , div
                 [ class
-                    ("md:hidden transition-all duration-300 ease-in-out overflow-hidden "
+                    ("md:hidden transition-all duration-300 ease-in-out "
                         ++ (if mobileMenuIsOpen then
-                                "max-h-64"
+                                "max-h-[500px] overflow-visible"
 
                             else
-                                "max-h-0"
+                                "max-h-0 overflow-hidden"
                            )
                     )
                 ]
                 [ div [ class "py-2" ]
                     [ ul [ class "flex flex-col space-y-4 mt-4" ]
                         (List.map viewMobileMenuItem navigationItems)
-                    , div [ class "mt-4 px-4" ]
-                        [ div [ class "flex-shrink-0 min-w-[150px]" ]
-                            [ WalletConnector.view walletConnectorMsgs walletConnector ]
+                    , div [ class "mt-4 px-4 z-20 relative" ]
+                        [ div [ class "w-full" ]
+                            [ WalletConnector.viewMobile walletConnectorMsgs walletConnector ]
                         ]
                     ]
                 ]

@@ -1,8 +1,8 @@
-module WalletConnector exposing (Msgs, State, view)
+module WalletConnector exposing (Msgs, State, view, viewMobile)
 
 import Cardano.Address exposing (Address)
 import Cardano.Cip30 as Cip30
-import Helper exposing (applyDropdownContainerStyle, applyDropdownItemStyle, applyWalletIconContainerStyle, applyWalletIconStyle, prettyAddr, viewWalletButton)
+import Helper exposing (applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle, prettyAddr, viewWalletButton)
 import Html exposing (Html, div, img, li, span, text, ul)
 import Html.Attributes exposing (alt, class, src, style)
 
@@ -26,7 +26,17 @@ view : Msgs msg -> State -> Html msg
 view msg state =
     case state.wallet of
         Nothing ->
-            viewAvailableWallets state.walletsDiscovered state.walletDropdownIsOpen msg
+            viewAvailableWallets state.walletsDiscovered state.walletDropdownIsOpen msg False
+
+        Just wallet ->
+            viewConnectedWallet wallet state.walletChangeAddress msg
+
+
+viewMobile : Msgs msg -> State -> Html msg
+viewMobile msg state =
+    case state.wallet of
+        Nothing ->
+            viewAvailableWallets state.walletsDiscovered state.walletDropdownIsOpen msg True
 
         Just wallet ->
             viewConnectedWallet wallet state.walletChangeAddress msg
@@ -49,8 +59,8 @@ viewConnectedWallet wallet maybeChangeAddress msg =
         ]
 
 
-viewAvailableWallets : List Cip30.WalletDescriptor -> Bool -> Msgs msg -> Html msg
-viewAvailableWallets wallets dropdownOpen msg =
+viewAvailableWallets : List Cip30.WalletDescriptor -> Bool -> Msgs msg -> Bool -> Html msg
+viewAvailableWallets wallets dropdownOpen msg isMobile =
     if List.isEmpty wallets then
         div [ class "text-xs text-gray-600" ] [ text "No wallets" ]
 
@@ -72,7 +82,13 @@ viewAvailableWallets wallets dropdownOpen msg =
                     [ text "▼" ]
                 ]
             , if dropdownOpen then
-                div applyDropdownContainerStyle
+                div
+                    (if isMobile then
+                        applyMobileDropdownContainerStyle
+
+                     else
+                        applyDropdownContainerStyle
+                    )
                     [ ul []
                         (List.map (viewWalletDropdownItem msg) wallets)
                     ]

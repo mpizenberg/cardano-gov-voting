@@ -2547,9 +2547,53 @@ viewProposalSelectionStep ctx model =
             let
                 visibleCount =
                     model.visibleProposalCount
+
+                networkBadge =
+                    case ctx.networkId of
+                        Mainnet ->
+                            div
+                                [ HA.class "inline-flex items-center bg-green-100 text-green-800 px-2 py-1 rounded text-sm font-medium ml-2" ]
+                                [ text "Mainnet" ]
+
+                        Testnet ->
+                            div
+                                [ HA.class "inline-flex items-center bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm font-medium ml-2" ]
+                                [ text "Testnet" ]
+
+                networkBadgeStyle =
+                    case ctx.networkId of
+                        Mainnet ->
+                            [ HA.style "background-color" "rgba(16, 185, 129, 0.1)"
+                            , HA.style "color" "#065f46"
+                            ]
+
+                        Testnet ->
+                            [ HA.style "background-color" "rgba(124, 58, 237, 0.1)"
+                            , HA.style "color" "#5b21b6"
+                            ]
             in
             div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
-                [ Html.h2 [ HA.class "text-3xl font-medium mb-4" ] [ text "Pick a Proposal" ]
+                [ div [ HA.class "flex items-center mb-4" ]
+                    [ Html.h2 [ HA.class "text-3xl font-medium" ] [ text "Pick a Proposal" ]
+                    , Html.span
+                        (networkBadgeStyle
+                            ++ [ HA.style "font-size" "0.7rem"
+                               , HA.style "font-weight" "600"
+                               , HA.style "padding" "0.15rem 0.5rem"
+                               , HA.style "border-radius" "9999px"
+                               , HA.style "white-space" "nowrap"
+                               , HA.style "margin-left" "8px"
+                               ]
+                        )
+                        [ text
+                            (if ctx.networkId == Mainnet then
+                                "Mainnet"
+
+                             else
+                                "Testnet"
+                            )
+                        ]
+                    ]
                 , case ctx.proposals of
                     RemoteData.NotAsked ->
                         text "Proposals are not loading, please report this error."
@@ -2608,7 +2652,7 @@ viewProposalSelectionStep ctx model =
                                             , HA.style "border-radius" "0.5rem"
                                             , HA.style "padding" "0.75rem 1.5rem"
                                             , HA.style "cursor" "pointer"
-                                            , HA.style "transition" "all 0.2s ease"
+                                            , HA.style "font-size" "0.875rem"
                                             , onClick (ctx.wrapMsg (ShowMoreProposals visibleCount))
                                             ]
                                             [ text <| "Show More (" ++ String.fromInt (min 10 (totalCount - visibleCount)) ++ " of " ++ String.fromInt (totalCount - visibleCount) ++ " remaining)" ]
@@ -2648,9 +2692,22 @@ viewProposalSelectionStep ctx model =
                                     , text <| Maybe.withDefault "Unknown abstract (unexpected metadata format)" meta.body.abstract
                                     ]
                             )
+
+                networkBadge =
+                    case ctx.networkId of
+                        Mainnet ->
+                            div
+                                [ HA.class "inline-flex items-center bg-green-100 text-green-800 px-2 py-1 rounded text-sm font-medium ml-2" ]
+                                [ text "Mainnet" ]
+
+                        Testnet ->
+                            div
+                                [ HA.class "inline-flex items-center bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm font-medium ml-2" ]
+                                [ text "Testnet" ]
             in
             div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
                 [ Html.h2 [ HA.class "text-3xl font-medium mb-4" ] [ text "Pick a Proposal" ]
+                , networkBadge
                 , Helper.formContainer
                     [ Html.p [ HA.class "mb-4" ]
                         [ Html.strong [ HA.class "font-medium" ] [ text "Selected proposal:" ]
@@ -2721,14 +2778,17 @@ viewProposalCard wrapMsg networkId proposal =
             [ HA.style "background-color" "#F7FAFC"
             , HA.style "padding" "1rem 1.25rem"
             , HA.style "border-bottom" "1px solid #EDF2F7"
+            , HA.style "display" "flex"
+            , HA.style "justify-content" "space-between"
+            , HA.style "align-items" "center"
             ]
             [ Html.h3
                 [ HA.style "font-weight" "600"
-                , HA.style "font-size" "1.125rem"
-                , HA.style "white-space" "nowrap"
-                , HA.style "overflow" "hidden"
-                , HA.style "text-overflow" "ellipsis"
+                , HA.style "font-size" "1rem"
                 , HA.style "color" "#1A202C"
+                , HA.style "line-height" "1.4"
+                , HA.style "word-wrap" "break-word"
+                , HA.style "flex" "1"
                 ]
                 [ text title ]
             ]
@@ -2761,9 +2821,30 @@ viewProposalCard wrapMsg networkId proposal =
                     , HA.style "flex-wrap" "wrap"
                     , HA.style "justify-content" "space-between"
                     , HA.style "align-items" "center"
-                    , HA.style "margin-bottom" "0.75rem"
+                    , HA.style "margin-bottom" "0.3rem"
                     ]
-                    [ cardanoScanActionLink networkId proposal.id
+                    [ Html.div [ HA.style "display" "flex", HA.style "align-items" "center" ]
+                        [ Html.span [ HA.style "font-weight" "500", HA.style "color" "#4A5568", HA.style "margin-right" "0.5rem" ] [ text "ID:" ]
+                        , Html.a
+                            [ HA.href <| cardanoScanActionUrl networkId proposal.id
+                            , HA.target "_blank"
+                            , HA.rel "noopener noreferrer"
+                            , HA.style "display" "inline-flex"
+                            , HA.style "align-items" "center"
+                            , HA.style "color" "#3182CE"
+                            , HA.style "text-decoration" "underline"
+                            , HA.style "cursor" "pointer"
+                            , HA.title "View on Cardanoscan (opens in new tab)"
+                            ]
+                            [ text <| strBothEnds 8 8 <| Bytes.toHex proposal.id.transactionId
+                            , text <| "#" ++ String.fromInt proposal.id.govActionIndex
+                            , Html.span
+                                [ HA.style "margin-left" "0.25rem"
+                                , HA.style "font-size" "0.8rem"
+                                ]
+                                [ text "↗" ]
+                            ]
+                        ]
                     , div
                         [ HA.style "font-size" "0.75rem"
                         , HA.style "font-weight" "500"
@@ -2795,8 +2876,12 @@ viewProposalCard wrapMsg networkId proposal =
         ]
 
 
-cardanoScanActionLink : NetworkId -> ActionId -> Html msg
-cardanoScanActionLink networkId id =
+
+-- Helper function to generate CardanoScan URL
+
+
+cardanoScanActionUrl : NetworkId -> ActionId -> String
+cardanoScanActionUrl networkId id =
     let
         baseUrl =
             case networkId of
@@ -2806,16 +2891,30 @@ cardanoScanActionLink networkId id =
                 Testnet ->
                     "https://preview.cardanoscan.io/govAction/"
     in
+    baseUrl
+        ++ (id.transactionId |> Bytes.toHex)
+        ++ (Bytes.toHex <| Bytes.fromBytes <| Cbor.Encode.encode (Cbor.Encode.int id.govActionIndex))
+
+
+cardanoScanActionLink : NetworkId -> ActionId -> Html msg
+cardanoScanActionLink networkId id =
+    let
+        url =
+            cardanoScanActionUrl networkId id
+    in
     Html.a
-        [ HA.href <|
-            baseUrl
-                ++ (id.transactionId |> Bytes.toHex)
-                ++ (Bytes.toHex <| Bytes.fromBytes <| Cbor.Encode.encode (Cbor.Encode.int id.govActionIndex))
+        [ HA.href url
         , HA.target "_blank"
         , HA.rel "noopener noreferrer"
+        , HA.class "text-blue-600 hover:text-blue-800 underline font-mono"
         ]
-        [ text <| "Id: " ++ (strBothEnds 8 8 <| Bytes.toHex id.transactionId)
+        [ text <| strBothEnds 8 8 <| Bytes.toHex id.transactionId
         , text <| "#" ++ String.fromInt id.govActionIndex
+        , Html.span
+            [ HA.style "margin-left" "0.25rem"
+            , HA.style "font-size" "0.8rem"
+            ]
+            [ text "↗" ]
         ]
 
 

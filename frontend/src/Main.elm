@@ -148,6 +148,7 @@ type alias Model =
     , walletChangeAddress : Maybe Address
     , walletUtxos : Maybe (Utxo.RefDict Output)
     , protocolParams : Maybe ProtocolParams
+    , epoch : WebData Int
     , proposals : WebData (Dict String ActiveProposal)
     , scriptsInfo : Dict String ScriptInfo
     , drepsInfo : Dict String DrepInfo
@@ -190,6 +191,7 @@ init { url, jsonLdContexts, db, networkId } =
         , walletUtxos = Nothing
         , walletChangeAddress = Nothing
         , protocolParams = Nothing
+        , epoch = RemoteData.NotAsked
         , proposals = RemoteData.NotAsked
         , scriptsInfo = Dict.empty
         , drepsInfo = Dict.empty
@@ -223,6 +225,7 @@ type Msg
     | UrlChanged Route
     | WalletMsg Value
     | GotProtocolParams (Result Http.Error ProtocolParams)
+    | GotEpoch (Result Http.Error Int)
     | GotProposals (Result Http.Error (List ActiveProposal))
       -- Header
     | ToggleMobileMenu
@@ -485,6 +488,18 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        ( GotEpoch result, _ ) ->
+            case result of
+                Err httpError ->
+                    ( { model | epoch = RemoteData.Failure httpError }
+                    , Cmd.none
+                    )
+
+                Ok epoch ->
+                    ( { model | epoch = RemoteData.Success epoch }
+                    , Cmd.none
+                    )
+
         ( GotProposals result, _ ) ->
             case result of
                 Err httpError ->
@@ -494,8 +509,13 @@ update msg model =
 
                 Ok activeProposals ->
                     let
+                        epochVisibility =
+                            RemoteData.withDefault 0 model.epoch
+
                         proposalsList =
                             List.map (\p -> ( Gov.actionIdToString p.id, p )) activeProposals
+                                -- only keep those that aren’t expired when we receive them
+                                |> List.filter (\( _, p ) -> p.epoch_validity.end >= epochVisibility)
 
                         completeReadProposalMetadataTask : ActiveProposal -> ConcurrentTask x TaskCompleted
                         completeReadProposalMetadataTask { id, metadataHash, metadataUrl } =
@@ -570,6 +590,7 @@ handleUrlChange route model =
                 ( { newModel | proposals = RemoteData.Loading }
                 , Cmd.batch
                     [ updateUrlCmd
+                    , Api.defaultApiProvider.queryEpoch model.networkId GotEpoch
                     , Api.defaultApiProvider.loadGovProposals model.networkId GotProposals
                     ]
                 )
@@ -945,6 +966,7 @@ viewContent model =
             Page.Preparation.view
                 { wrapMsg = PreparationPageMsg
                 , loadedWallet = loadedWallet
+                , epoch = RemoteData.toMaybe model.epoch
                 , proposals = model.proposals
                 , jsonLdContexts = model.jsonLdContexts
                 , costModels = Maybe.map .costModels model.protocolParams

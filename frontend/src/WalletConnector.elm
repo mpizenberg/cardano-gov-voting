@@ -1,8 +1,8 @@
 module WalletConnector exposing (Msgs, State, view, viewMobile)
 
-import Cardano.Address exposing (Address)
+import Cardano.Address as Address exposing (Address)
 import Cardano.Cip30 as Cip30
-import Helper exposing (applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle, prettyAddr, viewWalletButton)
+import Helper exposing (applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle, viewWalletButton)
 import Html exposing (Html, div, img, li, span, text, ul)
 import Html.Attributes exposing (alt, class, src, style)
 
@@ -50,7 +50,7 @@ viewConnectedWallet wallet maybeChangeAddress msg =
             , case maybeChangeAddress of
                 Just addr ->
                     div [ class "text-xs text-gray-500" ]
-                        [ text (String.left 4 (prettyAddr addr) ++ "...") ]
+                        [ text (Helper.shortenedHex 9 (Address.toBech32 addr)) ]
 
                 Nothing ->
                     text ""

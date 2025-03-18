@@ -610,7 +610,7 @@ view ctx (Model model) =
                             [ Html.strong [ HA.class "font-medium" ] [ text "Transaction ID: " ]
                             , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex <| Transaction.computeTxId summary.tx ]
                             ]
-                        , Html.p [ HA.class "mb-2" ] [ text "Transaction details: (₳ displayed as lovelaces)" ]
+                        , Html.p [ HA.class "mb-2" ] [ text "Transaction generated successfully", Html.span [ HA.style "color" "red" ] [ text " (₳ displayed as lovelaces):" ] ]
                         , Html.pre
                             [ HA.class "bg-gray-50 p-4 rounded-md border overflow-auto mt-2 text-sm whitespace-pre-wrap break-words"
                             , HA.style "border-color" "#C6C6C6"
@@ -641,7 +641,7 @@ view ctx (Model model) =
                             [ Html.strong [ HA.class "font-medium" ] [ text "Transaction ID: " ]
                             , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex <| Transaction.computeTxId summary.tx ]
                             ]
-                        , Html.p [ HA.class "mb-2" ] [ text "Transaction details: (₳ displayed as lovelaces)" ]
+                        , Html.p [ HA.class "mb-2" ] [ text "Transaction generated successfully", Html.span [ HA.style "color" "red" ] [ text " (₳ displayed as lovelaces):" ] ]
                         , Html.pre
                             [ HA.class "bg-gray-50 p-4 rounded-md border overflow-auto mt-2 text-sm whitespace-pre-wrap break-words"
                             , HA.style "border-color" "#C6C6C6"

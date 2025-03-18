@@ -29,7 +29,7 @@ import Blake2b exposing (blake2b256)
 import Bytes as ElmBytes
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano exposing (CredentialWitness(..), ScriptWitness(..), TxFinalized, VoterWitness(..), WitnessSource(..))
-import Cardano.Address exposing (Address, Credential(..), CredentialHash, NetworkId(..))
+import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
 import Cardano.Gov as Gov exposing (ActionId, Anchor, CostModels, Id(..), Vote)
@@ -2231,7 +2231,7 @@ view ctx (Model model) =
             , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
             , viewBuildTxStep ctx model
             , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
-            , viewSignTxStep ctx model.buildTxStep
+            , viewSignTxStep ctx model.voterStep model.buildTxStep
             ]
         ]
 
@@ -3818,7 +3818,7 @@ viewBuildTxStep ctx model =
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Building" ]
                 , Helper.formContainer
-                    [ Html.p [ HA.class "mb-2" ] [ text "Transaction generated successfully (₳ displayed as lovelaces):" ]
+                    [ Html.p [ HA.class "mb-2" ] [ text "Transaction generated successfully", Html.span [ HA.style "color" "red" ] [ text " (₳ displayed as lovelaces):" ] ]
                     , div [ HA.class "relative" ]
                         [ Html.pre
                             [ HA.style "padding" "1rem"
@@ -3848,10 +3848,60 @@ viewBuildTxStep ctx model =
 --
 
 
-viewSignTxStep : ViewContext msg -> Step BuildTxPrep {} TxFinalized -> Html msg
-viewSignTxStep ctx buildTxStep =
-    case buildTxStep of
-        Done _ { tx, expectedSignatures } ->
+viewSignTxStep : ViewContext msg -> Step a b VoterWitness -> Step BuildTxPrep {} TxFinalized -> Html msg
+viewSignTxStep ctx voterStep buildTxStep =
+    case ( buildTxStep, voterStep ) of
+        ( Done _ { tx, expectedSignatures }, Done _ voterWitness ) ->
+            let
+                voterId =
+                    -- type VoterWitness
+                    -- = WithCommitteeHotCred CredentialWitness
+                    -- | WithDrepCred CredentialWitness
+                    -- | WithPoolCred (Bytes CredentialHash)
+                    case voterWitness of
+                        Cardano.WithCommitteeHotCred (Cardano.WithKey hotkey) ->
+                            ( Bytes.toHex hotkey, "Committee hot key" )
+
+                        Cardano.WithCommitteeHotCred (Cardano.WithScript scriptHash _) ->
+                            ( Bytes.toHex scriptHash, "Committee governance script" )
+
+                        Cardano.WithDrepCred (Cardano.WithKey credKey) ->
+                            ( Bytes.toHex credKey, "DRep key" )
+
+                        Cardano.WithDrepCred (Cardano.WithScript scriptHash _) ->
+                            ( Bytes.toHex scriptHash, "DRep governance script" )
+
+                        Cardano.WithPoolCred poolKey ->
+                            ( Bytes.toHex poolKey, "SPO key" )
+
+                walletSpendingCredential =
+                    case ctx.loadedWallet of
+                        Just { changeAddress } ->
+                            Address.extractPubKeyHash changeAddress
+                                |> Maybe.map (\hash -> ( Bytes.toHex hash, "Wallet spending key" ))
+                                |> Maybe.withDefault ( "", "" )
+
+                        Nothing ->
+                            ( "", "" )
+
+                walletStakeCredential =
+                    case ctx.loadedWallet of
+                        Just { changeAddress } ->
+                            Address.extractStakeKeyHash changeAddress
+                                |> Maybe.map (\hash -> ( Bytes.toHex hash, "Wallet stake key" ))
+                                |> Maybe.withDefault ( "", "" )
+
+                        Nothing ->
+                            ( "", "" )
+
+                keyNames : Dict String String
+                keyNames =
+                    Dict.fromList
+                        [ voterId
+                        , walletSpendingCredential
+                        , walletStakeCredential
+                        ]
+            in
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Signing" ]
                 , Helper.formContainer
@@ -3862,7 +3912,17 @@ viewSignTxStep ctx buildTxStep =
                             (List.map
                                 (\hash ->
                                     Html.li [ HA.class "border-b pb-2 last:border-b-0 last:pb-0", HA.style "border-color" "#C6C6C6" ]
-                                        [ text <| Bytes.toHex hash ]
+                                        (let
+                                            hashHex =
+                                                Bytes.toHex hash
+                                         in
+                                         case Dict.get hashHex keyNames of
+                                            Just keyName ->
+                                                [ text <| keyName ++ ": " ++ Bytes.toHex hash ]
+
+                                            Nothing ->
+                                                [ text <| Bytes.toHex hash ]
+                                        )
                                 )
                                 expectedSignatures
                             )

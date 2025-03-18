@@ -80,7 +80,7 @@ type alias InnerModel =
 -}
 type alias RegisterTxSummary =
     { tx : Transaction
-    , expectedSignatures : List (Bytes CredentialHash)
+    , expectedSignatures : List { keyName : String, keyHash : Bytes CredentialHash }
     , nativeScript : NativeScript
     , scriptHash : Bytes CredentialHash
     , scriptRefInput : Maybe OutputReference
@@ -90,7 +90,7 @@ type alias RegisterTxSummary =
 
 type alias UnregisterTxSummary =
     { tx : Transaction
-    , expectedSignatures : List (Bytes CredentialHash)
+    , expectedSignatures : List { keyName : String, keyHash : Bytes CredentialHash }
     , scriptHash : Bytes CredentialHash
     }
 
@@ -219,7 +219,9 @@ validateFormAndBuildRegister ctx model =
                             | registerTxSummary =
                                 Just
                                     { tx = tx
-                                    , expectedSignatures = expectedSignatures
+                                    , expectedSignatures =
+                                        expectedSignatures
+                                            |> List.map (\keyHash -> { keyHash = keyHash, keyName = "TODO" })
                                     , nativeScript = script
                                     , scriptHash = scriptHash
                                     , scriptRefInput =
@@ -271,7 +273,9 @@ validateFormAndBuildUnregister ctx model =
                             | unregisterTxSummary =
                                 Just
                                     { tx = tx
-                                    , expectedSignatures = expectedSignatures
+                                    , expectedSignatures =
+                                        expectedSignatures
+                                            |> List.map (\keyHash -> { keyHash = keyHash, keyName = "TODO-multisig" })
                                     , scriptHash = scriptHash
                                     }
                             , error = Nothing
@@ -523,7 +527,7 @@ buildUnregisterTx w costModels unsortedCreds model =
 type alias ViewContext msg =
     { wrapMsg : Msg -> msg
     , wallet : Maybe Cip30.Wallet
-    , signingLink : Transaction -> List (Bytes CredentialHash) -> List (Html msg) -> Html msg
+    , signingLink : Transaction -> List { keyName : String, keyHash : Bytes CredentialHash } -> List (Html msg) -> Html msg
     }
 
 

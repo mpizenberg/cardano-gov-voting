@@ -249,7 +249,7 @@ type Msg
 type Route
     = RouteLanding
     | RoutePreparation
-    | RouteSigning { expectedSigners : List (Bytes CredentialHash), tx : Maybe Transaction }
+    | RouteSigning { expectedSigners : List { keyName : String, keyHash : Bytes CredentialHash }, tx : Maybe Transaction }
     | RouteMultisigRegistration
     | RoutePdf
     | RouteDisclaimer
@@ -303,7 +303,15 @@ locationHrefToRoute locationHref =
                         { expectedSigners =
                             Dict.get "signer" queryParameters
                                 |> Maybe.withDefault []
-                                |> List.filterMap Bytes.fromHex
+                                |> List.filterMap
+                                    (\stringKeySigner ->
+                                        case String.split ";" stringKeySigner of
+                                            [ keyName, keyBytes ] ->
+                                                Just { keyName = keyName, keyHash = Bytes.fromHexUnchecked keyBytes }
+
+                                            _ ->
+                                                Nothing
+                                    )
                         , tx =
                             Maybe.andThen Bytes.fromHex fragment
                                 |> Maybe.andThen Transaction.deserialize
@@ -336,7 +344,7 @@ routeToAppUrl route =
 
         RouteSigning { expectedSigners, tx } ->
             { path = [ "page", "signing" ]
-            , queryParameters = Dict.singleton "signer" <| List.map Bytes.toHex expectedSigners
+            , queryParameters = Dict.singleton "signer" <| List.map (\{ keyName, keyHash } -> keyName ++ ";" ++ Bytes.toHex keyHash) expectedSigners
             , fragment = Maybe.map (Bytes.toHex << Transaction.serialize) tx
             }
 

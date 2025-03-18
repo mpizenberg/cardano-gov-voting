@@ -2156,7 +2156,7 @@ type alias ViewContext msg =
     , jsonLdContexts : JsonLdContexts
     , costModels : Maybe CostModels
     , networkId : NetworkId
-    , signingLink : Transaction -> List (Bytes CredentialHash) -> List (Html msg) -> Html msg
+    , signingLink : Transaction -> List { keyName : String, keyHash : Bytes CredentialHash } -> List (Html msg) -> Html msg
     }
 
 
@@ -3930,7 +3930,16 @@ viewSignTxStep ctx voterStep buildTxStep =
                     , Html.p [ HA.class "text-gray-800 mb-4" ]
                         [ text "Click the button below to proceed to the signing page where you can finalize and submit your voting transaction." ]
                     , ctx.signingLink tx
-                        expectedSignatures
+                        (expectedSignatures
+                            |> List.map
+                                (\keyHash ->
+                                    { keyHash = keyHash
+                                    , keyName =
+                                        Dict.get (Bytes.toHex keyHash) keyNames
+                                            |> Maybe.withDefault "Key hash"
+                                    }
+                                )
+                        )
                         [ button
                             [ HA.style "display" "inline-flex"
                             , HA.style "align-items" "center"

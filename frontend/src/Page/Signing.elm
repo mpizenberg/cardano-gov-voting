@@ -54,14 +54,14 @@ submission status and any errors that occur.
 type alias LoadedTxModel =
     { tx : Transaction
     , txId : Bytes TransactionId
-    , expectedSigners : Dict String { keyHash : Bytes CredentialHash }
+    , expectedSigners : Dict String { keyName : String, keyHash : Bytes CredentialHash }
     , vkeyWitnesses : Dict String VKeyWitness
     , txSubmitted : Maybe (Bytes TransactionId)
     , error : Maybe String
     }
 
 
-initialModel : List (Bytes CredentialHash) -> Maybe Transaction -> Model
+initialModel : List { keyName : String, keyHash : Bytes CredentialHash } -> Maybe Transaction -> Model
 initialModel expectedSigners maybeTx =
     case maybeTx of
         Just tx ->
@@ -70,7 +70,7 @@ initialModel expectedSigners maybeTx =
                 , txId = Transaction.computeTxId tx
                 , expectedSigners =
                     expectedSigners
-                        |> List.map (\hash -> ( Bytes.toHex hash, { keyHash = hash } ))
+                        |> List.map (\{ keyName, keyHash } -> ( Bytes.toHex keyHash, { keyName = keyName, keyHash = keyHash } ))
                         |> Dict.fromList
                 , vkeyWitnesses = Dict.empty
                 , txSubmitted = Nothing
@@ -490,16 +490,17 @@ view ctx model =
         ]
 
 
-viewExpectedSignatures : Dict String { keyHash : Bytes CredentialHash } -> Dict String VKeyWitness -> List (Html msg)
+viewExpectedSignatures : Dict String { keyName : String, keyHash : Bytes CredentialHash } -> Dict String VKeyWitness -> List (Html msg)
 viewExpectedSignatures expectedSigners vkeyWitnesses =
     let
-        viewExpectedSigner hash =
-            case Dict.get hash vkeyWitnesses of
+        viewExpectedSigner : String -> { keyName : String, keyHash : Bytes CredentialHash } -> Html msg
+        viewExpectedSigner keyHash { keyName } =
+            case Dict.get keyHash vkeyWitnesses of
                 Just witness ->
                     Html.div [ HA.class "bg-green-50 border p-3 rounded-md mb-2 flex items-center", HA.style "border-color" "#C6C6C6" ]
                         [ Html.div [ HA.class "font-bold", HA.style "margin-left" "6px", HA.style "margin-right" "6px" ] [ text "✓" ]
                         , Html.div [ HA.class "font-mono text-sm" ]
-                            [ Html.div [] [ text <| "Key Hash: " ++ shortenedHex 8 hash ]
+                            [ Html.div [] [ text <| keyName ++ ": " ++ shortenedHex 8 keyHash ]
                             , Html.div [ HA.class "text-gray-600" ]
                                 [ text <| "VKey: " ++ shortenedHex 8 (Bytes.toHex witness.vkey) ]
                             , Html.div [ HA.class "text-gray-600" ]
@@ -511,11 +512,11 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
                     Html.div [ HA.class "bg-gray-50 border p-3 rounded-md mb-2 flex items-center", HA.style "border-color" "#C6C6C6" ]
                         [ Html.div [ HA.class "mr-2 text-gray-600" ] [ text "□" ]
                         , Html.div [ HA.class "font-mono text-sm" ]
-                            [ text <| "Key Hash: " ++ shortenedHex 8 hash ]
+                            [ text <| keyName ++ ": " ++ shortenedHex 8 keyHash ]
                         ]
     in
-    Dict.keys expectedSigners
-        |> List.map viewExpectedSigner
+    Dict.map viewExpectedSigner expectedSigners
+        |> Dict.values
 
 
 viewError : Maybe String -> Html msg

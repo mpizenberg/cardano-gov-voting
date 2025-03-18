@@ -11,6 +11,7 @@ module Helper exposing
     , shortenedHex
     , textField
     , textFieldInline
+    , viewActionTypeIcon
     , viewButton
     , viewNumberInput
     , viewSelect
@@ -209,12 +210,12 @@ viewSelect attributes options =
 
 
 firstTextField : String -> String -> (String -> msg) -> Html msg
-firstTextField label value toMsg =
-    Html.span [ HA.style "display" "block", HA.style "margin-bottom" "0.5rem" ]
-        [ Html.label [] [ text <| label ++ " " ]
-        , Html.input
+firstTextField placeholder value toMsg =
+    Html.span [ HA.style "display" "block", HA.style "margin-bottom" "0.5rem", HA.style "width" "100%" ]
+        [ Html.input
             [ HA.type_ "text"
             , HA.value value
+            , HA.placeholder placeholder
             , Html.Events.onInput toMsg
             , HA.style "background-color" "transparent"
             , HA.style "border-bottom" "1px solid #7A7A7A"
@@ -223,7 +224,7 @@ firstTextField label value toMsg =
             , HA.style "border-right" "none"
             , HA.class "w-full"
             , HA.style "width" "100%"
-            , HA.style "padding" "0.5rem 0.75rem"
+            , HA.style "padding" "0.5rem 0.2rem"
             ]
             []
         ]
@@ -359,3 +360,38 @@ applyWalletIconStyle =
     , HA.style "max-width" "20px"
     , HA.style "object-fit" "contain"
     ]
+
+
+viewActionTypeIcon : String -> Html msg
+viewActionTypeIcon actionType =
+    let
+        iconStyle =
+            [ HA.style "margin-left" "0.25rem"
+            , HA.style "display" "inline-flex"
+            , HA.style "align-items" "center"
+            ]
+    in
+    case actionType of
+        "treasuryWithdrawals" ->
+            Html.span iconStyle [ text "💰" ]
+
+        "constitution" ->
+            Html.span iconStyle [ text "📜" ]
+
+        "constitutionalCommittee" ->
+            Html.span iconStyle [ text "👥" ]
+
+        "information" ->
+            Html.span iconStyle [ text "ℹ️" ]
+
+        "noConfidence" ->
+            Html.span iconStyle [ text "❌" ]
+
+        "protocolParametersUpdate" ->
+            Html.span iconStyle [ text "⚙️" ]
+
+        "hardfork" ->
+            Html.span iconStyle [ text "🍴" ]
+
+        _ ->
+            Html.span iconStyle [ text "🔄" ]

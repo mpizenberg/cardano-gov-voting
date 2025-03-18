@@ -2249,7 +2249,7 @@ viewVoterIdentificationStep ctx step =
             Html.map ctx.wrapMsg <|
                 div []
                     [ Html.h2 [ HA.class "text-3xl font-medium  mb-4" ] [ text "Voter governance ID (drep/pool/cc_hot)" ]
-                    , Html.p [] [ Helper.firstTextField "" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
+                    , Html.p [] [ Helper.firstTextField "Enter drep/pool/cc_hot" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
                     , Html.Lazy.lazy viewValidGovIdForm form
                     , Html.p [ HA.class "my-4" ] [ Helper.viewButton "Confirm Voter" ValidateVoterFormButtonClicked ]
                     , viewError form.error
@@ -2681,21 +2681,40 @@ viewProposalSelectionStep ctx model =
                                     ]
                             )
 
-                networkBadge =
+                networkBadgeStyle =
                     case ctx.networkId of
                         Mainnet ->
-                            div
-                                [ HA.class "inline-flex items-center bg-green-100 text-green-800 px-2 py-1 rounded text-sm font-medium ml-2" ]
-                                [ text "Mainnet" ]
+                            [ HA.style "background-color" "rgba(16, 185, 129, 0.1)"
+                            , HA.style "color" "#065f46"
+                            ]
 
                         Testnet ->
-                            div
-                                [ HA.class "inline-flex items-center bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm font-medium ml-2" ]
-                                [ text "Testnet" ]
+                            [ HA.style "background-color" "rgba(124, 58, 237, 0.1)"
+                            , HA.style "color" "#5b21b6"
+                            ]
             in
             div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
-                [ Html.h2 [ HA.class "text-3xl font-medium mb-4" ] [ text "Pick a Proposal" ]
-                , networkBadge
+                [ div [ HA.class "flex items-center mb-4" ]
+                    [ Html.h2 [ HA.class "text-3xl font-medium" ] [ text "Pick a Proposal" ]
+                    , Html.span
+                        (networkBadgeStyle
+                            ++ [ HA.style "font-size" "0.7rem"
+                               , HA.style "font-weight" "600"
+                               , HA.style "padding" "0.15rem 0.5rem"
+                               , HA.style "border-radius" "9999px"
+                               , HA.style "white-space" "nowrap"
+                               , HA.style "margin-left" "8px"
+                               ]
+                        )
+                        [ text
+                            (if ctx.networkId == Mainnet then
+                                "Mainnet"
+
+                             else
+                                "Testnet"
+                            )
+                        ]
+                    ]
                 , Helper.formContainer
                     [ Html.p [ HA.class "mb-4" ]
                         [ Html.strong [ HA.class "font-medium" ] [ text "Selected proposal:" ]
@@ -2824,7 +2843,7 @@ viewProposalCard wrapMsg networkId proposal =
                             , HA.style "cursor" "pointer"
                             , HA.title "View on Cardanoscan (opens in new tab)"
                             ]
-                            [ text <| strBothEnds 8 8 <| Bytes.toHex proposal.id.transactionId
+                            [ text <| strBothEnds 5 5 <| Bytes.toHex proposal.id.transactionId
                             , text <| "#" ++ String.fromInt proposal.id.govActionIndex
                             , Html.span
                                 [ HA.style "margin-left" "0.25rem"
@@ -2842,7 +2861,9 @@ viewProposalCard wrapMsg networkId proposal =
                         , HA.style "border-radius" "9999px"
                         , HA.style "margin-left" "0.5rem"
                         ]
-                        [ text proposal.actionType ]
+                        [ text proposal.actionType
+                        , Helper.viewActionTypeIcon proposal.actionType
+                        ]
                     ]
                 ]
             , Html.button
@@ -3853,54 +3874,59 @@ viewSignTxStep ctx voterStep buildTxStep =
     case ( buildTxStep, voterStep ) of
         ( Done _ { tx, expectedSignatures }, Done _ voterWitness ) ->
             let
+                -- Extract the main voter credential information
                 voterId =
-                    -- type VoterWitness
-                    -- = WithCommitteeHotCred CredentialWitness
-                    -- | WithDrepCred CredentialWitness
-                    -- | WithPoolCred (Bytes CredentialHash)
                     case voterWitness of
                         Cardano.WithCommitteeHotCred (Cardano.WithKey hotkey) ->
-                            ( Bytes.toHex hotkey, "Committee hot key" )
+                            [ ( Bytes.toHex hotkey, "Committee hot key" ) ]
 
-                        Cardano.WithCommitteeHotCred (Cardano.WithScript scriptHash _) ->
+                        Cardano.WithCommitteeHotCred (Cardano.WithScript scriptHash witness) ->
                             ( Bytes.toHex scriptHash, "Committee governance script" )
+                                :: extractMultisigKeys witness
 
                         Cardano.WithDrepCred (Cardano.WithKey credKey) ->
-                            ( Bytes.toHex credKey, "DRep key" )
+                            [ ( Bytes.toHex credKey, "DRep key" ) ]
 
-                        Cardano.WithDrepCred (Cardano.WithScript scriptHash _) ->
+                        Cardano.WithDrepCred (Cardano.WithScript scriptHash witness) ->
                             ( Bytes.toHex scriptHash, "DRep governance script" )
+                                :: extractMultisigKeys witness
 
                         Cardano.WithPoolCred poolKey ->
-                            ( Bytes.toHex poolKey, "SPO key" )
+                            [ ( Bytes.toHex poolKey, "SPO key" ) ]
+
+                extractMultisigKeys : ScriptWitness -> List ( String, String )
+                extractMultisigKeys witness =
+                    case witness of
+                        NativeWitness { expectedSigners } ->
+                            List.map (\signer -> ( Bytes.toHex signer, "Multisig signer" )) expectedSigners
+
+                        -- "let’s leave it as-is because we don’t handle them anyway for now"
+                        PlutusWitness _ ->
+                            []
 
                 walletSpendingCredential =
                     case ctx.loadedWallet of
                         Just { changeAddress } ->
                             Address.extractPubKeyHash changeAddress
-                                |> Maybe.map (\hash -> ( Bytes.toHex hash, "Wallet spending key" ))
-                                |> Maybe.withDefault ( "", "" )
+                                |> Maybe.map (\hash -> [ ( Bytes.toHex hash, "Wallet spending key" ) ])
+                                |> Maybe.withDefault []
 
                         Nothing ->
-                            ( "", "" )
+                            []
 
                 walletStakeCredential =
                     case ctx.loadedWallet of
                         Just { changeAddress } ->
                             Address.extractStakeKeyHash changeAddress
-                                |> Maybe.map (\hash -> ( Bytes.toHex hash, "Wallet stake key" ))
-                                |> Maybe.withDefault ( "", "" )
+                                |> Maybe.map (\hash -> [ ( Bytes.toHex hash, "Wallet stake key" ) ])
+                                |> Maybe.withDefault []
 
                         Nothing ->
-                            ( "", "" )
+                            []
 
                 keyNames : Dict String String
                 keyNames =
-                    Dict.fromList
-                        [ voterId
-                        , walletSpendingCredential
-                        , walletStakeCredential
-                        ]
+                    Dict.fromList (voterId ++ walletSpendingCredential ++ walletStakeCredential)
             in
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Signing" ]

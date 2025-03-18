@@ -902,7 +902,7 @@ innerUpdate ctx msg model =
             )
 
         AddHeaderButtonClicked ->
-            ( updateStorageForm (\form -> { form | headers = ( "", "" ) :: form.headers }) model
+            ( updateStorageForm (\form -> { form | headers = form.headers ++ [ ( "", "" ) ] }) model
             , Cmd.none
             , Nothing
             )
@@ -3600,8 +3600,6 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                             div []
                                 [ Helper.labeledField "IPFS RPC server:"
                                     (Helper.textFieldInline form.ipfsServer IpfsServerChange)
-                                , div [ HA.class "mt-4" ]
-                                    [ Helper.viewButton "Add header" AddHeaderButtonClicked ]
                                 , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
                                 , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
                                     [ text "For example, use "
@@ -3614,6 +3612,8 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                                         ]
                                         [ text "Blockfrost" ]
                                     , text " or other IPFS providers."
+                                    , div [ HA.class "mt-4" ]
+                                        [ Helper.viewButton "Add HTTP header" AddHeaderButtonClicked ]
                                     ]
                                 ]
 
@@ -3694,9 +3694,9 @@ viewHeader n ( field, value ) =
     Helper.formContainer
         [ div [ HA.class "flex items-center" ]
             [ div [ HA.class "flex-1 flex gap-12" ]
-                [ Helper.labeledField "Project ID"
+                [ Helper.labeledField "Request Header Title"
                     (Helper.textFieldInline field (StorageHeaderFieldChange n))
-                , Helper.labeledField "IPFS"
+                , Helper.labeledField "Request Header Value"
                     (Helper.textFieldInline value (StorageHeaderValueChange n))
                 , Helper.viewButton "Delete" (DeleteHeaderButtonClicked n)
                 ]

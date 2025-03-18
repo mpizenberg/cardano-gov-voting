@@ -1541,7 +1541,11 @@ validateRationaleForm step =
             in
             case rationaleValidation of
                 Ok _ ->
-                    Done form (rationaleFromForm form)
+                    let
+                        formWithoutError =
+                            { form | error = Nothing }
+                    in
+                    Done formWithoutError (rationaleFromForm formWithoutError)
 
                 Err err ->
                     Preparing { form | error = Just err }

@@ -87,7 +87,7 @@ type alias InnerModel =
     { someRefUtxos : Utxo.RefDict Output
     , voterStep : Step VoterPreparationForm VoterWitness VoterWitness
     , pickProposalStep : Step {} {} ActiveProposal
-    , rationaleCreationStep : Step RationaleForm {} Rationale
+    , rationaleCreationStep : Step RationaleForm Rationale Rationale
     , rationaleSignatureStep : Step RationaleSignatureForm {} RationaleSignature
     , permanentStorageStep : Step StorageForm {} Storage
     , buildTxStep : Step BuildTxPrep {} TxFinalized
@@ -161,6 +161,7 @@ initVoterForm =
 
 type alias RationaleForm =
     { summary : String
+    , pdfAutogen : Bool
     , rationaleStatement : MarkdownForm
     , precedentDiscussion : MarkdownForm
     , counterArgumentDiscussion : MarkdownForm
@@ -197,6 +198,7 @@ noInternalVote =
 initRationaleForm : RationaleForm
 initRationaleForm =
     { summary = ""
+    , pdfAutogen = True
     , rationaleStatement = ""
     , precedentDiscussion = ""
     , counterArgumentDiscussion = ""
@@ -772,6 +774,21 @@ innerUpdate ctx msg model =
 
         ValidateRationaleButtonClicked ->
             case validateRationaleForm model.rationaleCreationStep of
+                -- If validation fails, it will return back to the form editing step with an error message
+                Preparing formWithError ->
+                    ( { model | rationaleCreationStep = Preparing formWithError }, Cmd.none, Nothing )
+
+                -- If validation partially succeeds but needs more processing,
+                -- it will return in the Preparing step and we now need to store the PDF on IPFS,
+                -- and then edit the rationale to include the PDF link
+                Validating form rationale ->
+                    ( { model | rationaleCreationStep = Validating form rationale }
+                    , Cmd.none
+                      -- TODO: save rationale PDF to IPFS and update rationale with link
+                    , Nothing
+                    )
+
+                -- If validation fully succeeds, it will proceed to the Done step
                 Done prep newRationale ->
                     let
                         -- Initialize with no rationale signature
@@ -789,9 +806,6 @@ innerUpdate ctx msg model =
                             }
                     in
                     ( updatedModel, Cmd.none, Nothing )
-
-                prepOrValidating ->
-                    ( { model | rationaleCreationStep = prepOrValidating }, Cmd.none, Nothing )
 
         EditRationaleButtonClicked ->
             ( { model | rationaleCreationStep = editRationale model.rationaleCreationStep }
@@ -1525,7 +1539,7 @@ isH1Block block =
             False
 
 
-validateRationaleForm : Step RationaleForm {} Rationale -> Step RationaleForm {} Rationale
+validateRationaleForm : Step RationaleForm Rationale Rationale -> Step RationaleForm Rationale Rationale
 validateRationaleForm step =
     case step of
         Preparing form ->
@@ -1539,15 +1553,25 @@ validateRationaleForm step =
                         |> Result.andThen (\_ -> validateRationaleInternVote form.internalVote)
                         |> Result.andThen (\_ -> validateRationaleRefs form.references)
             in
-            case rationaleValidation of
-                Ok _ ->
+            case ( rationaleValidation, form.pdfAutogen ) of
+                -- Without PDF autogeneration, validation is considered complete
+                ( Ok _, False ) ->
                     let
                         formWithoutError =
                             { form | error = Nothing }
                     in
                     Done formWithoutError (rationaleFromForm formWithoutError)
 
-                Err err ->
+                -- With PDF autogeneration, we will need to store on IPFS the PDF,
+                -- and then auto-edit the rationale statement and references sections.
+                ( Ok _, True ) ->
+                    let
+                        formWithoutError =
+                            { form | error = Nothing }
+                    in
+                    Validating formWithoutError (rationaleFromForm formWithoutError)
+
+                ( Err err, _ ) ->
                     Preparing { form | error = Just err }
 
         _ ->
@@ -1687,7 +1711,7 @@ rationaleFromForm form =
     }
 
 
-editRationale : Step RationaleForm {} Rationale -> Step RationaleForm {} Rationale
+editRationale : Step RationaleForm Rationale Rationale -> Step RationaleForm Rationale Rationale
 editRationale step =
     case step of
         Preparing _ ->
@@ -2953,7 +2977,7 @@ strBothEnds startLength endLength str =
 --
 
 
-viewRationaleStep : ViewContext msg -> Step RationaleForm {} Rationale -> Html msg
+viewRationaleStep : ViewContext msg -> Step RationaleForm Rationale Rationale -> Html msg
 viewRationaleStep ctx step =
     Html.map ctx.wrapMsg <|
         case step of
@@ -2975,7 +2999,7 @@ viewRationaleStep ctx step =
                 div []
                     [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
                     , Helper.formContainer
-                        [ Html.p [ HA.class "text-gray-600" ] [ text "Validating rationale data..." ]
+                        [ Html.p [ HA.class "text-gray-600" ] [ text "Auto-generation of PDF in progress ..." ]
                         , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
                         ]
                     ]
@@ -3356,7 +3380,7 @@ viewRef ref =
 
 viewRationaleSignatureStep :
     ViewContext msg
-    -> Step RationaleForm {} Rationale
+    -> Step RationaleForm Rationale Rationale
     -> Step RationaleSignatureForm {} RationaleSignature
     -> Html msg
 viewRationaleSignatureStep ctx rationaleCreationStep step =

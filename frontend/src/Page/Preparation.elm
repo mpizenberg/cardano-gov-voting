@@ -3900,10 +3900,10 @@ viewSignTxStep ctx voterStep buildTxStep =
                         NativeWitness { expectedSigners } ->
                             List.map (\signer -> ( Bytes.toHex signer, "Multisig signer" )) expectedSigners
 
+                        -- "let’s leave it as-is because we don’t handle them anyway for now"
                         PlutusWitness _ ->
                             []
 
-                -- "let’s leave it as-is because we don’t handle them anyway for now"
                 walletSpendingCredential =
                     case ctx.loadedWallet of
                         Just { changeAddress } ->

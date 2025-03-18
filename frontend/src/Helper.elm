@@ -8,7 +8,6 @@ module Helper exposing
     , formContainer
     , labeledField
     , prettyAdaLovelace
-    , prettyAddr
     , shortenedHex
     , textField
     , textFieldInline
@@ -23,8 +22,6 @@ module Helper exposing
 and are potentially useful in multiple places.
 -}
 
-import Bytes.Comparable as Bytes
-import Cardano.Address as Address exposing (Address)
 import Html exposing (Html, button, text)
 import Html.Attributes as HA
 import Html.Events exposing (onClick)
@@ -34,14 +31,6 @@ import Numeral
 
 
 -- String formatting
-
-
-{-| Display the Hex form of an address with only the first and last few characters.
--}
-prettyAddr : Address -> String
-prettyAddr address =
-    Bytes.toHex (Address.toBytes address)
-        |> shortenedHex 8
 
 
 {-| Shorten some string, by only keeping the first and last few characters.

@@ -7,12 +7,13 @@ The workflow is split into the following sequential steps:
 
 1.  Voter identification - Who is voting (DRep/SPO/CC)
 2.  Proposal selection - What proposal to vote on
-3.  Rationale creation - The reasoning behind the vote
-4.  Rationale signing - Optional signatures from multiple authors
-5.  Permanent storage - Storing rationale on IPFS
-6.  Fee handling - How transaction fees will be paid
-7.  Transaction building - Creating the vote transaction
-8.  Transaction signing - Redirect to the signing page
+3.  IPFS storage configuration - How to store the rationale on IPFS
+4.  Rationale creation - The reasoning behind the vote
+5.  Rationale signing - Optional signatures from multiple authors
+6.  Rationale storage - Storing rationale on IPFS
+7.  Fee handling - How transaction fees will be paid
+8.  Transaction building - Creating the vote transaction
+9.  Transaction signing - Redirect to the signing page
 
 Each step follows a common pattern using the Step type:
 
@@ -87,9 +88,10 @@ type alias InnerModel =
     { someRefUtxos : Utxo.RefDict Output
     , voterStep : Step VoterPreparationForm VoterWitness VoterWitness
     , pickProposalStep : Step {} {} ActiveProposal
+    , storageConfigStep : Step StorageForm {} StorageConfig
     , rationaleCreationStep : Step RationaleForm Rationale Rationale
     , rationaleSignatureStep : Step RationaleSignatureForm {} RationaleSignature
-    , permanentStorageStep : Step StorageForm {} Storage
+    , permanentStorageStep : Step { error : Maybe String } {} Storage
     , buildTxStep : Step BuildTxPrep {} TxFinalized
     , signTxStep : Step { error : Maybe String } SigningTx SignedTx
     , visibleProposalCount : Int
@@ -117,9 +119,10 @@ init =
         { someRefUtxos = Utxo.emptyRefDict
         , voterStep = Preparing initVoterForm
         , pickProposalStep = Preparing {}
+        , storageConfigStep = Preparing initStorageForm
         , rationaleCreationStep = Preparing initRationaleForm
         , rationaleSignatureStep = Preparing initRationaleSignatureForm
-        , permanentStorageStep = Preparing initStorageForm
+        , permanentStorageStep = Preparing { error = Nothing }
         , buildTxStep = Preparing { error = Nothing }
         , signTxStep = Preparing { error = Nothing }
         , visibleProposalCount = 10
@@ -318,7 +321,7 @@ initAuthorForm =
 
 
 type StorageMethod
-    = StandardIPFS
+    = PreconfigIPFS
     | CustomIPFS
 
 
@@ -332,15 +335,20 @@ type alias StorageForm =
 
 initStorageForm : StorageForm
 initStorageForm =
-    { storageMethod = StandardIPFS
+    { storageMethod = PreconfigIPFS
     , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
     , headers = [ ( "project_id", "" ) ]
     , error = Nothing
     }
 
 
+type StorageConfig
+    = UsePreconfigIpfs
+    | UseCustomIpfs { ipfsServer : String, headers : List ( String, String ) }
+
+
 type alias Storage =
-    { config : StorageForm
+    { config : StorageConfig
     , jsonFile : IpfsFile
     }
 
@@ -424,8 +432,17 @@ type Msg
     | PickProposalButtonClicked String
     | ChangeProposalButtonClicked
     | ShowMoreProposals Int
+      -- Storage Config Step
+    | StorageMethodSelected StorageMethod
+    | IpfsServerChange String
+    | AddHeaderButtonClicked
+    | DeleteHeaderButtonClicked Int
+    | StorageHeaderFieldChange Int String
+    | StorageHeaderValueChange Int String
+    | ValidateStorageConfigButtonClicked
       -- Rationale
     | RationaleSummaryChange String
+    | TogglePdfAutogen Bool
     | RationaleStatementChange String
     | PrecedentDiscussionChange String
     | CounterArgumentChange String
@@ -441,6 +458,7 @@ type Msg
     | ReferenceUriChange Int String
     | ReferenceTypeChange Int String
     | ValidateRationaleButtonClicked
+    | GotUnsignedPdfFile (Result Http.Error ElmBytes.Bytes)
     | EditRationaleButtonClicked
       -- Rationale Signature
     | AddAuthorButtonClicked
@@ -453,14 +471,8 @@ type Msg
     | ValidateRationaleSignaturesButtonClicked
     | ChangeAuthorsButtonClicked
     | ConvertToPdfButtonClicked String
-    | GotPdfFile (Result Http.Error ElmBytes.Bytes)
-      -- Storage
-    | StorageMethodSelected StorageMethod
-    | IpfsServerChange String
-    | AddHeaderButtonClicked
-    | DeleteHeaderButtonClicked Int
-    | StorageHeaderFieldChange Int String
-    | StorageHeaderValueChange Int String
+    | GotSignedPdfFile (Result Http.Error ElmBytes.Bytes)
+      -- Rationale Storage
     | PinJsonIpfsButtonClicked
     | GotIpfsAnswer (Result String IpfsAnswer)
     | AddOtherStorageButtonCLicked
@@ -520,12 +532,6 @@ innerUpdate ctx msg model =
     case msg of
         ShowMoreProposals currentCount ->
             ( { model | visibleProposalCount = currentCount + 10 }
-            , Cmd.none
-            , Nothing
-            )
-
-        StorageMethodSelected method ->
-            ( updateStorageForm (\form -> { form | storageMethod = method }) model
             , Cmd.none
             , Nothing
             )
@@ -680,10 +686,86 @@ innerUpdate ctx msg model =
             )
 
         --
+        -- Storage Configuration Step
+        --
+        StorageMethodSelected method ->
+            ( updateStorageConfigForm (\form -> { form | storageMethod = method }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        IpfsServerChange ipfsServer ->
+            ( updateStorageConfigForm (\form -> { form | ipfsServer = ipfsServer }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        AddHeaderButtonClicked ->
+            ( updateStorageConfigForm (\form -> { form | headers = form.headers ++ [ ( "", "" ) ] }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        DeleteHeaderButtonClicked n ->
+            ( updateStorageConfigForm (\form -> { form | headers = List.Extra.removeAt n form.headers }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        StorageHeaderFieldChange n field ->
+            ( updateStorageConfigForm (\form -> { form | headers = List.Extra.updateAt n (\( _, v ) -> ( field, v )) form.headers }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        StorageHeaderValueChange n value ->
+            ( updateStorageConfigForm (\form -> { form | headers = List.Extra.updateAt n (\( f, _ ) -> ( f, value )) form.headers }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        ValidateStorageConfigButtonClicked ->
+            case model.storageConfigStep of
+                Preparing form ->
+                    case form.storageMethod of
+                        -- When using the preconfigured IPFS server, no need to validate anything.
+                        PreconfigIPFS ->
+                            ( { model | storageConfigStep = Done form UsePreconfigIpfs }
+                            , Cmd.none
+                            , Nothing
+                            )
+
+                        -- When using a custom IPFS server, in theory, we should check that it’s valid with some endpoint.
+                        CustomIPFS ->
+                            case validateIpfsForm form of
+                                Ok _ ->
+                                    -- TODO: test some IPFS endpoint to check custom config validity,
+                                    -- and return a "Validating" step instead of a "Done" step.
+                                    ( { model | storageConfigStep = Done form (UseCustomIpfs { ipfsServer = form.ipfsServer, headers = form.headers }) }
+                                    , Cmd.none
+                                    , Nothing
+                                    )
+
+                                Err error ->
+                                    ( { model | storageConfigStep = Preparing { form | error = Just error } }
+                                    , Cmd.none
+                                    , Nothing
+                                    )
+
+                _ ->
+                    ( model, Cmd.none, Nothing )
+
+        --
         -- Rationale Step
         --
         RationaleSummaryChange summary ->
             ( updateRationaleForm (\form -> { form | summary = summary }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        TogglePdfAutogen pdfAutogen ->
+            ( updateRationaleForm (\form -> { form | pdfAutogen = pdfAutogen }) model
             , Cmd.none
             , Nothing
             )
@@ -782,9 +864,18 @@ innerUpdate ctx msg model =
                 -- it will return in the Preparing step and we now need to store the PDF on IPFS,
                 -- and then edit the rationale to include the PDF link
                 Validating form rationale ->
+                    let
+                        tempUnsignedRationaleForm =
+                            rationaleSignatureFromForm ctx.jsonLdContexts { authors = [], error = Nothing, rationale = rationale }
+
+                        rawFileContent =
+                            tempUnsignedRationaleForm.signedJson
+                                |> Debug.log "Raw unsigned file content sent to PDF conversion"
+                    in
                     ( { model | rationaleCreationStep = Validating form rationale }
-                    , Cmd.none
-                      -- TODO: save rationale PDF to IPFS and update rationale with link
+                      -- Save rationale PDF to IPFS and update rationale with link
+                    , Api.defaultApiProvider.convertToPdf rawFileContent GotUnsignedPdfFile
+                        |> Cmd.map ctx.wrapMsg
                     , Nothing
                     )
 
@@ -806,6 +897,22 @@ innerUpdate ctx msg model =
                             }
                     in
                     ( updatedModel, Cmd.none, Nothing )
+
+        -- Handling PDF auto-gen for the rationale
+        GotUnsignedPdfFile result ->
+            case ( model.rationaleCreationStep, result ) of
+                ( Validating _ _, Ok pdfBytes ) ->
+                    Debug.todo "send PDF to IPFS"
+
+                ( Validating form _, Err error ) ->
+                    ( { model | rationaleCreationStep = Preparing { form | error = Just <| "An error occurred while converting the rationale to PDF: " ++ Debug.toString error } }
+                    , Cmd.none
+                    , Nothing
+                    )
+
+                _ ->
+                    -- Ignore if we are not validating the rationale
+                    ( model, Cmd.none, Nothing )
 
         EditRationaleButtonClicked ->
             ( { model | rationaleCreationStep = editRationale model.rationaleCreationStep }
@@ -880,12 +987,12 @@ innerUpdate ctx msg model =
 
         ConvertToPdfButtonClicked rawFileContent ->
             ( model
-            , Api.defaultApiProvider.convertToPdf rawFileContent GotPdfFile
+            , Api.defaultApiProvider.convertToPdf rawFileContent GotSignedPdfFile
                 |> Cmd.map ctx.wrapMsg
             , Nothing
             )
 
-        GotPdfFile result ->
+        GotSignedPdfFile result ->
             case model.rationaleSignatureStep of
                 Done form rationaleSignature ->
                     case result of
@@ -907,47 +1014,14 @@ innerUpdate ctx msg model =
                     ( model, Cmd.none, Nothing )
 
         --
-        -- Permanent Storage Step
+        -- Rationale Storage Step
         --
-        IpfsServerChange ipfsServer ->
-            ( updateStorageForm (\form -> { form | ipfsServer = ipfsServer }) model
-            , Cmd.none
-            , Nothing
-            )
-
-        AddHeaderButtonClicked ->
-            ( updateStorageForm (\form -> { form | headers = form.headers ++ [ ( "", "" ) ] }) model
-            , Cmd.none
-            , Nothing
-            )
-
-        DeleteHeaderButtonClicked n ->
-            ( updateStorageForm (\form -> { form | headers = List.Extra.removeAt n form.headers }) model
-            , Cmd.none
-            , Nothing
-            )
-
-        StorageHeaderFieldChange n field ->
-            ( updateStorageForm (\form -> { form | headers = List.Extra.updateAt n (\( _, v ) -> ( field, v )) form.headers }) model
-            , Cmd.none
-            , Nothing
-            )
-
-        StorageHeaderValueChange n value ->
-            ( updateStorageForm (\form -> { form | headers = List.Extra.updateAt n (\( f, _ ) -> ( f, value )) form.headers }) model
-            , Cmd.none
-            , Nothing
-            )
-
         PinJsonIpfsButtonClicked ->
-            case model.permanentStorageStep of
-                Preparing form ->
-                    validateIpfsFormAndSendPinRequest ctx form model
+            case ( model.storageConfigStep, model.permanentStorageStep ) of
+                ( Done _ _, Preparing _ ) ->
+                    sendPinRequest ctx model
 
-                Validating _ _ ->
-                    ( model, Cmd.none, Nothing )
-
-                Done _ _ ->
+                _ ->
                     ( model, Cmd.none, Nothing )
 
         GotIpfsAnswer (Err httpError) ->
@@ -965,14 +1039,11 @@ innerUpdate ctx msg model =
                     ( model, Cmd.none, Nothing )
 
         GotIpfsAnswer (Ok ipfsAnswer) ->
-            case model.permanentStorageStep of
-                Preparing _ ->
-                    ( model, Cmd.none, Nothing )
+            case ( model.storageConfigStep, model.permanentStorageStep ) of
+                ( Done _ storageConfig, Validating _ _ ) ->
+                    handleIpfsAnswer model storageConfig ipfsAnswer
 
-                Validating form _ ->
-                    handleIpfsAnswer model form ipfsAnswer
-
-                Done _ _ ->
+                _ ->
                     ( model, Cmd.none, Nothing )
 
         AddOtherStorageButtonCLicked ->
@@ -1495,6 +1566,53 @@ utxoRefFromStr str =
 
 
 
+-- Storage Configuration Step
+
+
+updateStorageConfigForm : (StorageForm -> StorageForm) -> InnerModel -> InnerModel
+updateStorageConfigForm formUpdate model =
+    case model.storageConfigStep of
+        Preparing form ->
+            { model | storageConfigStep = Preparing <| formUpdate form }
+
+        Validating _ _ ->
+            model
+
+        Done _ _ ->
+            model
+
+
+validateIpfsForm : StorageForm -> Result String ()
+validateIpfsForm form =
+    case form.storageMethod of
+        PreconfigIPFS ->
+            -- For standard IPFS, no validation needed
+            Ok ()
+
+        CustomIPFS ->
+            let
+                -- Check that the IPFS server url looks legit
+                ipfsServerUrlSeemsLegit =
+                    case Url.fromString form.ipfsServer of
+                        Just _ ->
+                            Ok ()
+
+                        Nothing ->
+                            Err ("This url seems incorrect, it must look like this: https://subdomain.domain.org, instead I got this: " ++ form.ipfsServer)
+
+                -- Check that headers look valid
+                nonEmptyHeadersResult headers =
+                    if List.any (\( f, _ ) -> String.isEmpty f) headers then
+                        Err "Empty header fields are forbidden."
+
+                    else
+                        Ok ()
+            in
+            ipfsServerUrlSeemsLegit
+                |> Result.andThen (\_ -> nonEmptyHeadersResult form.headers)
+
+
+
 -- Rationale Step
 
 
@@ -1993,27 +2111,14 @@ reduceResults results =
 
 
 
--- Permanent Storage Step
+-- Rationale Storage Step
 
 
-updateStorageForm : (StorageForm -> StorageForm) -> InnerModel -> InnerModel
-updateStorageForm formUpdate model =
-    case model.permanentStorageStep of
-        Preparing form ->
-            { model | permanentStorageStep = Preparing <| formUpdate form }
-
-        Validating _ _ ->
-            model
-
-        Done _ _ ->
-            model
-
-
-validateIpfsFormAndSendPinRequest : UpdateContext msg -> StorageForm -> InnerModel -> ( InnerModel, Cmd msg, Maybe MsgToParent )
-validateIpfsFormAndSendPinRequest ctx form model =
-    case ( model.rationaleSignatureStep, validateIpfsForm form ) of
-        ( Done _ ratSig, Ok _ ) ->
-            ( { model | permanentStorageStep = Validating form {} }
+sendPinRequest : UpdateContext msg -> InnerModel -> ( InnerModel, Cmd msg, Maybe MsgToParent )
+sendPinRequest ctx model =
+    case model.rationaleSignatureStep of
+        Done _ ratSig ->
+            ( { model | permanentStorageStep = Validating { error = Nothing } {} }
             , ctx.jsonRationaleToFile
                 { fileContent = ratSig.signedJson
                 , fileName = "rationale-signed.json"
@@ -2021,90 +2126,54 @@ validateIpfsFormAndSendPinRequest ctx form model =
             , Nothing
             )
 
-        ( Done _ _, Err error ) ->
-            ( { model | permanentStorageStep = Preparing { form | error = Just error } }
-            , Cmd.none
-            , Nothing
-            )
-
         _ ->
-            ( { model | permanentStorageStep = Preparing { form | error = Just "Validate the rationale signature step first." } }
+            ( { model | permanentStorageStep = Preparing { error = Just "Validate the rationale signature step first." } }
             , Cmd.none
             , Nothing
             )
-
-
-validateIpfsForm : StorageForm -> Result String ()
-validateIpfsForm form =
-    case form.storageMethod of
-        StandardIPFS ->
-            -- For standard IPFS, no validation needed
-            Ok ()
-
-        CustomIPFS ->
-            let
-                -- Check that the IPFS server url looks legit
-                ipfsServerUrlSeemsLegit =
-                    case Url.fromString form.ipfsServer of
-                        Just _ ->
-                            Ok ()
-
-                        Nothing ->
-                            Err ("This url seems incorrect, it must look like this: https://subdomain.domain.org, instead I got this: " ++ form.ipfsServer)
-
-                -- Check that headers look valid
-                nonEmptyHeadersResult headers =
-                    if List.any (\( f, _ ) -> String.isEmpty f) headers then
-                        Err "Empty header fields are forbidden."
-
-                    else
-                        Ok ()
-            in
-            ipfsServerUrlSeemsLegit
-                |> Result.andThen (\_ -> nonEmptyHeadersResult form.headers)
 
 
 pinRationaleFile : JD.Value -> Model -> ( Model, Cmd Msg )
 pinRationaleFile fileAsValue (Model model) =
-    case ( JD.decodeValue File.decoder fileAsValue, model.permanentStorageStep ) of
-        ( Err error, Validating form _ ) ->
-            ( Model { model | permanentStorageStep = Preparing { form | error = Just <| JD.errorToString error } }
+    case ( JD.decodeValue File.decoder fileAsValue, model.storageConfigStep, model.permanentStorageStep ) of
+        ( Err error, _, Validating _ _ ) ->
+            ( Model { model | permanentStorageStep = Preparing { error = Just <| JD.errorToString error } }
             , Cmd.none
             )
 
-        ( Ok file, Validating storageForm _ ) ->
+        ( Ok file, Done _ storageConfig, Validating _ _ ) ->
             ( Model model
-            , case storageForm.storageMethod of
-                StandardIPFS ->
+            , case storageConfig of
+                UsePreconfigIpfs ->
                     Api.defaultApiProvider.ipfsCfAdd
                         { file = file }
                         GotIpfsAnswer
 
-                CustomIPFS ->
+                UseCustomIpfs { ipfsServer, headers } ->
                     Api.defaultApiProvider.ipfsAdd
-                        { rpc = storageForm.ipfsServer
-                        , headers = storageForm.headers
+                        { rpc = ipfsServer
+                        , headers = headers
                         , file = file
                         }
                         GotIpfsAnswer
             )
 
-        -- Ignore if we aren't validating the permanent storage step
+        -- Ignore if we aren't validating the rationale storage step
         _ ->
             ( Model model, Cmd.none )
 
 
-handleIpfsAnswer : InnerModel -> StorageForm -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
-handleIpfsAnswer model form ipfsAnswer =
+handleIpfsAnswer : InnerModel -> StorageConfig -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
+handleIpfsAnswer model storageConfig ipfsAnswer =
     case ipfsAnswer of
         IpfsError error ->
-            ( { model | permanentStorageStep = Preparing { form | error = Just error } }
+            ( { model | permanentStorageStep = Preparing { error = Just error } }
             , Cmd.none
             , Nothing
             )
 
         IpfsAddSuccessful file ->
-            ( { model | permanentStorageStep = Done form { config = form, jsonFile = file } }
+            ( { model | permanentStorageStep = Done { error = Nothing } { config = storageConfig, jsonFile = file } }
             , Cmd.none
             , Nothing
             )
@@ -2251,11 +2320,13 @@ view ctx (Model model) =
             , Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
             , viewProposalSelectionStep ctx model
             , Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
+            , viewStorageConfigStep ctx model.storageConfigStep
+            , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
             , viewRationaleStep ctx model.rationaleCreationStep
             , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
             , viewRationaleSignatureStep ctx model.rationaleCreationStep model.rationaleSignatureStep
             , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
-            , viewPermanentStorageStep ctx model.rationaleSignatureStep model.permanentStorageStep
+            , viewPermanentStorageStep ctx model.rationaleSignatureStep model.storageConfigStep model.permanentStorageStep
             , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
             , viewBuildTxStep ctx model
             , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
@@ -2973,6 +3044,93 @@ strBothEnds startLength endLength str =
 
 
 --
+-- Storage Configuration Step
+--
+
+
+viewStorageConfigStep : ViewContext msg -> Step StorageForm {} StorageConfig -> Html msg
+viewStorageConfigStep ctx step =
+    case step of
+        Preparing form ->
+            Html.map ctx.wrapMsg <|
+                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Storage Configuration" ]
+                    , Html.p [ HA.class "mb-4" ]
+                        [ text "Only the hash of your rationale is stored on Cardano,"
+                        , text " so it's recommended to also store the actual JSON file containing the rationale in a permanent storage solution."
+                        , text " Here we provide an easy way to store it on IPFS."
+                        ]
+                    , Helper.formContainer
+                        [ Html.h4 [ HA.class "text-xl mt-4 mb-2" ] [ text "IPFS Method" ]
+                        , div [ HA.class "flex items-center mb-2" ]
+                            [ Html.input
+                                [ HA.type_ "radio"
+                                , HA.name "ipfs-method"
+                                , HA.checked (form.storageMethod == PreconfigIPFS)
+                                , onClick (StorageMethodSelected PreconfigIPFS)
+                                , HA.class "mr-2"
+                                ]
+                                []
+                            , Html.label [ HA.class "text-base" ] [ text "Pre-configured IPFS (Cardano Foundation)" ]
+                            ]
+                        , div [ HA.class "flex items-center mb-4" ]
+                            [ Html.input
+                                [ HA.type_ "radio"
+                                , HA.name "ipfs-method"
+                                , HA.checked (form.storageMethod == CustomIPFS)
+                                , onClick (StorageMethodSelected CustomIPFS)
+                                , HA.class "mr-2"
+                                ]
+                                []
+                            , Html.label [ HA.class "text-base" ] [ text "Custom IPFS Provider" ]
+                            ]
+                        , if form.storageMethod == CustomIPFS then
+                            div []
+                                [ Helper.labeledField "IPFS RPC server:"
+                                    (Helper.textFieldInline form.ipfsServer IpfsServerChange)
+                                , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
+                                , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
+                                    [ text "For example, use "
+                                    , Html.a
+                                        [ HA.href "https://blockfrost.dev/start-building/ipfs/"
+                                        , HA.target "_blank"
+                                        , HA.rel "noopener noreferrer"
+                                        , HA.style "color" "#2563eb"
+                                        , HA.style "text-decoration" "underline"
+                                        ]
+                                        [ text "Blockfrost" ]
+                                    , text " or other IPFS providers."
+                                    , div [ HA.class "mt-4" ]
+                                        [ Helper.viewButton "Add HTTP header" AddHeaderButtonClicked ]
+                                    ]
+                                ]
+
+                          else
+                            text ""
+                        ]
+                    , Html.p [] [ Helper.viewButton "Validate storage config" ValidateStorageConfigButtonClicked ]
+                    , viewError form.error
+                    ]
+
+        Validating _ _ ->
+            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Storage Configuration" ]
+                , Html.p [] [ text "Validating storage configuration ..." ]
+                ]
+
+        Done _ storageConfig ->
+            -- TODO: Please Fill make this pretty ^^
+            -- and with a button to change your mind and get back to the "Preparing" step
+            case storageConfig of
+                UsePreconfigIpfs ->
+                    div [] [ text "Using preconfigured IPFS server" ]
+
+                UseCustomIpfs { ipfsServer, headers } ->
+                    div [] [ text "Using custom IPFS server" ]
+
+
+
+--
 -- Rationale Step
 --
 
@@ -2985,7 +3143,7 @@ viewRationaleStep ctx step =
                 div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
                     [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
                     , Helper.formContainer [ viewSummaryForm form.summary ]
-                    , Helper.formContainer [ viewStatementForm form.rationaleStatement ]
+                    , Helper.formContainer [ viewStatementForm form.pdfAutogen form.rationaleStatement ]
                     , Helper.formContainer [ viewPrecedentDiscussionForm form.precedentDiscussion ]
                     , Helper.formContainer [ viewCounterArgumentForm form.counterArgumentDiscussion ]
                     , Helper.formContainer [ viewConclusionForm form.conclusion ]
@@ -3074,8 +3232,8 @@ viewSummaryForm form =
         ]
 
 
-viewStatementForm : MarkdownForm -> Html Msg
-viewStatementForm form =
+viewStatementForm : Bool -> MarkdownForm -> Html Msg
+viewStatementForm hasAutoGen form =
     div []
         [ Html.h4 [ HA.class "text-xl font-medium" ] [ text "Rationale Statement" ]
         , div [ HA.class "mt-2 mb-4" ]
@@ -3083,7 +3241,23 @@ viewStatementForm form =
             , Html.p [ HA.class "text-sm text-gray-600" ] [ text "Fully describe your rationale, with your arguments in full details." ]
             , Html.p [ HA.class "text-sm text-gray-600" ] [ text "No size limit. Use markdown with heading level 2 (##) or higher." ]
             ]
+        , viewPdfAutogenCheckbox hasAutoGen
         , Helper.viewTextarea form RationaleStatementChange
+        ]
+
+
+viewPdfAutogenCheckbox : Bool -> Html Msg
+viewPdfAutogenCheckbox hasAutoGen =
+    Html.p []
+        [ Html.input
+            [ HA.type_ "checkbox"
+            , HA.id "autogen-checkbox"
+            , HA.name "autogen-checkbox"
+            , HA.checked hasAutoGen
+            , onCheck TogglePdfAutogen
+            ]
+            []
+        , Html.label [ HA.for "autogen-checkbox" ] [ text <| " Auto-generate PDF and add it to the rationale" ]
         ]
 
 
@@ -3609,77 +3783,29 @@ viewSigner { name, witnessAlgorithm, publicKey, signature } =
 --
 
 
-viewPermanentStorageStep : ViewContext msg -> Step RationaleSignatureForm {} RationaleSignature -> Step StorageForm {} Storage -> Html msg
-viewPermanentStorageStep ctx rationaleSigStep step =
-    case ( rationaleSigStep, step ) of
-        ( Done _ _, Preparing form ) ->
+viewPermanentStorageStep :
+    ViewContext msg
+    -> Step RationaleSignatureForm {} RationaleSignature
+    -> Step StorageForm {} StorageConfig
+    -> Step { error : Maybe String } {} Storage
+    -> Html msg
+viewPermanentStorageStep ctx rationaleSigStep storageConfigStep step =
+    case ( rationaleSigStep, storageConfigStep, step ) of
+        ( Done _ _, Done _ _, Preparing form ) ->
             Html.map ctx.wrapMsg <|
                 div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Permanent Storage" ]
-                    , Html.p [ HA.class "mb-4" ]
-                        [ text "Only the hash of your rationale is stored on Cardano,"
-                        , text " so it's recommended to also store the actual JSON file containing the rationale in a permanent storage solution."
-                        , text " Here we provide an easy way to store it on IPFS."
-                        ]
-                    , Helper.formContainer
-                        [ Html.h4 [ HA.class "text-xl mt-4 mb-2" ] [ text "IPFS Method" ]
-                        , div [ HA.class "flex items-center mb-2" ]
-                            [ Html.input
-                                [ HA.type_ "radio"
-                                , HA.name "ipfs-method"
-                                , HA.checked (form.storageMethod == StandardIPFS)
-                                , onClick (StorageMethodSelected StandardIPFS)
-                                , HA.class "mr-2"
-                                ]
-                                []
-                            , Html.label [ HA.class "text-base" ] [ text "Pre-configured IPFS (Cardano Foundation)" ]
-                            ]
-                        , div [ HA.class "flex items-center mb-4" ]
-                            [ Html.input
-                                [ HA.type_ "radio"
-                                , HA.name "ipfs-method"
-                                , HA.checked (form.storageMethod == CustomIPFS)
-                                , onClick (StorageMethodSelected CustomIPFS)
-                                , HA.class "mr-2"
-                                ]
-                                []
-                            , Html.label [ HA.class "text-base" ] [ text "Custom IPFS Provider" ]
-                            ]
-                        , if form.storageMethod == CustomIPFS then
-                            div []
-                                [ Helper.labeledField "IPFS RPC server:"
-                                    (Helper.textFieldInline form.ipfsServer IpfsServerChange)
-                                , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
-                                , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
-                                    [ text "For example, use "
-                                    , Html.a
-                                        [ HA.href "https://blockfrost.dev/start-building/ipfs/"
-                                        , HA.target "_blank"
-                                        , HA.rel "noopener noreferrer"
-                                        , HA.style "color" "#2563eb"
-                                        , HA.style "text-decoration" "underline"
-                                        ]
-                                        [ text "Blockfrost" ]
-                                    , text " or other IPFS providers."
-                                    , div [ HA.class "mt-4" ]
-                                        [ Helper.viewButton "Add HTTP header" AddHeaderButtonClicked ]
-                                    ]
-                                ]
-
-                          else
-                            text ""
-                        ]
+                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
                     , Html.p [] [ Helper.viewButton "Add to IPFS" PinJsonIpfsButtonClicked ]
                     , viewError form.error
                     ]
 
-        ( Done _ _, Validating _ _ ) ->
+        ( Done _ _, Done _ _, Validating _ _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Permanent Storage" ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
                 , Html.p [] [ text "Uploading rationale to IPFS server ..." ]
                 ]
 
-        ( Done _ r, Done _ storage ) ->
+        ( Done _ r, Done _ _, Done _ storage ) ->
             let
                 link =
                     "https://ipfs.io/ipfs/" ++ storage.jsonFile.cid
@@ -3692,7 +3818,7 @@ viewPermanentStorageStep ctx rationaleSigStep step =
             in
             Html.map ctx.wrapMsg <|
                 div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Permanent Storage" ]
+                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
                     , Helper.formContainer
                         [ Html.p [ HA.class "mb-4" ]
                             [ Html.strong [ HA.class "font-medium" ] [ text "File uploaded successfully:" ]
@@ -3733,8 +3859,8 @@ viewPermanentStorageStep ctx rationaleSigStep step =
 
         _ ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Permanent Storage" ]
-                , Html.p [] [ text "Please complete the rationale signature step first." ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
+                , Html.p [] [ text "Please complete the storage config and rationale signature steps first." ]
                 ]
 
 

@@ -3732,7 +3732,7 @@ viewRef ref =
                     , HA.rel "noopener noreferrer"
                     , HA.class "text-blue-600 hover:text-blue-800 underline"
                     ]
-                    [ text gatewayUrl ]
+                    [ text ref.uri ]
 
             else
                 text ref.uri

@@ -753,6 +753,13 @@ innerUpdate ctx msg model =
                                     , Nothing
                                     )
 
+                -- When the user clicks on "Change storage configuration"
+                Done prep _ ->
+                    ( { model | storageConfigStep = Preparing prep }
+                    , Cmd.none
+                    , Nothing
+                    )
+
                 _ ->
                     ( model, Cmd.none, Nothing )
 
@@ -3229,14 +3236,42 @@ viewStorageConfigStep ctx step =
                 ]
 
         Done _ storageConfig ->
-            -- TODO: Please Fill make this pretty ^^
-            -- and with a button to change your mind and get back to the "Preparing" step
-            case storageConfig of
-                UsePreconfigIpfs ->
-                    div [] [ text "Using preconfigured IPFS server" ]
+            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Storage Configuration" ]
+                , Helper.formContainer
+                    [ Html.p [ HA.class "mb-4" ]
+                        [ Html.strong [ HA.class "font-medium" ] [ text "Selected storage method:" ] ]
+                    , div [ HA.class "p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
+                        [ case storageConfig of
+                            UsePreconfigIpfs ->
+                                div [ HA.class "flex flex-col space-y-2" ]
+                                    [ div [ HA.class "flex items-center" ]
+                                        [ Html.span [ HA.class "font-medium" ] [ text "Pre-configured IPFS (Cardano Foundation)" ]
+                                        ]
+                                    , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
+                                        [ text "Files will be stored using the Cardano Foundation's IPFS gateway." ]
+                                    ]
 
-                UseCustomIpfs _ ->
-                    div [] [ text "Using custom IPFS server" ]
+                            UseCustomIpfs { ipfsServer } ->
+                                div [ HA.class "flex flex-col space-y-2" ]
+                                    [ div [ HA.class "flex items-center" ]
+                                        [ Html.span [ HA.class "font-medium" ] [ text "Custom IPFS Provider" ]
+                                        ]
+                                    , Html.p [ HA.class "ml-8" ]
+                                        [ Html.span [ HA.class "font-bold mr-2" ] [ text "Server:" ]
+                                        , Html.a
+                                            [ HA.href ipfsServer
+                                            , HA.target "_blank"
+                                            , HA.rel "noopener noreferrer"
+                                            , HA.class "font-mono break-all text-blue-600 hover:text-blue-800 underline"
+                                            ]
+                                            [ text ipfsServer ]
+                                        ]
+                                    ]
+                        ]
+                    ]
+                , Html.p [] [ Helper.viewButton "Change storage configuration" (ctx.wrapMsg ValidateStorageConfigButtonClicked) ]
+                ]
 
 
 
@@ -3255,7 +3290,7 @@ viewRationaleStep ctx pickProposalStep storageConfigStep step =
     Html.map ctx.wrapMsg <|
         case ( pickProposalStep, storageConfigStep, step ) of
             ( Done _ _, Done _ _, Preparing form ) ->
-                div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
+                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                     [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
                     , Helper.formContainer [ viewSummaryForm form.summary ]
                     , Helper.formContainer [ viewStatementForm form.pdfAutogen form.rationaleStatement ]
@@ -3334,19 +3369,19 @@ viewRationaleStep ctx pickProposalStep storageConfigStep step =
                     ]
 
             ( _, Done _ _, _ ) ->
-                div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
+                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                     [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
                     , Html.p [] [ text "Please pick a proposal first." ]
                     ]
 
             ( Done _ _, _, _ ) ->
-                div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
+                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                     [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
                     , Html.p [] [ text "Please validate the IPFS config step first." ]
                     ]
 
             _ ->
-                div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
+                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                     [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
                     , Html.p [] [ text "Please pick a proposal and  validate the IPFS config step first." ]
                     ]
@@ -3381,16 +3416,27 @@ viewStatementForm hasAutoGen form =
 
 viewPdfAutogenCheckbox : Bool -> Html Msg
 viewPdfAutogenCheckbox hasAutoGen =
-    Html.p []
-        [ Html.input
-            [ HA.type_ "checkbox"
-            , HA.id "autogen-checkbox"
-            , HA.name "autogen-checkbox"
-            , HA.checked hasAutoGen
-            , onCheck TogglePdfAutogen
+    div
+        [ HA.class "flex items-center mb-3" ]
+        [ div
+            [ HA.class "relative flex items-center" ]
+            [ Html.input
+                [ HA.type_ "checkbox"
+                , HA.id "autogen-checkbox"
+                , HA.name "autogen-checkbox"
+                , HA.checked hasAutoGen
+                , onCheck TogglePdfAutogen
+                , HA.class "h-4 w-4 cursor-pointer border-gray-300 rounded"
+                , HA.style "accent-color" "#272727"
+                ]
+                []
+            , Html.label
+                [ HA.for "autogen-checkbox"
+                , HA.class "ml-2 text-sm font-medium text-gray-700 cursor-pointer flex items-center"
+                ]
+                [ Html.span [ HA.class "mr-1" ] [ text "Auto-generate PDF and add it to the rationale" ]
+                ]
             ]
-            []
-        , Html.label [ HA.for "autogen-checkbox" ] [ text <| " Auto-generate PDF and add it to the rationale" ]
         ]
 
 
@@ -3663,18 +3709,48 @@ viewReferences references =
 
     else
         div []
-            [ Html.h4 [ HA.class "text-xl font-medium mb-2" ] [ text "References" ]
+            [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "References" ]
             , Html.ul [ HA.class "space-y-2" ] (List.map viewRef references)
             ]
 
 
 viewRef : Reference -> Html msg
 viewRef ref =
-    Html.li [ HA.class "py-1" ]
-        [ Html.div [ HA.class "flex flex-col md:flex-row" ]
-            [ Html.span [ HA.class "mr-4" ] [ Html.strong [ HA.class "font-medium" ] [ text "Type: " ], text (refTypeToString ref.type_) ]
-            , Html.span [ HA.class "mr-4" ] [ Html.strong [ HA.class "font-medium" ] [ text "Label: " ], text ref.label ]
-            , Html.span [] [ Html.strong [ HA.class "font-medium" ] [ text "URI: " ], text ref.uri ]
+    let
+        uriDisplay =
+            if String.startsWith "ipfs://" ref.uri then
+                let
+                    cid =
+                        String.dropLeft 7 ref.uri
+
+                    gatewayUrl =
+                        "https://ipfs.io/ipfs/" ++ cid
+                in
+                Html.a
+                    [ HA.href gatewayUrl
+                    , HA.target "_blank"
+                    , HA.rel "noopener noreferrer"
+                    , HA.class "text-blue-600 hover:text-blue-800 underline"
+                    ]
+                    [ text gatewayUrl ]
+
+            else
+                text ref.uri
+    in
+    Html.li [ HA.class "py-2 border-b last:border-b-0", HA.style "border-color" "#e5e7eb" ]
+        [ Html.div [ HA.class "flex flex-col space-y-1" ]
+            [ Html.div []
+                [ Html.strong [ HA.class "font-medium" ] [ text "Type: " ]
+                , text (refTypeToString ref.type_)
+                ]
+            , Html.div []
+                [ Html.strong [ HA.class "font-medium" ] [ text "Label: " ]
+                , text ref.label
+                ]
+            , Html.div [ HA.class "flex" ]
+                [ Html.strong [ HA.class "font-medium" ] [ text "URI: " ]
+                , Html.div [ HA.class "break-all ml-2 font-mono" ] [ uriDisplay ]
+                ]
             ]
         ]
 
@@ -3957,7 +4033,7 @@ viewPermanentStorageStep ctx rationaleSigStep storageConfigStep step =
                         |> Bytes.fromU8
             in
             Html.map ctx.wrapMsg <|
-                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                div [ HA.style "padding-top" "8px" ]
                     [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
                     , Helper.formContainer
                         [ Html.p [ HA.class "mb-4" ]
@@ -4133,7 +4209,7 @@ viewBuildTxStep ctx model =
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Building" ]
                 , Helper.formContainer
-                    [ Html.p [ HA.class "mb-2" ] [ text "Transaction generated successfully", Html.span [ HA.style "color" "red" ] [ text " (₳ displayed as lovelaces):" ] ]
+                    [ Html.p [ HA.class "mb-2" ] [ text "Transaction generated successfully", Html.span [ HA.style "color" "red" ] [ text " (₳ displayed as lovelaces)" ], Html.span [] [ text ":" ] ]
                     , div [ HA.class "relative" ]
                         [ Html.pre
                             [ HA.style "padding" "1rem"

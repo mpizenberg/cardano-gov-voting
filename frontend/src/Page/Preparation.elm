@@ -3584,7 +3584,18 @@ viewMd str =
 
 markdownRenderer : Md.Renderer (Html msg)
 markdownRenderer =
-    { defaultHtmlRenderer | heading = customHeadingRenderer }
+    { defaultHtmlRenderer
+        | heading = customHeadingRenderer
+        , link =
+            \link content ->
+                Html.a
+                    [ HA.href link.destination
+                    , HA.target "_blank"
+                    , HA.rel "noopener noreferrer"
+                    , HA.class "text-blue-600 hover:text-blue-800 underline"
+                    ]
+                    content
+    }
 
 
 customHeadingRenderer : { level : Markdown.Block.HeadingLevel, rawText : String, children : List (Html msg) } -> Html msg
@@ -3749,7 +3760,7 @@ viewRef ref =
                 ]
             , Html.div [ HA.class "flex" ]
                 [ Html.strong [ HA.class "font-medium" ] [ text "URI: " ]
-                , Html.div [ HA.class "break-all ml-2 font-mono" ] [ uriDisplay ]
+                , Html.div [ HA.class "break-all ml-2" ] [ uriDisplay ]
                 ]
             ]
         ]

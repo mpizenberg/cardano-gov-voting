@@ -856,18 +856,18 @@ innerUpdate ctx msg model =
             )
 
         ValidateRationaleButtonClicked ->
-            case validateRationaleForm model.rationaleCreationStep of
+            case ( validateRationaleForm model.rationaleCreationStep, model.pickProposalStep ) of
                 -- If validation fails, it will return back to the form editing step with an error message
-                Preparing formWithError ->
+                ( Preparing formWithError, _ ) ->
                     ( { model | rationaleCreationStep = Preparing formWithError }, Cmd.none, Nothing )
 
                 -- If validation partially succeeds but needs more processing,
                 -- it will return in the Preparing step and we now need to store the PDF on IPFS,
                 -- and then edit the rationale to include the PDF link
-                Validating form rationale ->
+                ( Validating form rationale, Done _ { id } ) ->
                     let
                         tempUnsignedRationaleForm =
-                            rationaleSignatureFromForm ctx.jsonLdContexts { authors = [], error = Nothing, rationale = rationale }
+                            rationaleSignatureFromForm ctx.jsonLdContexts id { authors = [], error = Nothing, rationale = rationale }
 
                         rawFileContent =
                             tempUnsignedRationaleForm.signedJson
@@ -880,7 +880,7 @@ innerUpdate ctx msg model =
                     )
 
                 -- If validation fully succeeds, it will proceed to the Done step
-                Done prep newRationale ->
+                ( Done prep newRationale, Done _ { id } ) ->
                     let
                         -- Initialize with no rationale signature
                         form =
@@ -893,10 +893,13 @@ innerUpdate ctx msg model =
                             { model
                                 | rationaleCreationStep = Done prep newRationale
                                 , rationaleSignatureStep =
-                                    Done form (rationaleSignatureFromForm ctx.jsonLdContexts form)
+                                    Done form (rationaleSignatureFromForm ctx.jsonLdContexts id form)
                             }
                     in
                     ( updatedModel, Cmd.none, Nothing )
+
+                _ ->
+                    ( model, Cmd.none, Nothing )
 
         -- Handling PDF auto-gen for the rationale
         GotUnsignedPdfFile result ->
@@ -977,7 +980,7 @@ innerUpdate ctx msg model =
             )
 
         SkipRationaleSignaturesButtonClicked ->
-            ( { model | rationaleSignatureStep = skipRationaleSignature ctx.jsonLdContexts model.rationaleSignatureStep }
+            ( { model | rationaleSignatureStep = skipRationaleSignature ctx.jsonLdContexts model.pickProposalStep model.rationaleSignatureStep }
             , Cmd.none
             , Nothing
             )
@@ -1897,11 +1900,12 @@ editRationale step =
 -- Rationale Signature Step
 
 
-encodeJsonLdRationale : Rationale -> JE.Value
-encodeJsonLdRationale rationale =
+encodeJsonLdRationale : Gov.ActionId -> Rationale -> JE.Value
+encodeJsonLdRationale actionId rationale =
     JE.object <|
         List.filterMap identity
-            [ Just ( "summary", JE.string rationale.summary )
+            [ Just ( "govActionId", JE.string <| Gov.idToBech32 <| GovActionId actionId )
+            , Just ( "summary", JE.string rationale.summary )
             , Just ( "rationaleStatement", JE.string rationale.rationaleStatement )
             , Maybe.map (\s -> ( "precedentDiscussion", JE.string s )) rationale.precedentDiscussion
             , Maybe.map (\s -> ( "counterargumentDiscussion", JE.string s )) rationale.counterArgumentDiscussion
@@ -2015,37 +2019,37 @@ signatureDecodingError decodingError rationaleSignatureStep =
             rationaleSignatureStep
 
 
-skipRationaleSignature : JsonLdContexts -> Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
-skipRationaleSignature jsonLdContexts step =
-    case step of
-        Preparing ({ authors } as form) ->
+skipRationaleSignature : JsonLdContexts -> Step {} {} ActiveProposal -> Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
+skipRationaleSignature jsonLdContexts pickProposalStep step =
+    case ( pickProposalStep, step ) of
+        ( Done _ { id }, Preparing ({ authors } as form) ) ->
             case findDuplicate (List.map .name authors) of
                 Just dup ->
                     Preparing { form | error = Just <| "There is a duplicate name in the authors list: " ++ dup }
 
                 Nothing ->
                     { form | authors = List.map (\a -> { a | signature = Nothing }) authors }
-                        |> rationaleSignatureFromForm jsonLdContexts
+                        |> rationaleSignatureFromForm jsonLdContexts id
                         |> Done form
 
-        Validating ({ authors } as form) _ ->
+        ( Done _ { id }, Validating ({ authors } as form) _ ) ->
             case findDuplicate (List.map .name authors) of
                 Just dup ->
                     Preparing { form | error = Just <| "There is a duplicate name in the authors list: " ++ dup }
 
                 Nothing ->
                     { form | authors = List.map (\a -> { a | signature = Nothing }) authors }
-                        |> rationaleSignatureFromForm jsonLdContexts
+                        |> rationaleSignatureFromForm jsonLdContexts id
                         |> Done form
 
-        Done _ _ ->
+        _ ->
             step
 
 
 validateRationaleSignature : JsonLdContexts -> InnerModel -> ( InnerModel, Cmd msg, Maybe MsgToParent )
 validateRationaleSignature jsonLdContexts model =
-    case model.rationaleSignatureStep of
-        Preparing ({ authors } as form) ->
+    case ( model.rationaleSignatureStep, model.pickProposalStep ) of
+        ( Preparing ({ authors } as form), Done _ activeProposal ) ->
             case validateAuthorsForm authors of
                 Err error ->
                     ( { model | rationaleSignatureStep = Preparing { form | error = Just error } }
@@ -2055,24 +2059,21 @@ validateRationaleSignature jsonLdContexts model =
 
                 Ok _ ->
                     -- TODO: change to Validating instead, and emit a command to check signatures
-                    ( { model | rationaleSignatureStep = Done form <| rationaleSignatureFromForm jsonLdContexts form }
+                    ( { model | rationaleSignatureStep = Done form <| rationaleSignatureFromForm jsonLdContexts activeProposal.id form }
                     , Cmd.none
                     , Nothing
                     )
 
-        Validating _ _ ->
-            ( model, Cmd.none, Nothing )
-
-        Done _ _ ->
+        _ ->
             ( model, Cmd.none, Nothing )
 
 
-rationaleSignatureFromForm : JsonLdContexts -> RationaleSignatureForm -> RationaleSignature
-rationaleSignatureFromForm jsonLdContexts form =
+rationaleSignatureFromForm : JsonLdContexts -> Gov.ActionId -> RationaleSignatureForm -> RationaleSignature
+rationaleSignatureFromForm jsonLdContexts actionId form =
     { authors = form.authors
     , rationale = form.rationale
     , signedJson =
-        createJsonRationale jsonLdContexts form.rationale form.authors
+        createJsonRationale jsonLdContexts actionId form.rationale form.authors
             |> JE.encode 0
     , error = Nothing
     }
@@ -2216,8 +2217,8 @@ pinRationaleFile fileAsValue (Model model) =
 
 handlePdfIpfsAnswer : UpdateContext msg -> InnerModel -> RationaleForm -> Rationale -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
 handlePdfIpfsAnswer ctx model form rationale ipfsAnswer =
-    case ipfsAnswer of
-        IpfsError error ->
+    case ( model.pickProposalStep, ipfsAnswer ) of
+        ( _, IpfsError error ) ->
             ( { model | rationaleCreationStep = Preparing { form | error = Just error } }
             , Cmd.none
             , Nothing
@@ -2225,7 +2226,7 @@ handlePdfIpfsAnswer ctx model form rationale ipfsAnswer =
 
         -- Edit the rationale to prepend a link to the PDF at the beginning of the rationale statement,
         -- and in the list of references.
-        IpfsAddSuccessful file ->
+        ( Done _ { id }, IpfsAddSuccessful file ) ->
             let
                 pdfLink =
                     "https://ipfs.io/ipfs/" ++ file.cid
@@ -2261,11 +2262,15 @@ handlePdfIpfsAnswer ctx model form rationale ipfsAnswer =
             ( { model
                 | rationaleCreationStep = Done { form | error = Nothing } updatedRationale
                 , rationaleSignatureStep =
-                    Done rationaleSignatureForm (rationaleSignatureFromForm ctx.jsonLdContexts rationaleSignatureForm)
+                    Done rationaleSignatureForm (rationaleSignatureFromForm ctx.jsonLdContexts id rationaleSignatureForm)
               }
             , Cmd.none
             , Nothing
             )
+
+        -- Do nothing if no proposal was picked yet
+        ( _, IpfsAddSuccessful _ ) ->
+            ( model, Cmd.none, Nothing )
 
 
 handleRationaleIpfsAnswer : InnerModel -> StorageConfig -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
@@ -2427,9 +2432,9 @@ view ctx (Model model) =
             , Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
             , viewStorageConfigStep ctx model.storageConfigStep
             , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
-            , viewRationaleStep ctx model.rationaleCreationStep
+            , viewRationaleStep ctx model.pickProposalStep model.storageConfigStep model.rationaleCreationStep
             , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
-            , viewRationaleSignatureStep ctx model.rationaleCreationStep model.rationaleSignatureStep
+            , viewRationaleSignatureStep ctx model.pickProposalStep model.rationaleCreationStep model.rationaleSignatureStep
             , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
             , viewPermanentStorageStep ctx model.rationaleSignatureStep model.storageConfigStep model.permanentStorageStep
             , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
@@ -3240,11 +3245,16 @@ viewStorageConfigStep ctx step =
 --
 
 
-viewRationaleStep : ViewContext msg -> Step RationaleForm Rationale Rationale -> Html msg
-viewRationaleStep ctx step =
+viewRationaleStep :
+    ViewContext msg
+    -> Step {} {} ActiveProposal
+    -> Step StorageForm {} StorageConfig
+    -> Step RationaleForm Rationale Rationale
+    -> Html msg
+viewRationaleStep ctx pickProposalStep storageConfigStep step =
     Html.map ctx.wrapMsg <|
-        case step of
-            Preparing form ->
+        case ( pickProposalStep, storageConfigStep, step ) of
+            ( Done _ _, Done _ _, Preparing form ) ->
                 div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
                     [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
                     , Helper.formContainer [ viewSummaryForm form.summary ]
@@ -3258,7 +3268,7 @@ viewRationaleStep ctx step =
                     , viewError form.error
                     ]
 
-            Validating _ _ ->
+            ( Done _ _, Done _ _, Validating _ _ ) ->
                 div []
                     [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
                     , Helper.formContainer
@@ -3267,7 +3277,7 @@ viewRationaleStep ctx step =
                         ]
                     ]
 
-            Done _ rationale ->
+            ( Done _ _, Done _ _, Done _ rationale ) ->
                 div []
                     [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
                     , div [ HA.class "space-y-6" ]
@@ -3321,6 +3331,24 @@ viewRationaleStep ctx step =
                             text ""
                         ]
                     , Html.p [ HA.class "mt-6" ] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
+                    ]
+
+            ( _, Done _ _, _ ) ->
+                div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
+                    [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
+                    , Html.p [] [ text "Please pick a proposal first." ]
+                    ]
+
+            ( Done _ _, _, _ ) ->
+                div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
+                    [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
+                    , Html.p [] [ text "Please validate the IPFS config step first." ]
+                    ]
+
+            _ ->
+                div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
+                    [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
+                    , Html.p [] [ text "Please pick a proposal and  validate the IPFS config step first." ]
                     ]
 
 
@@ -3659,27 +3687,28 @@ viewRef ref =
 
 viewRationaleSignatureStep :
     ViewContext msg
+    -> Step {} {} ActiveProposal
     -> Step RationaleForm Rationale Rationale
     -> Step RationaleSignatureForm {} RationaleSignature
     -> Html msg
-viewRationaleSignatureStep ctx rationaleCreationStep step =
-    case ( rationaleCreationStep, step ) of
-        ( Preparing _, _ ) ->
+viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
+    case ( pickProposalStep, rationaleCreationStep, step ) of
+        ( _, Preparing _, _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
                 , Html.p [] [ text "Please validate the rationale creation step first." ]
                 ]
 
-        ( Validating _ _, _ ) ->
+        ( _, Validating _ _, _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
                 , Html.p [] [ text "Please validate the rationale creation step first." ]
                 ]
 
-        ( Done _ _, Preparing form ) ->
+        ( Done _ { id }, Done _ _, Preparing form ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
-                , Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts form
+                , Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts id form
                 , Html.p []
                     [ Helper.viewButton "Skip rationale signing" (ctx.wrapMsg SkipRationaleSignaturesButtonClicked)
                     , text " or "
@@ -3688,13 +3717,19 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                 , viewError form.error
                 ]
 
-        ( Done _ _, Validating _ _ ) ->
+        ( _, Done _ _, Preparing _ ) ->
+            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
+                , Html.p [] [ text "Please pick a proposal first." ]
+                ]
+
+        ( _, Done _ _, Validating _ _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
                 , Html.p [] [ text "Validating rationale author signatures ..." ]
                 ]
 
-        ( Done _ _, Done _ ratSig ) ->
+        ( _, Done _ _, Done _ ratSig ) ->
             let
                 downloadButton =
                     Html.a
@@ -3732,11 +3767,11 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                         ]
 
 
-viewRationaleSignatureForm : JsonLdContexts -> RationaleSignatureForm -> Html Msg
-viewRationaleSignatureForm jsonLdContexts ({ authors } as form) =
+viewRationaleSignatureForm : JsonLdContexts -> Gov.ActionId -> RationaleSignatureForm -> Html Msg
+viewRationaleSignatureForm jsonLdContexts actionId ({ authors } as form) =
     let
         jsonRationale =
-            (rationaleSignatureFromForm jsonLdContexts { form | authors = [] }).signedJson
+            (rationaleSignatureFromForm jsonLdContexts actionId { form | authors = [] }).signedJson
     in
     div []
         [ Helper.formContainer
@@ -3781,13 +3816,13 @@ Includes:
   - Standard context and hash algorithm
 
 -}
-createJsonRationale : JsonLdContexts -> Rationale -> List AuthorWitness -> JE.Value
-createJsonRationale jsonLdContexts rationale authors =
+createJsonRationale : JsonLdContexts -> Gov.ActionId -> Rationale -> List AuthorWitness -> JE.Value
+createJsonRationale jsonLdContexts actionId rationale authors =
     JE.object <|
         List.filterMap identity
             [ Just ( "@context", jsonLdContexts.ccCip136Context )
             , Just ( "hashAlgorithm", JE.string "blake2b-256" )
-            , Just ( "body", encodeJsonLdRationale rationale )
+            , Just ( "body", encodeJsonLdRationale actionId rationale )
             , if List.isEmpty authors then
                 Nothing
 

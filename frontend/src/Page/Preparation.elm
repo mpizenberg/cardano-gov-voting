@@ -1,4 +1,4 @@
-module Page.Preparation exposing (InternalVote, JsonLdContexts, LoadedWallet, Model, Msg, MsgToParent(..), Rationale, Reference, ReferenceType(..), TaskCompleted, UpdateContext, ViewContext, handleTaskCompleted, init, noInternalVote, pinRationaleFile, update, view)
+module Page.Preparation exposing (InternalVote, JsonLdContexts, LoadedWallet, Model, Msg, MsgToParent(..), Rationale, Reference, ReferenceType(..), TaskCompleted, UpdateContext, ViewContext, handleTaskCompleted, init, noInternalVote, pinPdfFile, pinRationaleFile, update, view)
 
 {-| This module handles the complete vote preparation workflow, from identifying
 the voter to signing the transaction, which is handled by another page.
@@ -502,6 +502,7 @@ type alias UpdateContext msg =
     , loadedWallet : Maybe LoadedWallet
     , jsonLdContexts : JsonLdContexts
     , jsonRationaleToFile : { fileContent : String, fileName : String } -> Cmd msg
+    , pdfBytesToFile : { fileContentHex : String, fileName : String } -> Cmd msg
     , costModels : Maybe CostModels
     , networkId : NetworkId
     }
@@ -597,7 +598,7 @@ innerUpdate ctx msg model =
         GotDrepInfo result ->
             case result of
                 Err error ->
-                    ( updateVoterForm (\form -> { form | drepInfo = RemoteData.Failure (Debug.log "ERROR loading DRep info" error) }) model
+                    ( updateVoterForm (\form -> { form | drepInfo = RemoteData.Failure error }) model
                     , Cmd.none
                     , Nothing
                     )
@@ -870,7 +871,6 @@ innerUpdate ctx msg model =
 
                         rawFileContent =
                             tempUnsignedRationaleForm.signedJson
-                                |> Debug.log "Raw unsigned file content sent to PDF conversion"
                     in
                     ( { model | rationaleCreationStep = Validating form rationale }
                       -- Save rationale PDF to IPFS and update rationale with link
@@ -902,7 +902,13 @@ innerUpdate ctx msg model =
         GotUnsignedPdfFile result ->
             case ( model.rationaleCreationStep, result ) of
                 ( Validating _ _, Ok pdfBytes ) ->
-                    Debug.todo "send PDF to IPFS"
+                    ( model
+                    , ctx.pdfBytesToFile
+                        { fileContentHex = Bytes.fromBytes pdfBytes |> Bytes.toHex
+                        , fileName = "unsigned-rationale.pdf"
+                        }
+                    , Nothing
+                    )
 
                 ( Validating form _, Err error ) ->
                     ( { model | rationaleCreationStep = Preparing { form | error = Just <| "An error occurred while converting the rationale to PDF: " ++ Debug.toString error } }
@@ -1025,23 +1031,38 @@ innerUpdate ctx msg model =
                     ( model, Cmd.none, Nothing )
 
         GotIpfsAnswer (Err httpError) ->
-            case model.permanentStorageStep of
-                Preparing _ ->
-                    ( model, Cmd.none, Nothing )
+            case ( model.rationaleCreationStep, model.permanentStorageStep ) of
+                -- If we are validating the rationale form, it means the IPFS answer
+                -- is most likely the PDF we got back for PDF auto-gen.
+                ( Validating form _, _ ) ->
+                    ( { model | rationaleCreationStep = Preparing { form | error = Just <| Debug.toString httpError } }
+                    , Cmd.none
+                    , Nothing
+                    )
 
-                Validating form _ ->
+                -- Otherwise, if we are validating the permanent storage step, it means the IPFS answer
+                -- is most likely for the signed JSON rationale.
+                ( _, Validating form _ ) ->
                     ( { model | permanentStorageStep = Preparing { form | error = Just <| Debug.toString httpError } }
                     , Cmd.none
                     , Nothing
                     )
 
-                Done _ _ ->
+                -- Any other case is not supposed to happen.
+                _ ->
                     ( model, Cmd.none, Nothing )
 
         GotIpfsAnswer (Ok ipfsAnswer) ->
-            case ( model.storageConfigStep, model.permanentStorageStep ) of
-                ( Done _ storageConfig, Validating _ _ ) ->
-                    handleIpfsAnswer model storageConfig ipfsAnswer
+            case ( model.storageConfigStep, model.rationaleCreationStep, model.permanentStorageStep ) of
+                -- If we are validating the rationale form, it means the IPFS answer
+                -- is most likely the PDF we got back for PDF auto-gen.
+                ( Done _ _, Validating form rationale, _ ) ->
+                    handlePdfIpfsAnswer ctx model form rationale ipfsAnswer
+
+                -- Otherwise, if we are validating the permanent storage step, it means the IPFS answer
+                -- is most likely for the signed JSON rationale.
+                ( Done _ storageConfig, _, Validating _ _ ) ->
+                    handleRationaleIpfsAnswer model storageConfig ipfsAnswer
 
                 _ ->
                     ( model, Cmd.none, Nothing )
@@ -1829,6 +1850,36 @@ rationaleFromForm form =
     }
 
 
+pinPdfFile : JD.Value -> Model -> ( Model, Cmd Msg )
+pinPdfFile fileAsValue (Model model) =
+    case ( JD.decodeValue File.decoder fileAsValue, model.storageConfigStep, model.rationaleCreationStep ) of
+        ( Err error, _, Validating form _ ) ->
+            ( Model { model | rationaleCreationStep = Preparing { form | error = Just <| JD.errorToString error } }
+            , Cmd.none
+            )
+
+        ( Ok file, Done _ storageConfig, Validating _ _ ) ->
+            ( Model model
+            , case storageConfig of
+                UsePreconfigIpfs ->
+                    Api.defaultApiProvider.ipfsCfAdd
+                        { file = file }
+                        GotIpfsAnswer
+
+                UseCustomIpfs { ipfsServer, headers } ->
+                    Api.defaultApiProvider.ipfsAdd
+                        { rpc = ipfsServer
+                        , headers = headers
+                        , file = file
+                        }
+                        GotIpfsAnswer
+            )
+
+        -- Ignore if we aren't validating the rationale storage step
+        _ ->
+            ( Model model, Cmd.none )
+
+
 editRationale : Step RationaleForm Rationale Rationale -> Step RationaleForm Rationale Rationale
 editRationale step =
     case step of
@@ -2163,8 +2214,62 @@ pinRationaleFile fileAsValue (Model model) =
             ( Model model, Cmd.none )
 
 
-handleIpfsAnswer : InnerModel -> StorageConfig -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
-handleIpfsAnswer model storageConfig ipfsAnswer =
+handlePdfIpfsAnswer : UpdateContext msg -> InnerModel -> RationaleForm -> Rationale -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
+handlePdfIpfsAnswer ctx model form rationale ipfsAnswer =
+    case ipfsAnswer of
+        IpfsError error ->
+            ( { model | rationaleCreationStep = Preparing { form | error = Just error } }
+            , Cmd.none
+            , Nothing
+            )
+
+        -- Edit the rationale to prepend a link to the PDF at the beginning of the rationale statement,
+        -- and in the list of references.
+        IpfsAddSuccessful file ->
+            let
+                pdfLink =
+                    "https://ipfs.io/ipfs/" ++ file.cid
+
+                updatedRationaleStatement =
+                    "A [PDF version][pdf-link] of this rationale is also made available."
+                        ++ "\n\n"
+                        ++ ("[pdf-link]: " ++ pdfLink)
+                        ++ "\n\n"
+                        ++ rationale.rationaleStatement
+
+                updatedReferences =
+                    rationale.references
+                        ++ [ { type_ = OtherRefType
+                             , label = "Rationale PDF"
+                             , uri = "ipfs://" ++ file.cid
+                             }
+                           ]
+
+                updatedRationale =
+                    { rationale
+                        | rationaleStatement = updatedRationaleStatement
+                        , references = updatedReferences
+                    }
+
+                -- Initialize rationale signature with no author
+                rationaleSignatureForm =
+                    { authors = []
+                    , rationale = updatedRationale
+                    , error = Nothing
+                    }
+            in
+            ( { model
+                | rationaleCreationStep = Done { form | error = Nothing } updatedRationale
+                , rationaleSignatureStep =
+                    Done rationaleSignatureForm (rationaleSignatureFromForm ctx.jsonLdContexts rationaleSignatureForm)
+              }
+            , Cmd.none
+            , Nothing
+            )
+
+
+handleRationaleIpfsAnswer : InnerModel -> StorageConfig -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
+handleRationaleIpfsAnswer model storageConfig ipfsAnswer =
     case ipfsAnswer of
         IpfsError error ->
             ( { model | permanentStorageStep = Preparing { error = Just error } }
@@ -3125,7 +3230,7 @@ viewStorageConfigStep ctx step =
                 UsePreconfigIpfs ->
                     div [] [ text "Using preconfigured IPFS server" ]
 
-                UseCustomIpfs { ipfsServer, headers } ->
+                UseCustomIpfs _ ->
                     div [] [ text "Using custom IPFS server" ]
 
 

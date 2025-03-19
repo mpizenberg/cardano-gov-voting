@@ -79,6 +79,23 @@
             // mainApp.ports.onUrlChange.send(location.href);
         });
 
+        // Convert hex string to binary data
+        function hexToArrayBuffer(hexString) {
+            const bytes = new Uint8Array(hexString.length / 2);    
+            for (let i = 0; i < hexString.length; i += 2) {
+                bytes[i / 2] = parseInt(hexString.substring(i, i + 2), 16);
+            }
+            return bytes.buffer;
+        }
+
+        // Autogened PDF conversion from Hex to File
+        mainApp.ports.pdfBytesToFile.subscribe(async function (data) {
+            const file = new File([hexToArrayBuffer(data.fileContentHex)], data.fileName, {
+                type: "application/pdf",
+            });
+            mainApp.ports.gotPdfAsFile.send(file);
+        });
+
         // JSON rationale conversion from String to File
         mainApp.ports.jsonRationaleToFile.subscribe(async function (data) {
             const file = new File([data.fileContent], data.fileName, {

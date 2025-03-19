@@ -94,6 +94,7 @@ main =
                     [ fromWallet WalletMsg
                     , onUrlChange (locationHrefToRoute >> UrlChanged)
                     , gotRationaleAsFile GotRationaleAsFile
+                    , gotPdfAsFile GotPdfAsFile
                     , ConcurrentTask.onProgress
                         { send = sendTask
                         , receive = receiveTask
@@ -121,6 +122,12 @@ port jsonRationaleToFile : { fileContent : String, fileName : String } -> Cmd ms
 
 
 port gotRationaleAsFile : (Value -> msg) -> Sub msg
+
+
+port pdfBytesToFile : { fileContentHex : String, fileName : String } -> Cmd msg
+
+
+port gotPdfAsFile : (Value -> msg) -> Sub msg
 
 
 
@@ -234,6 +241,7 @@ type Msg
     | DisconnectWalletClicked
       -- Preparation page
     | PreparationPageMsg Page.Preparation.Msg
+    | GotPdfAsFile Value
     | GotRationaleAsFile Value
       -- Signing page
     | SigningPageMsg Page.Signing.Msg
@@ -408,6 +416,7 @@ update msg model =
                             , loadedWallet = loadedWallet
                             , jsonLdContexts = model.jsonLdContexts
                             , jsonRationaleToFile = jsonRationaleToFile
+                            , pdfBytesToFile = pdfBytesToFile
                             , costModels = Maybe.map .costModels model.protocolParams
                             , networkId = model.networkId
                             }
@@ -417,6 +426,16 @@ update msg model =
                     in
                     updateModelWithPrepToParentMsg msgToParent { model | page = PreparationPage newPageModel }
                         |> Tuple.mapSecond (\cmd -> Cmd.batch [ cmd, cmds ])
+
+                _ ->
+                    ( model, Cmd.none )
+
+        ( GotPdfAsFile file, { page } ) ->
+            case page of
+                PreparationPage pageModel ->
+                    Page.Preparation.pinPdfFile file pageModel
+                        |> Tuple.mapFirst (\newPageModel -> { model | page = PreparationPage newPageModel })
+                        |> Tuple.mapSecond (Cmd.map PreparationPageMsg)
 
                 _ ->
                     ( model, Cmd.none )

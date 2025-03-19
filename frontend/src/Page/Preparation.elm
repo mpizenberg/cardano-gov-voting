@@ -1,4 +1,4 @@
-module Page.Preparation exposing (InternalVote, JsonLdContexts, LoadedWallet, Model, Msg, MsgToParent(..), Rationale, Reference, ReferenceType(..), TaskCompleted, UpdateContext, ViewContext, handleTaskCompleted, init, noInternalVote, pinRationaleFile, update, view)
+module Page.Preparation exposing (InternalVote, JsonLdContexts, LoadedWallet, Model, Msg, MsgToParent(..), Rationale, Reference, ReferenceType(..), TaskCompleted, UpdateContext, ViewContext, handleTaskCompleted, init, noInternalVote, pinPdfFile, pinRationaleFile, update, view)
 
 {-| This module handles the complete vote preparation workflow, from identifying
 the voter to signing the transaction, which is handled by another page.
@@ -7,12 +7,13 @@ The workflow is split into the following sequential steps:
 
 1.  Voter identification - Who is voting (DRep/SPO/CC)
 2.  Proposal selection - What proposal to vote on
-3.  Rationale creation - The reasoning behind the vote
-4.  Rationale signing - Optional signatures from multiple authors
-5.  Permanent storage - Storing rationale on IPFS
-6.  Fee handling - How transaction fees will be paid
-7.  Transaction building - Creating the vote transaction
-8.  Transaction signing - Redirect to the signing page
+3.  IPFS storage configuration - How to store the rationale on IPFS
+4.  Rationale creation - The reasoning behind the vote
+5.  Rationale signing - Optional signatures from multiple authors
+6.  Rationale storage - Storing rationale on IPFS
+7.  Fee handling - How transaction fees will be paid
+8.  Transaction building - Creating the vote transaction
+9.  Transaction signing - Redirect to the signing page
 
 Each step follows a common pattern using the Step type:
 
@@ -87,9 +88,10 @@ type alias InnerModel =
     { someRefUtxos : Utxo.RefDict Output
     , voterStep : Step VoterPreparationForm VoterWitness VoterWitness
     , pickProposalStep : Step {} {} ActiveProposal
-    , rationaleCreationStep : Step RationaleForm {} Rationale
+    , storageConfigStep : Step StorageForm {} StorageConfig
+    , rationaleCreationStep : Step RationaleForm Rationale Rationale
     , rationaleSignatureStep : Step RationaleSignatureForm {} RationaleSignature
-    , permanentStorageStep : Step StorageForm {} Storage
+    , permanentStorageStep : Step { error : Maybe String } {} Storage
     , buildTxStep : Step BuildTxPrep {} TxFinalized
     , signTxStep : Step { error : Maybe String } SigningTx SignedTx
     , visibleProposalCount : Int
@@ -117,9 +119,10 @@ init =
         { someRefUtxos = Utxo.emptyRefDict
         , voterStep = Preparing initVoterForm
         , pickProposalStep = Preparing {}
+        , storageConfigStep = Preparing initStorageForm
         , rationaleCreationStep = Preparing initRationaleForm
         , rationaleSignatureStep = Preparing initRationaleSignatureForm
-        , permanentStorageStep = Preparing initStorageForm
+        , permanentStorageStep = Preparing { error = Nothing }
         , buildTxStep = Preparing { error = Nothing }
         , signTxStep = Preparing { error = Nothing }
         , visibleProposalCount = 10
@@ -161,6 +164,7 @@ initVoterForm =
 
 type alias RationaleForm =
     { summary : String
+    , pdfAutogen : Bool
     , rationaleStatement : MarkdownForm
     , precedentDiscussion : MarkdownForm
     , counterArgumentDiscussion : MarkdownForm
@@ -197,6 +201,7 @@ noInternalVote =
 initRationaleForm : RationaleForm
 initRationaleForm =
     { summary = ""
+    , pdfAutogen = True
     , rationaleStatement = ""
     , precedentDiscussion = ""
     , counterArgumentDiscussion = ""
@@ -316,7 +321,7 @@ initAuthorForm =
 
 
 type StorageMethod
-    = StandardIPFS
+    = PreconfigIPFS
     | CustomIPFS
 
 
@@ -330,15 +335,20 @@ type alias StorageForm =
 
 initStorageForm : StorageForm
 initStorageForm =
-    { storageMethod = StandardIPFS
+    { storageMethod = PreconfigIPFS
     , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
     , headers = [ ( "project_id", "" ) ]
     , error = Nothing
     }
 
 
+type StorageConfig
+    = UsePreconfigIpfs
+    | UseCustomIpfs { ipfsServer : String, headers : List ( String, String ) }
+
+
 type alias Storage =
-    { config : StorageForm
+    { config : StorageConfig
     , jsonFile : IpfsFile
     }
 
@@ -422,8 +432,17 @@ type Msg
     | PickProposalButtonClicked String
     | ChangeProposalButtonClicked
     | ShowMoreProposals Int
+      -- Storage Config Step
+    | StorageMethodSelected StorageMethod
+    | IpfsServerChange String
+    | AddHeaderButtonClicked
+    | DeleteHeaderButtonClicked Int
+    | StorageHeaderFieldChange Int String
+    | StorageHeaderValueChange Int String
+    | ValidateStorageConfigButtonClicked
       -- Rationale
     | RationaleSummaryChange String
+    | TogglePdfAutogen Bool
     | RationaleStatementChange String
     | PrecedentDiscussionChange String
     | CounterArgumentChange String
@@ -439,6 +458,7 @@ type Msg
     | ReferenceUriChange Int String
     | ReferenceTypeChange Int String
     | ValidateRationaleButtonClicked
+    | GotUnsignedPdfFile (Result Http.Error ElmBytes.Bytes)
     | EditRationaleButtonClicked
       -- Rationale Signature
     | AddAuthorButtonClicked
@@ -451,14 +471,8 @@ type Msg
     | ValidateRationaleSignaturesButtonClicked
     | ChangeAuthorsButtonClicked
     | ConvertToPdfButtonClicked String
-    | GotPdfFile (Result Http.Error ElmBytes.Bytes)
-      -- Storage
-    | StorageMethodSelected StorageMethod
-    | IpfsServerChange String
-    | AddHeaderButtonClicked
-    | DeleteHeaderButtonClicked Int
-    | StorageHeaderFieldChange Int String
-    | StorageHeaderValueChange Int String
+    | GotSignedPdfFile (Result Http.Error ElmBytes.Bytes)
+      -- Rationale Storage
     | PinJsonIpfsButtonClicked
     | GotIpfsAnswer (Result String IpfsAnswer)
     | AddOtherStorageButtonCLicked
@@ -488,6 +502,7 @@ type alias UpdateContext msg =
     , loadedWallet : Maybe LoadedWallet
     , jsonLdContexts : JsonLdContexts
     , jsonRationaleToFile : { fileContent : String, fileName : String } -> Cmd msg
+    , pdfBytesToFile : { fileContentHex : String, fileName : String } -> Cmd msg
     , costModels : Maybe CostModels
     , networkId : NetworkId
     }
@@ -518,12 +533,6 @@ innerUpdate ctx msg model =
     case msg of
         ShowMoreProposals currentCount ->
             ( { model | visibleProposalCount = currentCount + 10 }
-            , Cmd.none
-            , Nothing
-            )
-
-        StorageMethodSelected method ->
-            ( updateStorageForm (\form -> { form | storageMethod = method }) model
             , Cmd.none
             , Nothing
             )
@@ -589,7 +598,7 @@ innerUpdate ctx msg model =
         GotDrepInfo result ->
             case result of
                 Err error ->
-                    ( updateVoterForm (\form -> { form | drepInfo = RemoteData.Failure (Debug.log "ERROR loading DRep info" error) }) model
+                    ( updateVoterForm (\form -> { form | drepInfo = RemoteData.Failure error }) model
                     , Cmd.none
                     , Nothing
                     )
@@ -678,10 +687,93 @@ innerUpdate ctx msg model =
             )
 
         --
+        -- Storage Configuration Step
+        --
+        StorageMethodSelected method ->
+            ( updateStorageConfigForm (\form -> { form | storageMethod = method }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        IpfsServerChange ipfsServer ->
+            ( updateStorageConfigForm (\form -> { form | ipfsServer = ipfsServer }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        AddHeaderButtonClicked ->
+            ( updateStorageConfigForm (\form -> { form | headers = form.headers ++ [ ( "", "" ) ] }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        DeleteHeaderButtonClicked n ->
+            ( updateStorageConfigForm (\form -> { form | headers = List.Extra.removeAt n form.headers }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        StorageHeaderFieldChange n field ->
+            ( updateStorageConfigForm (\form -> { form | headers = List.Extra.updateAt n (\( _, v ) -> ( field, v )) form.headers }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        StorageHeaderValueChange n value ->
+            ( updateStorageConfigForm (\form -> { form | headers = List.Extra.updateAt n (\( f, _ ) -> ( f, value )) form.headers }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        ValidateStorageConfigButtonClicked ->
+            case model.storageConfigStep of
+                Preparing form ->
+                    case form.storageMethod of
+                        -- When using the preconfigured IPFS server, no need to validate anything.
+                        PreconfigIPFS ->
+                            ( { model | storageConfigStep = Done form UsePreconfigIpfs }
+                            , Cmd.none
+                            , Nothing
+                            )
+
+                        -- When using a custom IPFS server, in theory, we should check that it’s valid with some endpoint.
+                        CustomIPFS ->
+                            case validateIpfsForm form of
+                                Ok _ ->
+                                    -- TODO: test some IPFS endpoint to check custom config validity,
+                                    -- and return a "Validating" step instead of a "Done" step.
+                                    ( { model | storageConfigStep = Done form (UseCustomIpfs { ipfsServer = form.ipfsServer, headers = form.headers }) }
+                                    , Cmd.none
+                                    , Nothing
+                                    )
+
+                                Err error ->
+                                    ( { model | storageConfigStep = Preparing { form | error = Just error } }
+                                    , Cmd.none
+                                    , Nothing
+                                    )
+
+                -- When the user clicks on "Change storage configuration"
+                Done prep _ ->
+                    ( { model | storageConfigStep = Preparing prep }
+                    , Cmd.none
+                    , Nothing
+                    )
+
+                _ ->
+                    ( model, Cmd.none, Nothing )
+
+        --
         -- Rationale Step
         --
         RationaleSummaryChange summary ->
             ( updateRationaleForm (\form -> { form | summary = summary }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        TogglePdfAutogen pdfAutogen ->
+            ( updateRationaleForm (\form -> { form | pdfAutogen = pdfAutogen }) model
             , Cmd.none
             , Nothing
             )
@@ -771,8 +863,31 @@ innerUpdate ctx msg model =
             )
 
         ValidateRationaleButtonClicked ->
-            case validateRationaleForm model.rationaleCreationStep of
-                Done prep newRationale ->
+            case ( validateRationaleForm model.rationaleCreationStep, model.pickProposalStep ) of
+                -- If validation fails, it will return back to the form editing step with an error message
+                ( Preparing formWithError, _ ) ->
+                    ( { model | rationaleCreationStep = Preparing formWithError }, Cmd.none, Nothing )
+
+                -- If validation partially succeeds but needs more processing,
+                -- it will return in the Preparing step and we now need to store the PDF on IPFS,
+                -- and then edit the rationale to include the PDF link
+                ( Validating form rationale, Done _ { id } ) ->
+                    let
+                        tempUnsignedRationaleForm =
+                            rationaleSignatureFromForm ctx.jsonLdContexts id { authors = [], error = Nothing, rationale = rationale }
+
+                        rawFileContent =
+                            tempUnsignedRationaleForm.signedJson
+                    in
+                    ( { model | rationaleCreationStep = Validating form rationale }
+                      -- Save rationale PDF to IPFS and update rationale with link
+                    , Api.defaultApiProvider.convertToPdf rawFileContent GotUnsignedPdfFile
+                        |> Cmd.map ctx.wrapMsg
+                    , Nothing
+                    )
+
+                -- If validation fully succeeds, it will proceed to the Done step
+                ( Done prep newRationale, Done _ { id } ) ->
                     let
                         -- Initialize with no rationale signature
                         form =
@@ -785,13 +900,35 @@ innerUpdate ctx msg model =
                             { model
                                 | rationaleCreationStep = Done prep newRationale
                                 , rationaleSignatureStep =
-                                    Done form (rationaleSignatureFromForm ctx.jsonLdContexts form)
+                                    Done form (rationaleSignatureFromForm ctx.jsonLdContexts id form)
                             }
                     in
                     ( updatedModel, Cmd.none, Nothing )
 
-                prepOrValidating ->
-                    ( { model | rationaleCreationStep = prepOrValidating }, Cmd.none, Nothing )
+                _ ->
+                    ( model, Cmd.none, Nothing )
+
+        -- Handling PDF auto-gen for the rationale
+        GotUnsignedPdfFile result ->
+            case ( model.rationaleCreationStep, result ) of
+                ( Validating _ _, Ok pdfBytes ) ->
+                    ( model
+                    , ctx.pdfBytesToFile
+                        { fileContentHex = Bytes.fromBytes pdfBytes |> Bytes.toHex
+                        , fileName = "unsigned-rationale.pdf"
+                        }
+                    , Nothing
+                    )
+
+                ( Validating form _, Err error ) ->
+                    ( { model | rationaleCreationStep = Preparing { form | error = Just <| "An error occurred while converting the rationale to PDF: " ++ Debug.toString error } }
+                    , Cmd.none
+                    , Nothing
+                    )
+
+                _ ->
+                    -- Ignore if we are not validating the rationale
+                    ( model, Cmd.none, Nothing )
 
         EditRationaleButtonClicked ->
             ( { model | rationaleCreationStep = editRationale model.rationaleCreationStep }
@@ -850,7 +987,7 @@ innerUpdate ctx msg model =
             )
 
         SkipRationaleSignaturesButtonClicked ->
-            ( { model | rationaleSignatureStep = skipRationaleSignature ctx.jsonLdContexts model.rationaleSignatureStep }
+            ( { model | rationaleSignatureStep = skipRationaleSignature ctx.jsonLdContexts model.pickProposalStep model.rationaleSignatureStep }
             , Cmd.none
             , Nothing
             )
@@ -866,12 +1003,12 @@ innerUpdate ctx msg model =
 
         ConvertToPdfButtonClicked rawFileContent ->
             ( model
-            , Api.defaultApiProvider.convertToPdf rawFileContent GotPdfFile
+            , Api.defaultApiProvider.convertToPdf rawFileContent GotSignedPdfFile
                 |> Cmd.map ctx.wrapMsg
             , Nothing
             )
 
-        GotPdfFile result ->
+        GotSignedPdfFile result ->
             case model.rationaleSignatureStep of
                 Done form rationaleSignature ->
                     case result of
@@ -893,72 +1030,51 @@ innerUpdate ctx msg model =
                     ( model, Cmd.none, Nothing )
 
         --
-        -- Permanent Storage Step
+        -- Rationale Storage Step
         --
-        IpfsServerChange ipfsServer ->
-            ( updateStorageForm (\form -> { form | ipfsServer = ipfsServer }) model
-            , Cmd.none
-            , Nothing
-            )
-
-        AddHeaderButtonClicked ->
-            ( updateStorageForm (\form -> { form | headers = form.headers ++ [ ( "", "" ) ] }) model
-            , Cmd.none
-            , Nothing
-            )
-
-        DeleteHeaderButtonClicked n ->
-            ( updateStorageForm (\form -> { form | headers = List.Extra.removeAt n form.headers }) model
-            , Cmd.none
-            , Nothing
-            )
-
-        StorageHeaderFieldChange n field ->
-            ( updateStorageForm (\form -> { form | headers = List.Extra.updateAt n (\( _, v ) -> ( field, v )) form.headers }) model
-            , Cmd.none
-            , Nothing
-            )
-
-        StorageHeaderValueChange n value ->
-            ( updateStorageForm (\form -> { form | headers = List.Extra.updateAt n (\( f, _ ) -> ( f, value )) form.headers }) model
-            , Cmd.none
-            , Nothing
-            )
-
         PinJsonIpfsButtonClicked ->
-            case model.permanentStorageStep of
-                Preparing form ->
-                    validateIpfsFormAndSendPinRequest ctx form model
+            case ( model.storageConfigStep, model.permanentStorageStep ) of
+                ( Done _ _, Preparing _ ) ->
+                    sendPinRequest ctx model
 
-                Validating _ _ ->
-                    ( model, Cmd.none, Nothing )
-
-                Done _ _ ->
+                _ ->
                     ( model, Cmd.none, Nothing )
 
         GotIpfsAnswer (Err httpError) ->
-            case model.permanentStorageStep of
-                Preparing _ ->
-                    ( model, Cmd.none, Nothing )
+            case ( model.rationaleCreationStep, model.permanentStorageStep ) of
+                -- If we are validating the rationale form, it means the IPFS answer
+                -- is most likely the PDF we got back for PDF auto-gen.
+                ( Validating form _, _ ) ->
+                    ( { model | rationaleCreationStep = Preparing { form | error = Just <| Debug.toString httpError } }
+                    , Cmd.none
+                    , Nothing
+                    )
 
-                Validating form _ ->
+                -- Otherwise, if we are validating the permanent storage step, it means the IPFS answer
+                -- is most likely for the signed JSON rationale.
+                ( _, Validating form _ ) ->
                     ( { model | permanentStorageStep = Preparing { form | error = Just <| Debug.toString httpError } }
                     , Cmd.none
                     , Nothing
                     )
 
-                Done _ _ ->
+                -- Any other case is not supposed to happen.
+                _ ->
                     ( model, Cmd.none, Nothing )
 
         GotIpfsAnswer (Ok ipfsAnswer) ->
-            case model.permanentStorageStep of
-                Preparing _ ->
-                    ( model, Cmd.none, Nothing )
+            case ( model.storageConfigStep, model.rationaleCreationStep, model.permanentStorageStep ) of
+                -- If we are validating the rationale form, it means the IPFS answer
+                -- is most likely the PDF we got back for PDF auto-gen.
+                ( Done _ _, Validating form rationale, _ ) ->
+                    handlePdfIpfsAnswer ctx model form rationale ipfsAnswer
 
-                Validating form _ ->
-                    handleIpfsAnswer model form ipfsAnswer
+                -- Otherwise, if we are validating the permanent storage step, it means the IPFS answer
+                -- is most likely for the signed JSON rationale.
+                ( Done _ storageConfig, _, Validating _ _ ) ->
+                    handleRationaleIpfsAnswer model storageConfig ipfsAnswer
 
-                Done _ _ ->
+                _ ->
                     ( model, Cmd.none, Nothing )
 
         AddOtherStorageButtonCLicked ->
@@ -1481,6 +1597,53 @@ utxoRefFromStr str =
 
 
 
+-- Storage Configuration Step
+
+
+updateStorageConfigForm : (StorageForm -> StorageForm) -> InnerModel -> InnerModel
+updateStorageConfigForm formUpdate model =
+    case model.storageConfigStep of
+        Preparing form ->
+            { model | storageConfigStep = Preparing <| formUpdate form }
+
+        Validating _ _ ->
+            model
+
+        Done _ _ ->
+            model
+
+
+validateIpfsForm : StorageForm -> Result String ()
+validateIpfsForm form =
+    case form.storageMethod of
+        PreconfigIPFS ->
+            -- For standard IPFS, no validation needed
+            Ok ()
+
+        CustomIPFS ->
+            let
+                -- Check that the IPFS server url looks legit
+                ipfsServerUrlSeemsLegit =
+                    case Url.fromString form.ipfsServer of
+                        Just _ ->
+                            Ok ()
+
+                        Nothing ->
+                            Err ("This url seems incorrect, it must look like this: https://subdomain.domain.org, instead I got this: " ++ form.ipfsServer)
+
+                -- Check that headers look valid
+                nonEmptyHeadersResult headers =
+                    if List.any (\( f, _ ) -> String.isEmpty f) headers then
+                        Err "Empty header fields are forbidden."
+
+                    else
+                        Ok ()
+            in
+            ipfsServerUrlSeemsLegit
+                |> Result.andThen (\_ -> nonEmptyHeadersResult form.headers)
+
+
+
 -- Rationale Step
 
 
@@ -1525,7 +1688,7 @@ isH1Block block =
             False
 
 
-validateRationaleForm : Step RationaleForm {} Rationale -> Step RationaleForm {} Rationale
+validateRationaleForm : Step RationaleForm Rationale Rationale -> Step RationaleForm Rationale Rationale
 validateRationaleForm step =
     case step of
         Preparing form ->
@@ -1539,11 +1702,25 @@ validateRationaleForm step =
                         |> Result.andThen (\_ -> validateRationaleInternVote form.internalVote)
                         |> Result.andThen (\_ -> validateRationaleRefs form.references)
             in
-            case rationaleValidation of
-                Ok _ ->
-                    Done form (rationaleFromForm form)
+            case ( rationaleValidation, form.pdfAutogen ) of
+                -- Without PDF autogeneration, validation is considered complete
+                ( Ok _, False ) ->
+                    let
+                        formWithoutError =
+                            { form | error = Nothing }
+                    in
+                    Done formWithoutError (rationaleFromForm formWithoutError)
 
-                Err err ->
+                -- With PDF autogeneration, we will need to store on IPFS the PDF,
+                -- and then auto-edit the rationale statement and references sections.
+                ( Ok _, True ) ->
+                    let
+                        formWithoutError =
+                            { form | error = Nothing }
+                    in
+                    Validating formWithoutError (rationaleFromForm formWithoutError)
+
+                ( Err err, _ ) ->
                     Preparing { form | error = Just err }
 
         _ ->
@@ -1683,7 +1860,37 @@ rationaleFromForm form =
     }
 
 
-editRationale : Step RationaleForm {} Rationale -> Step RationaleForm {} Rationale
+pinPdfFile : JD.Value -> Model -> ( Model, Cmd Msg )
+pinPdfFile fileAsValue (Model model) =
+    case ( JD.decodeValue File.decoder fileAsValue, model.storageConfigStep, model.rationaleCreationStep ) of
+        ( Err error, _, Validating form _ ) ->
+            ( Model { model | rationaleCreationStep = Preparing { form | error = Just <| JD.errorToString error } }
+            , Cmd.none
+            )
+
+        ( Ok file, Done _ storageConfig, Validating _ _ ) ->
+            ( Model model
+            , case storageConfig of
+                UsePreconfigIpfs ->
+                    Api.defaultApiProvider.ipfsCfAdd
+                        { file = file }
+                        GotIpfsAnswer
+
+                UseCustomIpfs { ipfsServer, headers } ->
+                    Api.defaultApiProvider.ipfsAdd
+                        { rpc = ipfsServer
+                        , headers = headers
+                        , file = file
+                        }
+                        GotIpfsAnswer
+            )
+
+        -- Ignore if we aren't validating the rationale storage step
+        _ ->
+            ( Model model, Cmd.none )
+
+
+editRationale : Step RationaleForm Rationale Rationale -> Step RationaleForm Rationale Rationale
 editRationale step =
     case step of
         Preparing _ ->
@@ -1700,11 +1907,12 @@ editRationale step =
 -- Rationale Signature Step
 
 
-encodeJsonLdRationale : Rationale -> JE.Value
-encodeJsonLdRationale rationale =
+encodeJsonLdRationale : Gov.ActionId -> Rationale -> JE.Value
+encodeJsonLdRationale actionId rationale =
     JE.object <|
         List.filterMap identity
-            [ Just ( "summary", JE.string rationale.summary )
+            [ Just ( "govActionId", JE.string <| Gov.idToBech32 <| GovActionId actionId )
+            , Just ( "summary", JE.string rationale.summary )
             , Just ( "rationaleStatement", JE.string rationale.rationaleStatement )
             , Maybe.map (\s -> ( "precedentDiscussion", JE.string s )) rationale.precedentDiscussion
             , Maybe.map (\s -> ( "counterargumentDiscussion", JE.string s )) rationale.counterArgumentDiscussion
@@ -1818,37 +2026,37 @@ signatureDecodingError decodingError rationaleSignatureStep =
             rationaleSignatureStep
 
 
-skipRationaleSignature : JsonLdContexts -> Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
-skipRationaleSignature jsonLdContexts step =
-    case step of
-        Preparing ({ authors } as form) ->
+skipRationaleSignature : JsonLdContexts -> Step {} {} ActiveProposal -> Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
+skipRationaleSignature jsonLdContexts pickProposalStep step =
+    case ( pickProposalStep, step ) of
+        ( Done _ { id }, Preparing ({ authors } as form) ) ->
             case findDuplicate (List.map .name authors) of
                 Just dup ->
                     Preparing { form | error = Just <| "There is a duplicate name in the authors list: " ++ dup }
 
                 Nothing ->
                     { form | authors = List.map (\a -> { a | signature = Nothing }) authors }
-                        |> rationaleSignatureFromForm jsonLdContexts
+                        |> rationaleSignatureFromForm jsonLdContexts id
                         |> Done form
 
-        Validating ({ authors } as form) _ ->
+        ( Done _ { id }, Validating ({ authors } as form) _ ) ->
             case findDuplicate (List.map .name authors) of
                 Just dup ->
                     Preparing { form | error = Just <| "There is a duplicate name in the authors list: " ++ dup }
 
                 Nothing ->
                     { form | authors = List.map (\a -> { a | signature = Nothing }) authors }
-                        |> rationaleSignatureFromForm jsonLdContexts
+                        |> rationaleSignatureFromForm jsonLdContexts id
                         |> Done form
 
-        Done _ _ ->
+        _ ->
             step
 
 
 validateRationaleSignature : JsonLdContexts -> InnerModel -> ( InnerModel, Cmd msg, Maybe MsgToParent )
 validateRationaleSignature jsonLdContexts model =
-    case model.rationaleSignatureStep of
-        Preparing ({ authors } as form) ->
+    case ( model.rationaleSignatureStep, model.pickProposalStep ) of
+        ( Preparing ({ authors } as form), Done _ activeProposal ) ->
             case validateAuthorsForm authors of
                 Err error ->
                     ( { model | rationaleSignatureStep = Preparing { form | error = Just error } }
@@ -1858,24 +2066,21 @@ validateRationaleSignature jsonLdContexts model =
 
                 Ok _ ->
                     -- TODO: change to Validating instead, and emit a command to check signatures
-                    ( { model | rationaleSignatureStep = Done form <| rationaleSignatureFromForm jsonLdContexts form }
+                    ( { model | rationaleSignatureStep = Done form <| rationaleSignatureFromForm jsonLdContexts activeProposal.id form }
                     , Cmd.none
                     , Nothing
                     )
 
-        Validating _ _ ->
-            ( model, Cmd.none, Nothing )
-
-        Done _ _ ->
+        _ ->
             ( model, Cmd.none, Nothing )
 
 
-rationaleSignatureFromForm : JsonLdContexts -> RationaleSignatureForm -> RationaleSignature
-rationaleSignatureFromForm jsonLdContexts form =
+rationaleSignatureFromForm : JsonLdContexts -> Gov.ActionId -> RationaleSignatureForm -> RationaleSignature
+rationaleSignatureFromForm jsonLdContexts actionId form =
     { authors = form.authors
     , rationale = form.rationale
     , signedJson =
-        createJsonRationale jsonLdContexts form.rationale form.authors
+        createJsonRationale jsonLdContexts actionId form.rationale form.authors
             |> JE.encode 0
     , error = Nothing
     }
@@ -1965,27 +2170,14 @@ reduceResults results =
 
 
 
--- Permanent Storage Step
+-- Rationale Storage Step
 
 
-updateStorageForm : (StorageForm -> StorageForm) -> InnerModel -> InnerModel
-updateStorageForm formUpdate model =
-    case model.permanentStorageStep of
-        Preparing form ->
-            { model | permanentStorageStep = Preparing <| formUpdate form }
-
-        Validating _ _ ->
-            model
-
-        Done _ _ ->
-            model
-
-
-validateIpfsFormAndSendPinRequest : UpdateContext msg -> StorageForm -> InnerModel -> ( InnerModel, Cmd msg, Maybe MsgToParent )
-validateIpfsFormAndSendPinRequest ctx form model =
-    case ( model.rationaleSignatureStep, validateIpfsForm form ) of
-        ( Done _ ratSig, Ok _ ) ->
-            ( { model | permanentStorageStep = Validating form {} }
+sendPinRequest : UpdateContext msg -> InnerModel -> ( InnerModel, Cmd msg, Maybe MsgToParent )
+sendPinRequest ctx model =
+    case model.rationaleSignatureStep of
+        Done _ ratSig ->
+            ( { model | permanentStorageStep = Validating { error = Nothing } {} }
             , ctx.jsonRationaleToFile
                 { fileContent = ratSig.signedJson
                 , fileName = "rationale-signed.json"
@@ -1993,90 +2185,112 @@ validateIpfsFormAndSendPinRequest ctx form model =
             , Nothing
             )
 
-        ( Done _ _, Err error ) ->
-            ( { model | permanentStorageStep = Preparing { form | error = Just error } }
-            , Cmd.none
-            , Nothing
-            )
-
         _ ->
-            ( { model | permanentStorageStep = Preparing { form | error = Just "Validate the rationale signature step first." } }
+            ( { model | permanentStorageStep = Preparing { error = Just "Validate the rationale signature step first." } }
             , Cmd.none
             , Nothing
             )
-
-
-validateIpfsForm : StorageForm -> Result String ()
-validateIpfsForm form =
-    case form.storageMethod of
-        StandardIPFS ->
-            -- For standard IPFS, no validation needed
-            Ok ()
-
-        CustomIPFS ->
-            let
-                -- Check that the IPFS server url looks legit
-                ipfsServerUrlSeemsLegit =
-                    case Url.fromString form.ipfsServer of
-                        Just _ ->
-                            Ok ()
-
-                        Nothing ->
-                            Err ("This url seems incorrect, it must look like this: https://subdomain.domain.org, instead I got this: " ++ form.ipfsServer)
-
-                -- Check that headers look valid
-                nonEmptyHeadersResult headers =
-                    if List.any (\( f, _ ) -> String.isEmpty f) headers then
-                        Err "Empty header fields are forbidden."
-
-                    else
-                        Ok ()
-            in
-            ipfsServerUrlSeemsLegit
-                |> Result.andThen (\_ -> nonEmptyHeadersResult form.headers)
 
 
 pinRationaleFile : JD.Value -> Model -> ( Model, Cmd Msg )
 pinRationaleFile fileAsValue (Model model) =
-    case ( JD.decodeValue File.decoder fileAsValue, model.permanentStorageStep ) of
-        ( Err error, Validating form _ ) ->
-            ( Model { model | permanentStorageStep = Preparing { form | error = Just <| JD.errorToString error } }
+    case ( JD.decodeValue File.decoder fileAsValue, model.storageConfigStep, model.permanentStorageStep ) of
+        ( Err error, _, Validating _ _ ) ->
+            ( Model { model | permanentStorageStep = Preparing { error = Just <| JD.errorToString error } }
             , Cmd.none
             )
 
-        ( Ok file, Validating storageForm _ ) ->
+        ( Ok file, Done _ storageConfig, Validating _ _ ) ->
             ( Model model
-            , case storageForm.storageMethod of
-                StandardIPFS ->
+            , case storageConfig of
+                UsePreconfigIpfs ->
                     Api.defaultApiProvider.ipfsCfAdd
                         { file = file }
                         GotIpfsAnswer
 
-                CustomIPFS ->
+                UseCustomIpfs { ipfsServer, headers } ->
                     Api.defaultApiProvider.ipfsAdd
-                        { rpc = storageForm.ipfsServer
-                        , headers = storageForm.headers
+                        { rpc = ipfsServer
+                        , headers = headers
                         , file = file
                         }
                         GotIpfsAnswer
             )
 
-        -- Ignore if we aren't validating the permanent storage step
+        -- Ignore if we aren't validating the rationale storage step
         _ ->
             ( Model model, Cmd.none )
 
 
-handleIpfsAnswer : InnerModel -> StorageForm -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
-handleIpfsAnswer model form ipfsAnswer =
+handlePdfIpfsAnswer : UpdateContext msg -> InnerModel -> RationaleForm -> Rationale -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
+handlePdfIpfsAnswer ctx model form rationale ipfsAnswer =
+    case ( model.pickProposalStep, ipfsAnswer ) of
+        ( _, IpfsError error ) ->
+            ( { model | rationaleCreationStep = Preparing { form | error = Just error } }
+            , Cmd.none
+            , Nothing
+            )
+
+        -- Edit the rationale to prepend a link to the PDF at the beginning of the rationale statement,
+        -- and in the list of references.
+        ( Done _ { id }, IpfsAddSuccessful file ) ->
+            let
+                pdfLink =
+                    "https://ipfs.io/ipfs/" ++ file.cid
+
+                updatedRationaleStatement =
+                    "A [PDF version][pdf-link] of this rationale is also made available."
+                        ++ "\n\n"
+                        ++ ("[pdf-link]: " ++ pdfLink)
+                        ++ "\n\n"
+                        ++ rationale.rationaleStatement
+
+                updatedReferences =
+                    rationale.references
+                        ++ [ { type_ = OtherRefType
+                             , label = "Rationale PDF"
+                             , uri = "ipfs://" ++ file.cid
+                             }
+                           ]
+
+                updatedRationale =
+                    { rationale
+                        | rationaleStatement = updatedRationaleStatement
+                        , references = updatedReferences
+                    }
+
+                -- Initialize rationale signature with no author
+                rationaleSignatureForm =
+                    { authors = []
+                    , rationale = updatedRationale
+                    , error = Nothing
+                    }
+            in
+            ( { model
+                | rationaleCreationStep = Done { form | error = Nothing } updatedRationale
+                , rationaleSignatureStep =
+                    Done rationaleSignatureForm (rationaleSignatureFromForm ctx.jsonLdContexts id rationaleSignatureForm)
+              }
+            , Cmd.none
+            , Nothing
+            )
+
+        -- Do nothing if no proposal was picked yet
+        ( _, IpfsAddSuccessful _ ) ->
+            ( model, Cmd.none, Nothing )
+
+
+handleRationaleIpfsAnswer : InnerModel -> StorageConfig -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
+handleRationaleIpfsAnswer model storageConfig ipfsAnswer =
     case ipfsAnswer of
         IpfsError error ->
-            ( { model | permanentStorageStep = Preparing { form | error = Just error } }
+            ( { model | permanentStorageStep = Preparing { error = Just error } }
             , Cmd.none
             , Nothing
             )
 
         IpfsAddSuccessful file ->
-            ( { model | permanentStorageStep = Done form { config = form, jsonFile = file } }
+            ( { model | permanentStorageStep = Done { error = Nothing } { config = storageConfig, jsonFile = file } }
             , Cmd.none
             , Nothing
             )
@@ -2223,11 +2437,13 @@ view ctx (Model model) =
             , Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
             , viewProposalSelectionStep ctx model
             , Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
-            , viewRationaleStep ctx model.rationaleCreationStep
-            , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
-            , viewRationaleSignatureStep ctx model.rationaleCreationStep model.rationaleSignatureStep
+            , viewStorageConfigStep ctx model.storageConfigStep
             , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
-            , viewPermanentStorageStep ctx model.rationaleSignatureStep model.permanentStorageStep
+            , viewRationaleStep ctx model.pickProposalStep model.storageConfigStep model.rationaleCreationStep
+            , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
+            , viewRationaleSignatureStep ctx model.pickProposalStep model.rationaleCreationStep model.rationaleSignatureStep
+            , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
+            , viewPermanentStorageStep ctx model.rationaleSignatureStep model.storageConfigStep model.permanentStorageStep
             , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
             , viewBuildTxStep ctx model
             , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
@@ -2945,19 +3161,139 @@ strBothEnds startLength endLength str =
 
 
 --
+-- Storage Configuration Step
+--
+
+
+viewStorageConfigStep : ViewContext msg -> Step StorageForm {} StorageConfig -> Html msg
+viewStorageConfigStep ctx step =
+    case step of
+        Preparing form ->
+            Html.map ctx.wrapMsg <|
+                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Storage Configuration" ]
+                    , Html.p [ HA.class "mb-4" ]
+                        [ text "Only the hash of your rationale is stored on Cardano,"
+                        , text " so it's recommended to also store the actual JSON file containing the rationale in a permanent storage solution."
+                        , text " Here we provide an easy way to store it on IPFS."
+                        ]
+                    , Helper.formContainer
+                        [ Html.h4 [ HA.class "text-xl mt-4 mb-2" ] [ text "IPFS Method" ]
+                        , div [ HA.class "flex items-center mb-2" ]
+                            [ Html.input
+                                [ HA.type_ "radio"
+                                , HA.name "ipfs-method"
+                                , HA.checked (form.storageMethod == PreconfigIPFS)
+                                , onClick (StorageMethodSelected PreconfigIPFS)
+                                , HA.class "mr-2"
+                                ]
+                                []
+                            , Html.label [ HA.class "text-base" ] [ text "Pre-configured IPFS (Cardano Foundation)" ]
+                            ]
+                        , div [ HA.class "flex items-center mb-4" ]
+                            [ Html.input
+                                [ HA.type_ "radio"
+                                , HA.name "ipfs-method"
+                                , HA.checked (form.storageMethod == CustomIPFS)
+                                , onClick (StorageMethodSelected CustomIPFS)
+                                , HA.class "mr-2"
+                                ]
+                                []
+                            , Html.label [ HA.class "text-base" ] [ text "Custom IPFS Provider" ]
+                            ]
+                        , if form.storageMethod == CustomIPFS then
+                            div []
+                                [ Helper.labeledField "IPFS RPC server:"
+                                    (Helper.textFieldInline form.ipfsServer IpfsServerChange)
+                                , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
+                                , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
+                                    [ text "For example, use "
+                                    , Html.a
+                                        [ HA.href "https://blockfrost.dev/start-building/ipfs/"
+                                        , HA.target "_blank"
+                                        , HA.rel "noopener noreferrer"
+                                        , HA.style "color" "#2563eb"
+                                        , HA.style "text-decoration" "underline"
+                                        ]
+                                        [ text "Blockfrost" ]
+                                    , text " or other IPFS providers."
+                                    , div [ HA.class "mt-4" ]
+                                        [ Helper.viewButton "Add HTTP header" AddHeaderButtonClicked ]
+                                    ]
+                                ]
+
+                          else
+                            text ""
+                        ]
+                    , Html.p [] [ Helper.viewButton "Validate storage config" ValidateStorageConfigButtonClicked ]
+                    , viewError form.error
+                    ]
+
+        Validating _ _ ->
+            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Storage Configuration" ]
+                , Html.p [] [ text "Validating storage configuration ..." ]
+                ]
+
+        Done _ storageConfig ->
+            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Storage Configuration" ]
+                , Helper.formContainer
+                    [ Html.p [ HA.class "mb-4" ]
+                        [ Html.strong [ HA.class "font-medium" ] [ text "Selected storage method:" ] ]
+                    , div [ HA.class "p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
+                        [ case storageConfig of
+                            UsePreconfigIpfs ->
+                                div [ HA.class "flex flex-col space-y-2" ]
+                                    [ div [ HA.class "flex items-center" ]
+                                        [ Html.span [ HA.class "font-medium" ] [ text "Pre-configured IPFS (Cardano Foundation)" ]
+                                        ]
+                                    , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
+                                        [ text "Files will be stored using the Cardano Foundation's IPFS gateway." ]
+                                    ]
+
+                            UseCustomIpfs { ipfsServer } ->
+                                div [ HA.class "flex flex-col space-y-2" ]
+                                    [ div [ HA.class "flex items-center" ]
+                                        [ Html.span [ HA.class "font-medium" ] [ text "Custom IPFS Provider" ]
+                                        ]
+                                    , Html.p [ HA.class "ml-8" ]
+                                        [ Html.span [ HA.class "font-bold mr-2" ] [ text "Server:" ]
+                                        , Html.a
+                                            [ HA.href ipfsServer
+                                            , HA.target "_blank"
+                                            , HA.rel "noopener noreferrer"
+                                            , HA.class "font-mono break-all text-blue-600 hover:text-blue-800 underline"
+                                            ]
+                                            [ text ipfsServer ]
+                                        ]
+                                    ]
+                        ]
+                    ]
+                , Html.p [] [ Helper.viewButton "Change storage configuration" (ctx.wrapMsg ValidateStorageConfigButtonClicked) ]
+                ]
+
+
+
+--
 -- Rationale Step
 --
 
 
-viewRationaleStep : ViewContext msg -> Step RationaleForm {} Rationale -> Html msg
-viewRationaleStep ctx step =
+viewRationaleStep :
+    ViewContext msg
+    -> Step {} {} ActiveProposal
+    -> Step StorageForm {} StorageConfig
+    -> Step RationaleForm Rationale Rationale
+    -> Html msg
+viewRationaleStep ctx pickProposalStep storageConfigStep step =
     Html.map ctx.wrapMsg <|
-        case step of
-            Preparing form ->
-                div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
+        case ( pickProposalStep, storageConfigStep, step ) of
+            ( Done _ _, Done _ _, Preparing form ) ->
+                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                     [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
                     , Helper.formContainer [ viewSummaryForm form.summary ]
-                    , Helper.formContainer [ viewStatementForm form.rationaleStatement ]
+                    , Helper.formContainer [ viewStatementForm form.pdfAutogen form.rationaleStatement ]
                     , Helper.formContainer [ viewPrecedentDiscussionForm form.precedentDiscussion ]
                     , Helper.formContainer [ viewCounterArgumentForm form.counterArgumentDiscussion ]
                     , Helper.formContainer [ viewConclusionForm form.conclusion ]
@@ -2967,16 +3303,16 @@ viewRationaleStep ctx step =
                     , viewError form.error
                     ]
 
-            Validating _ _ ->
+            ( Done _ _, Done _ _, Validating _ _ ) ->
                 div []
                     [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
                     , Helper.formContainer
-                        [ Html.p [ HA.class "text-gray-600" ] [ text "Validating rationale data..." ]
+                        [ Html.p [ HA.class "text-gray-600" ] [ text "Auto-generation of PDF in progress ..." ]
                         , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
                         ]
                     ]
 
-            Done _ rationale ->
+            ( Done _ _, Done _ _, Done _ rationale ) ->
                 div []
                     [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
                     , div [ HA.class "space-y-6" ]
@@ -3032,6 +3368,24 @@ viewRationaleStep ctx step =
                     , Html.p [ HA.class "mt-6" ] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
                     ]
 
+            ( _, Done _ _, _ ) ->
+                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                    [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
+                    , Html.p [] [ text "Please pick a proposal first." ]
+                    ]
+
+            ( Done _ _, _, _ ) ->
+                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                    [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
+                    , Html.p [] [ text "Please validate the IPFS config step first." ]
+                    ]
+
+            _ ->
+                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                    [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
+                    , Html.p [] [ text "Please pick a proposal and  validate the IPFS config step first." ]
+                    ]
+
 
 viewSummaryForm : MarkdownForm -> Html Msg
 viewSummaryForm form =
@@ -3046,8 +3400,8 @@ viewSummaryForm form =
         ]
 
 
-viewStatementForm : MarkdownForm -> Html Msg
-viewStatementForm form =
+viewStatementForm : Bool -> MarkdownForm -> Html Msg
+viewStatementForm hasAutoGen form =
     div []
         [ Html.h4 [ HA.class "text-xl font-medium" ] [ text "Rationale Statement" ]
         , div [ HA.class "mt-2 mb-4" ]
@@ -3055,7 +3409,34 @@ viewStatementForm form =
             , Html.p [ HA.class "text-sm text-gray-600" ] [ text "Fully describe your rationale, with your arguments in full details." ]
             , Html.p [ HA.class "text-sm text-gray-600" ] [ text "No size limit. Use markdown with heading level 2 (##) or higher." ]
             ]
+        , viewPdfAutogenCheckbox hasAutoGen
         , Helper.viewTextarea form RationaleStatementChange
+        ]
+
+
+viewPdfAutogenCheckbox : Bool -> Html Msg
+viewPdfAutogenCheckbox hasAutoGen =
+    div
+        [ HA.class "flex items-center mb-3" ]
+        [ div
+            [ HA.class "relative flex items-center" ]
+            [ Html.input
+                [ HA.type_ "checkbox"
+                , HA.id "autogen-checkbox"
+                , HA.name "autogen-checkbox"
+                , HA.checked hasAutoGen
+                , onCheck TogglePdfAutogen
+                , HA.class "h-4 w-4 cursor-pointer border-gray-300 rounded"
+                , HA.style "accent-color" "#272727"
+                ]
+                []
+            , Html.label
+                [ HA.for "autogen-checkbox"
+                , HA.class "ml-2 text-sm font-medium text-gray-700 cursor-pointer flex items-center"
+                ]
+                [ Html.span [ HA.class "mr-1" ] [ text "Auto-generate PDF and add it to the rationale" ]
+                ]
+            ]
         ]
 
 
@@ -3203,7 +3584,18 @@ viewMd str =
 
 markdownRenderer : Md.Renderer (Html msg)
 markdownRenderer =
-    { defaultHtmlRenderer | heading = customHeadingRenderer }
+    { defaultHtmlRenderer
+        | heading = customHeadingRenderer
+        , link =
+            \link content ->
+                Html.a
+                    [ HA.href link.destination
+                    , HA.target "_blank"
+                    , HA.rel "noopener noreferrer"
+                    , HA.class "text-blue-600 hover:text-blue-800 underline"
+                    ]
+                    content
+    }
 
 
 customHeadingRenderer : { level : Markdown.Block.HeadingLevel, rawText : String, children : List (Html msg) } -> Html msg
@@ -3328,18 +3720,48 @@ viewReferences references =
 
     else
         div []
-            [ Html.h4 [ HA.class "text-xl font-medium mb-2" ] [ text "References" ]
+            [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "References" ]
             , Html.ul [ HA.class "space-y-2" ] (List.map viewRef references)
             ]
 
 
 viewRef : Reference -> Html msg
 viewRef ref =
-    Html.li [ HA.class "py-1" ]
-        [ Html.div [ HA.class "flex flex-col md:flex-row" ]
-            [ Html.span [ HA.class "mr-4" ] [ Html.strong [ HA.class "font-medium" ] [ text "Type: " ], text (refTypeToString ref.type_) ]
-            , Html.span [ HA.class "mr-4" ] [ Html.strong [ HA.class "font-medium" ] [ text "Label: " ], text ref.label ]
-            , Html.span [] [ Html.strong [ HA.class "font-medium" ] [ text "URI: " ], text ref.uri ]
+    let
+        uriDisplay =
+            if String.startsWith "ipfs://" ref.uri then
+                let
+                    cid =
+                        String.dropLeft 7 ref.uri
+
+                    gatewayUrl =
+                        "https://ipfs.io/ipfs/" ++ cid
+                in
+                Html.a
+                    [ HA.href gatewayUrl
+                    , HA.target "_blank"
+                    , HA.rel "noopener noreferrer"
+                    , HA.class "text-blue-600 hover:text-blue-800 underline"
+                    ]
+                    [ text ref.uri ]
+
+            else
+                text ref.uri
+    in
+    Html.li [ HA.class "py-2 border-b last:border-b-0", HA.style "border-color" "#e5e7eb" ]
+        [ Html.div [ HA.class "flex flex-col space-y-1" ]
+            [ Html.div []
+                [ Html.strong [ HA.class "font-medium" ] [ text "Type: " ]
+                , text (refTypeToString ref.type_)
+                ]
+            , Html.div []
+                [ Html.strong [ HA.class "font-medium" ] [ text "Label: " ]
+                , text ref.label
+                ]
+            , Html.div [ HA.class "flex" ]
+                [ Html.strong [ HA.class "font-medium" ] [ text "URI: " ]
+                , Html.div [ HA.class "break-all ml-2" ] [ uriDisplay ]
+                ]
             ]
         ]
 
@@ -3352,27 +3774,28 @@ viewRef ref =
 
 viewRationaleSignatureStep :
     ViewContext msg
-    -> Step RationaleForm {} Rationale
+    -> Step {} {} ActiveProposal
+    -> Step RationaleForm Rationale Rationale
     -> Step RationaleSignatureForm {} RationaleSignature
     -> Html msg
-viewRationaleSignatureStep ctx rationaleCreationStep step =
-    case ( rationaleCreationStep, step ) of
-        ( Preparing _, _ ) ->
+viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
+    case ( pickProposalStep, rationaleCreationStep, step ) of
+        ( _, Preparing _, _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
                 , Html.p [] [ text "Please validate the rationale creation step first." ]
                 ]
 
-        ( Validating _ _, _ ) ->
+        ( _, Validating _ _, _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
                 , Html.p [] [ text "Please validate the rationale creation step first." ]
                 ]
 
-        ( Done _ _, Preparing form ) ->
+        ( Done _ { id }, Done _ _, Preparing form ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
-                , Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts form
+                , Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts id form
                 , Html.p []
                     [ Helper.viewButton "Skip rationale signing" (ctx.wrapMsg SkipRationaleSignaturesButtonClicked)
                     , text " or "
@@ -3381,13 +3804,19 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                 , viewError form.error
                 ]
 
-        ( Done _ _, Validating _ _ ) ->
+        ( _, Done _ _, Preparing _ ) ->
+            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
+                , Html.p [] [ text "Please pick a proposal first." ]
+                ]
+
+        ( _, Done _ _, Validating _ _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
                 , Html.p [] [ text "Validating rationale author signatures ..." ]
                 ]
 
-        ( Done _ _, Done _ ratSig ) ->
+        ( _, Done _ _, Done _ ratSig ) ->
             let
                 downloadButton =
                     Html.a
@@ -3425,11 +3854,11 @@ viewRationaleSignatureStep ctx rationaleCreationStep step =
                         ]
 
 
-viewRationaleSignatureForm : JsonLdContexts -> RationaleSignatureForm -> Html Msg
-viewRationaleSignatureForm jsonLdContexts ({ authors } as form) =
+viewRationaleSignatureForm : JsonLdContexts -> Gov.ActionId -> RationaleSignatureForm -> Html Msg
+viewRationaleSignatureForm jsonLdContexts actionId ({ authors } as form) =
     let
         jsonRationale =
-            (rationaleSignatureFromForm jsonLdContexts { form | authors = [] }).signedJson
+            (rationaleSignatureFromForm jsonLdContexts actionId { form | authors = [] }).signedJson
     in
     div []
         [ Helper.formContainer
@@ -3474,13 +3903,13 @@ Includes:
   - Standard context and hash algorithm
 
 -}
-createJsonRationale : JsonLdContexts -> Rationale -> List AuthorWitness -> JE.Value
-createJsonRationale jsonLdContexts rationale authors =
+createJsonRationale : JsonLdContexts -> Gov.ActionId -> Rationale -> List AuthorWitness -> JE.Value
+createJsonRationale jsonLdContexts actionId rationale authors =
     JE.object <|
         List.filterMap identity
             [ Just ( "@context", jsonLdContexts.ccCip136Context )
             , Just ( "hashAlgorithm", JE.string "blake2b-256" )
-            , Just ( "body", encodeJsonLdRationale rationale )
+            , Just ( "body", encodeJsonLdRationale actionId rationale )
             , if List.isEmpty authors then
                 Nothing
 
@@ -3581,77 +4010,29 @@ viewSigner { name, witnessAlgorithm, publicKey, signature } =
 --
 
 
-viewPermanentStorageStep : ViewContext msg -> Step RationaleSignatureForm {} RationaleSignature -> Step StorageForm {} Storage -> Html msg
-viewPermanentStorageStep ctx rationaleSigStep step =
-    case ( rationaleSigStep, step ) of
-        ( Done _ _, Preparing form ) ->
+viewPermanentStorageStep :
+    ViewContext msg
+    -> Step RationaleSignatureForm {} RationaleSignature
+    -> Step StorageForm {} StorageConfig
+    -> Step { error : Maybe String } {} Storage
+    -> Html msg
+viewPermanentStorageStep ctx rationaleSigStep storageConfigStep step =
+    case ( rationaleSigStep, storageConfigStep, step ) of
+        ( Done _ _, Done _ _, Preparing form ) ->
             Html.map ctx.wrapMsg <|
                 div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Permanent Storage" ]
-                    , Html.p [ HA.class "mb-4" ]
-                        [ text "Only the hash of your rationale is stored on Cardano,"
-                        , text " so it's recommended to also store the actual JSON file containing the rationale in a permanent storage solution."
-                        , text " Here we provide an easy way to store it on IPFS."
-                        ]
-                    , Helper.formContainer
-                        [ Html.h4 [ HA.class "text-xl mt-4 mb-2" ] [ text "IPFS Method" ]
-                        , div [ HA.class "flex items-center mb-2" ]
-                            [ Html.input
-                                [ HA.type_ "radio"
-                                , HA.name "ipfs-method"
-                                , HA.checked (form.storageMethod == StandardIPFS)
-                                , onClick (StorageMethodSelected StandardIPFS)
-                                , HA.class "mr-2"
-                                ]
-                                []
-                            , Html.label [ HA.class "text-base" ] [ text "Pre-configured IPFS (Cardano Foundation)" ]
-                            ]
-                        , div [ HA.class "flex items-center mb-4" ]
-                            [ Html.input
-                                [ HA.type_ "radio"
-                                , HA.name "ipfs-method"
-                                , HA.checked (form.storageMethod == CustomIPFS)
-                                , onClick (StorageMethodSelected CustomIPFS)
-                                , HA.class "mr-2"
-                                ]
-                                []
-                            , Html.label [ HA.class "text-base" ] [ text "Custom IPFS Provider" ]
-                            ]
-                        , if form.storageMethod == CustomIPFS then
-                            div []
-                                [ Helper.labeledField "IPFS RPC server:"
-                                    (Helper.textFieldInline form.ipfsServer IpfsServerChange)
-                                , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
-                                , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
-                                    [ text "For example, use "
-                                    , Html.a
-                                        [ HA.href "https://blockfrost.dev/start-building/ipfs/"
-                                        , HA.target "_blank"
-                                        , HA.rel "noopener noreferrer"
-                                        , HA.style "color" "#2563eb"
-                                        , HA.style "text-decoration" "underline"
-                                        ]
-                                        [ text "Blockfrost" ]
-                                    , text " or other IPFS providers."
-                                    , div [ HA.class "mt-4" ]
-                                        [ Helper.viewButton "Add HTTP header" AddHeaderButtonClicked ]
-                                    ]
-                                ]
-
-                          else
-                            text ""
-                        ]
+                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
                     , Html.p [] [ Helper.viewButton "Add to IPFS" PinJsonIpfsButtonClicked ]
                     , viewError form.error
                     ]
 
-        ( Done _ _, Validating _ _ ) ->
+        ( Done _ _, Done _ _, Validating _ _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Permanent Storage" ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
                 , Html.p [] [ text "Uploading rationale to IPFS server ..." ]
                 ]
 
-        ( Done _ r, Done _ storage ) ->
+        ( Done _ r, Done _ _, Done _ storage ) ->
             let
                 link =
                     "https://ipfs.io/ipfs/" ++ storage.jsonFile.cid
@@ -3663,8 +4044,8 @@ viewPermanentStorageStep ctx rationaleSigStep step =
                         |> Bytes.fromU8
             in
             Html.map ctx.wrapMsg <|
-                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Permanent Storage" ]
+                div [ HA.style "padding-top" "8px" ]
+                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
                     , Helper.formContainer
                         [ Html.p [ HA.class "mb-4" ]
                             [ Html.strong [ HA.class "font-medium" ] [ text "File uploaded successfully:" ]
@@ -3705,8 +4086,8 @@ viewPermanentStorageStep ctx rationaleSigStep step =
 
         _ ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Permanent Storage" ]
-                , Html.p [] [ text "Please complete the rationale signature step first." ]
+                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
+                , Html.p [] [ text "Please complete the storage config and rationale signature steps first." ]
                 ]
 
 
@@ -3839,7 +4220,7 @@ viewBuildTxStep ctx model =
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Building" ]
                 , Helper.formContainer
-                    [ Html.p [ HA.class "mb-2" ] [ text "Transaction generated successfully", Html.span [ HA.style "color" "red" ] [ text " (₳ displayed as lovelaces):" ] ]
+                    [ Html.p [ HA.class "mb-2" ] [ text "Transaction generated successfully", Html.span [ HA.style "color" "red" ] [ text " (₳ displayed as lovelaces)" ], Html.span [] [ text ":" ] ]
                     , div [ HA.class "relative" ]
                         [ Html.pre
                             [ HA.style "padding" "1rem"

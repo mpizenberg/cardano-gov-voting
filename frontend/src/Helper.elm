@@ -4,6 +4,7 @@ module Helper exposing
     , applyMobileDropdownContainerStyle
     , applyWalletIconContainerStyle
     , applyWalletIconStyle
+    , boxContainer
     , firstTextField
     , formContainer
     , labeledField
@@ -153,6 +154,17 @@ labeledField labelText field =
 formContainer : List (Html msg) -> Html msg
 formContainer content =
     Html.div [ HA.class "py-4" ] content
+
+
+boxContainer : List (Html msg) -> Html msg
+boxContainer content =
+    Html.div
+        [ HA.style "background-color" "#ffffff"
+        , HA.style "border-radius" "0.5rem"
+        , HA.style "box-shadow" "0 4px 6px rgba(0, 0, 0, 0.1)"
+        , HA.style "padding" "1.5rem"
+        ]
+        content
 
 
 

@@ -2429,10 +2429,13 @@ allPrepSteps { loadedWallet, costModels } m =
 
   - Message wrapper for parent component
   - Wallet connectivity status
+  - The current epoch
   - Available proposals to vote on
   - JSON-LD metadata context for rationale
   - Protocol parameters
+  - The network ID
   - Link to transaction signing page
+  - IPFS pre-configuration description
 
 -}
 type alias ViewContext msg =
@@ -2451,79 +2454,94 @@ type alias ViewContext msg =
 view : ViewContext msg -> Model -> Html msg
 view ctx (Model model) =
     div [ HA.style "max-width" "1440px", HA.style "margin" "0 auto" ]
-        [ div
-            [ HA.style "position" "relative"
-            , HA.style "overflow" "hidden"
-            , HA.style "padding-top" "6rem"
-            , HA.style "padding-bottom" "6rem"
-            , HA.style "margin-bottom" "2rem"
-            ]
-            [ div
-                [ HA.style "position" "relative"
-                , HA.style "z-index" "10"
-                , HA.style "max-width" "840px"
-                , HA.style "margin" "0 auto"
-                , HA.style "padding" "0 1.5rem"
-                ]
-                [ Html.h1
-                    [ HA.style "font-size" "3.5rem"
-                    , HA.style "font-weight" "600"
-                    , HA.style "line-height" "1.1"
-                    , HA.style "margin-bottom" "1.5rem"
-                    ]
-                    [ text "Vote Preparation" ]
-                , Html.p
-                    [ HA.style "font-size" "1.25rem"
-                    , HA.style "line-height" "1.6"
-                    , HA.style "max-width" "640px"
-                    , HA.style "margin-bottom" "2rem"
-                    ]
-                    [ text "This page helps you prepare and submit votes for governance proposals. You can identify yourself as a voter, select a proposal, create a rationale for your vote, and build the transaction."
-                    ]
-                ]
-            , div
-                [ HA.style "position" "absolute"
-                , HA.style "z-index" "1"
-                , HA.style "top" "-13rem"
-                , HA.style "right" "0"
-                , HA.style "left" "0"
-                , HA.style "overflow" "hidden"
-                , HA.style "transform" "translateZ(0)"
-                , HA.style "filter" "blur(64px)"
-                ]
-                [ div
-                    [ HA.style "position" "relative"
-                    , HA.style "width" "100%"
-                    , HA.style "padding-bottom" "58.7%"
-                    , HA.style "background" "linear-gradient(90deg, #00E0FF, #0084FF)"
-                    , HA.style "opacity" "0.8"
-                    , HA.style "clip-path" "polygon(19% 5%, 36% 8%, 55% 15%, 76% 5%, 100% 16%, 100% 100%, 0 100%, 0 14%)"
-                    ]
-                    []
-                ]
-            ]
+        [ viewPageHeader
         , div
             [ HA.style "max-width" "840px"
             , HA.style "margin" "0 auto"
             , HA.style "padding" "0 1.5rem"
             ]
             [ viewVoterIdentificationStep ctx model.voterStep
-            , Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
+            , viewDivider
             , viewProposalSelectionStep ctx model
-            , Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
+            , viewDivider
             , viewStorageConfigStep ctx model.storageConfigStep
-            , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
+            , viewDivider
             , viewRationaleStep ctx model.pickProposalStep model.storageConfigStep model.rationaleCreationStep
-            , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
+            , viewDivider
             , viewRationaleSignatureStep ctx model.pickProposalStep model.rationaleCreationStep model.rationaleSignatureStep
-            , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
+            , viewDivider
             , viewPermanentStorageStep ctx model.rationaleSignatureStep model.storageConfigStep model.permanentStorageStep
-            , Html.hr [ HA.style "margin-top" "2rem", HA.style "border-color" "#C7C7C7" ] []
+            , viewDivider
             , viewBuildTxStep ctx model
-            , Html.hr [ HA.style "margin-top" "1rem", HA.style "border-color" "#C7C7C7" ] []
+            , viewDivider
             , viewSignTxStep ctx model.voterStep model.buildTxStep
             ]
         ]
+
+
+viewPageHeader : Html msg
+viewPageHeader =
+    div
+        [ HA.style "position" "relative"
+        , HA.style "overflow" "hidden"
+        , HA.style "padding-top" "6rem"
+        , HA.style "padding-bottom" "6rem"
+        , HA.style "margin-bottom" "2rem"
+        ]
+        [ div
+            [ HA.style "position" "relative"
+            , HA.style "z-index" "10"
+            , HA.style "max-width" "840px"
+            , HA.style "margin" "0 auto"
+            , HA.style "padding" "0 1.5rem"
+            ]
+            [ Html.h1
+                [ HA.style "font-size" "3.5rem"
+                , HA.style "font-weight" "600"
+                , HA.style "line-height" "1.1"
+                , HA.style "margin-bottom" "1.5rem"
+                ]
+                [ text "Vote Preparation" ]
+            , Html.p
+                [ HA.style "font-size" "1.25rem"
+                , HA.style "line-height" "1.6"
+                , HA.style "max-width" "640px"
+                , HA.style "margin-bottom" "2rem"
+                ]
+                [ text "This page helps you prepare and submit votes for governance proposals. You can identify yourself as a voter, select a proposal, create a rationale for your vote, and build the transaction."
+                ]
+            ]
+        , viewHeaderBackground
+        ]
+
+
+viewHeaderBackground : Html msg
+viewHeaderBackground =
+    div
+        [ HA.style "position" "absolute"
+        , HA.style "z-index" "1"
+        , HA.style "top" "-13rem"
+        , HA.style "right" "0"
+        , HA.style "left" "0"
+        , HA.style "overflow" "hidden"
+        , HA.style "transform" "translateZ(0)"
+        , HA.style "filter" "blur(64px)"
+        ]
+        [ div
+            [ HA.style "position" "relative"
+            , HA.style "width" "100%"
+            , HA.style "padding-bottom" "58.7%"
+            , HA.style "background" "linear-gradient(90deg, #00E0FF, #0084FF)"
+            , HA.style "opacity" "0.8"
+            , HA.style "clip-path" "polygon(19% 5%, 36% 8%, 55% 15%, 76% 5%, 100% 16%, 100% 100%, 0 100%, 0 14%)"
+            ]
+            []
+        ]
+
+
+viewDivider : Html msg
+viewDivider =
+    Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
 
 
 
@@ -2532,13 +2550,18 @@ view ctx (Model model) =
 --
 
 
+sectionTitle : String -> Html msg
+sectionTitle title =
+    Html.h2 [ HA.class "text-3xl font-medium mb-4" ] [ text title ]
+
+
 viewVoterIdentificationStep : ViewContext msg -> Step VoterPreparationForm VoterWitness VoterWitness -> Html msg
 viewVoterIdentificationStep ctx step =
     case step of
         Preparing form ->
             Html.map ctx.wrapMsg <|
                 div []
-                    [ Html.h2 [ HA.class "text-3xl font-medium  mb-4" ] [ text "Voter governance ID (drep/pool/cc_hot)" ]
+                    [ sectionTitle "Voter governance ID (drep/pool/cc_hot)"
                     , Html.p [] [ Helper.firstTextField "Enter drep/pool/cc_hot" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
                     , Html.Lazy.lazy viewValidGovIdForm form
                     , Html.p [ HA.class "my-4" ] [ Helper.viewButton "Confirm Voter" ValidateVoterFormButtonClicked ]
@@ -2546,8 +2569,9 @@ viewVoterIdentificationStep ctx step =
                     ]
 
         Validating _ _ ->
-            div [ HA.style "background-color" "#ffffff", HA.style "border-radius" "0.5rem", HA.style "box-shadow" "0 4px 6px rgba(0, 0, 0, 0.1)", HA.style "padding" "1.5rem" ]
-                [ Html.p [] [ text "validating voter information ..." ]
+            div []
+                [ sectionTitle "Voter governance ID (drep/pool/cc_hot)"
+                , Helper.boxContainer [ Html.p [] [ text "validating voter information ..." ] ]
                 ]
 
         Done form voter ->
@@ -2556,21 +2580,6 @@ viewVoterIdentificationStep ctx step =
 
 viewValidGovIdForm : VoterPreparationForm -> Html Msg
 viewValidGovIdForm form =
-    let
-        viewVotingPower accessor webData =
-            case webData of
-                RemoteData.NotAsked ->
-                    text "not querried"
-
-                RemoteData.Loading ->
-                    text "loading ..."
-
-                RemoteData.Failure _ ->
-                    text <| "? Most likely, this voter is inactive, or not registered yet, or was just registered this epoch."
-
-                RemoteData.Success success ->
-                    text <| Helper.prettyAdaLovelace <| Natural.fromSafeInt <| accessor success
-    in
     case form.govId of
         Nothing ->
             text ""
@@ -2622,6 +2631,22 @@ viewValidGovIdForm form =
             Html.p [] [ text <| "Unexpected type of governance Id: " ++ Debug.toString govId ]
 
 
+viewVotingPower : (a -> Int) -> WebData a -> Html Msg
+viewVotingPower accessor webData =
+    case webData of
+        RemoteData.NotAsked ->
+            text "not querried"
+
+        RemoteData.Loading ->
+            text "loading ..."
+
+        RemoteData.Failure _ ->
+            text <| "? Most likely, this voter is inactive, or not registered yet, or was just registered this epoch."
+
+        RemoteData.Success success ->
+            text <| Helper.prettyAdaLovelace <| Natural.fromSafeInt <| accessor success
+
+
 viewCcInfo : WebData CcInfo -> Html msg
 viewCcInfo remoteCcInfo =
     case remoteCcInfo of
@@ -2664,32 +2689,7 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
                     Transaction.estimateRefScriptFeeSavings script
 
                 refScriptSuggestion =
-                    -- Suggest reference script for more than ₳0.005 savings
-                    if refScriptFeeSavings >= 5000 then
-                        div []
-                            [ Html.p [] [ text <| "By using a reference input for your script, you could save this much in Tx fees: " ++ prettyAdaLovelace (Natural.fromSafeInt refScriptFeeSavings) ]
-                            , utxoRefForm
-                            ]
-                        -- Print warning for more than ₳0.005 additional cost of using a reference script
-
-                    else if refScriptFeeSavings <= -5000 then
-                        Html.p [] [ text <| "Weirdly, using a reference input for your script would cost you more: " ++ prettyAdaLovelace (Natural.fromSafeInt -refScriptFeeSavings) ]
-                        -- Just ignore if it doesn’t affect the fees in any significant way
-
-                    else
-                        text ""
-
-                additionalSignerCost =
-                    Natural.fromSafeInt <|
-                        Transaction.defaultTxFeeParams.feePerByte
-                            * additionalBytesPerSignature
-
-                additionalBytesPerSignature =
-                    Transaction.encodeVKeyWitness
-                        { vkey = Bytes.dummy 32 "", signature = Bytes.dummy 64 "" }
-                        |> Cbor.Encode.encode
-                        |> Bytes.fromBytes
-                        |> Bytes.width
+                    refScriptSuggestionView refScriptFeeSavings utxoRefForm
             in
             case script of
                 Script.Native _ ->
@@ -2697,8 +2697,7 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
                         div []
                             [ Html.p [] [ text "Type of script: Native Script" ]
                             , refScriptSuggestion
-                            , Html.p [] [ text <| "Expected signers: (each adds " ++ prettyAdaLovelace additionalSignerCost ++ " to the Tx fees)" ]
-                            , div [] (List.map viewExpectedSignerCheckbox <| Dict.values expectedSigners)
+                            , viewScriptSignersSection expectedSigners
                             ]
 
                     else
@@ -2706,8 +2705,7 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
                             [ Html.p [] [ text "Type of script: Native Script" ]
                             , Html.p [] [ text <| "IMPORTANT: for technical reasons, we need you to provide a reference UTxO containing your script of hash: " ++ Bytes.toHex scriptHash ]
                             , utxoRefForm
-                            , Html.p [] [ text <| "Expected signers: (each adds " ++ prettyAdaLovelace additionalSignerCost ++ " to the Tx fees)" ]
-                            , div [] (List.map viewExpectedSignerCheckbox <| Dict.values expectedSigners)
+                            , viewScriptSignersSection expectedSigners
                             ]
 
                 Script.Plutus plutusScript ->
@@ -2717,6 +2715,45 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
                         , refScriptSuggestion
                         , Html.p [] [ text "WIP: we are waiting for someone needing this to implement Plutus voters" ]
                         ]
+
+
+refScriptSuggestionView : Int -> Html Msg -> Html Msg
+refScriptSuggestionView refScriptFeeSavings utxoRefForm =
+    if refScriptFeeSavings >= 5000 then
+        -- Suggest reference script for more than ₳0.005 savings
+        div []
+            [ Html.p [] [ text <| "By using a reference input for your script, you could save this much in Tx fees: " ++ prettyAdaLovelace (Natural.fromSafeInt refScriptFeeSavings) ]
+            , utxoRefForm
+            ]
+
+    else if refScriptFeeSavings <= -5000 then
+        -- Print warning for more than ₳0.005 additional cost of using a reference script
+        Html.p [] [ text <| "Weirdly, using a reference input for your script would cost you more: " ++ prettyAdaLovelace (Natural.fromSafeInt -refScriptFeeSavings) ]
+
+    else
+        -- Just ignore if it doesn’t affect the fees in any significant way
+        text ""
+
+
+viewScriptSignersSection : Dict String { expected : Bool, key : Bytes CredentialHash } -> Html Msg
+viewScriptSignersSection expectedSigners =
+    let
+        additionalSignerCost =
+            Natural.fromSafeInt <|
+                Transaction.defaultTxFeeParams.feePerByte
+                    * additionalBytesPerSignature
+
+        additionalBytesPerSignature =
+            Transaction.encodeVKeyWitness
+                { vkey = Bytes.dummy 32 "", signature = Bytes.dummy 64 "" }
+                |> Cbor.Encode.encode
+                |> Bytes.fromBytes
+                |> Bytes.width
+    in
+    div []
+        [ Html.p [] [ text <| "Expected signers: (each adds " ++ prettyAdaLovelace additionalSignerCost ++ " to the Tx fees)" ]
+        , div [] (List.map viewExpectedSignerCheckbox <| Dict.values expectedSigners)
+        ]
 
 
 viewExpectedSignerCheckbox : { expected : Bool, key : Bytes CredentialHash } -> Html Msg
@@ -2746,38 +2783,10 @@ viewIdentifiedVoter form voter =
                 |> Maybe.withDefault ""
 
         ( voterTypeText, voterCred ) =
-            case voter of
-                WithCommitteeHotCred cred ->
-                    ( "Constitutional Committee Voter: " ++ govIdStr, cred )
-
-                WithDrepCred cred ->
-                    let
-                        votingPowerStr =
-                            case form.drepInfo of
-                                RemoteData.Success { votingPower } ->
-                                    Helper.prettyAdaLovelace (Natural.fromSafeInt votingPower)
-
-                                _ ->
-                                    "?"
-                    in
-                    ( "DRep Voter (voting power: " ++ votingPowerStr ++ "): " ++ govIdStr, cred )
-
-                WithPoolCred hash ->
-                    let
-                        votingPower =
-                            case form.poolInfo of
-                                RemoteData.Success { stake } ->
-                                    Helper.prettyAdaLovelace (Natural.fromSafeInt stake)
-
-                                _ ->
-                                    "?"
-                    in
-                    ( "SPO Voter (voting power: " ++ votingPower ++ "): " ++ Pool.toBech32 hash
-                    , WithKey hash
-                    )
+            getVoterDisplayInfo voter form govIdStr
     in
     div []
-        [ Html.h2 [ HA.class "text-3xl font-medium  mb-4" ] [ text "Voter Information" ]
+        [ sectionTitle "Voter Information"
         , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
             [ Html.div [ HA.class "mb-2" ]
                 [ Html.span [ HA.class "font-medium" ] [ text voterTypeText ]
@@ -2822,6 +2831,39 @@ viewIdentifiedVoter form voter =
             ]
         , Html.p [] [ Helper.viewButton "Change Voter" ChangeVoterButtonClicked ]
         ]
+
+
+getVoterDisplayInfo : VoterWitness -> VoterPreparationForm -> String -> ( String, CredentialWitness )
+getVoterDisplayInfo voter form govIdStr =
+    case voter of
+        WithCommitteeHotCred cred ->
+            ( "Constitutional Committee Voter: " ++ govIdStr, cred )
+
+        WithDrepCred cred ->
+            let
+                votingPowerStr =
+                    case form.drepInfo of
+                        RemoteData.Success { votingPower } ->
+                            Helper.prettyAdaLovelace (Natural.fromSafeInt votingPower)
+
+                        _ ->
+                            "?"
+            in
+            ( "DRep Voter (voting power: " ++ votingPowerStr ++ "): " ++ govIdStr, cred )
+
+        WithPoolCred hash ->
+            let
+                votingPower =
+                    case form.poolInfo of
+                        RemoteData.Success { stake } ->
+                            Helper.prettyAdaLovelace (Natural.fromSafeInt stake)
+
+                        _ ->
+                            "?"
+            in
+            ( "SPO Voter (voting power: " ++ votingPower ++ "): " ++ Pool.toBech32 hash
+            , WithKey hash
+            )
 
 
 

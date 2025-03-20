@@ -113,13 +113,13 @@ type Step prep validating done
     | Done prep done
 
 
-init : Model
-init =
+init : { label : String, description : String } -> Model
+init ipfsPreconfig =
     Model
         { someRefUtxos = Utxo.emptyRefDict
         , voterStep = Preparing initVoterForm
         , pickProposalStep = Preparing {}
-        , storageConfigStep = Preparing initStorageForm
+        , storageConfigStep = Preparing (initStorageForm ipfsPreconfig)
         , rationaleCreationStep = Preparing initRationaleForm
         , rationaleSignatureStep = Preparing initRationaleSignatureForm
         , permanentStorageStep = Preparing { error = Nothing }
@@ -321,7 +321,7 @@ initAuthorForm =
 
 
 type StorageMethod
-    = PreconfigIPFS
+    = PreconfigIPFS { label : String, description : String }
     | CustomIPFS
 
 
@@ -333,9 +333,9 @@ type alias StorageForm =
     }
 
 
-initStorageForm : StorageForm
-initStorageForm =
-    { storageMethod = PreconfigIPFS
+initStorageForm : { label : String, description : String } -> StorageForm
+initStorageForm ipfsPreconfig =
+    { storageMethod = PreconfigIPFS ipfsPreconfig
     , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
     , headers = [ ( "project_id", "" ) ]
     , error = Nothing
@@ -343,7 +343,7 @@ initStorageForm =
 
 
 type StorageConfig
-    = UsePreconfigIpfs
+    = UsePreconfigIpfs { label : String, description : String }
     | UseCustomIpfs { ipfsServer : String, headers : List ( String, String ) }
 
 
@@ -730,8 +730,8 @@ innerUpdate ctx msg model =
                 Preparing form ->
                     case form.storageMethod of
                         -- When using the preconfigured IPFS server, no need to validate anything.
-                        PreconfigIPFS ->
-                            ( { model | storageConfigStep = Done form UsePreconfigIpfs }
+                        PreconfigIPFS { label, description } ->
+                            ( { model | storageConfigStep = Done form <| UsePreconfigIpfs { label = label, description = description } }
                             , Cmd.none
                             , Nothing
                             )
@@ -1616,7 +1616,7 @@ updateStorageConfigForm formUpdate model =
 validateIpfsForm : StorageForm -> Result String ()
 validateIpfsForm form =
     case form.storageMethod of
-        PreconfigIPFS ->
+        PreconfigIPFS _ ->
             -- For standard IPFS, no validation needed
             Ok ()
 
@@ -1871,13 +1871,13 @@ pinPdfFile fileAsValue (Model model) =
         ( Ok file, Done _ storageConfig, Validating _ _ ) ->
             ( Model model
             , case storageConfig of
-                UsePreconfigIpfs ->
-                    Api.defaultApiProvider.ipfsCfAdd
+                UsePreconfigIpfs _ ->
+                    Api.defaultApiProvider.ipfsAddFile
                         { file = file }
                         GotIpfsAnswer
 
                 UseCustomIpfs { ipfsServer, headers } ->
-                    Api.defaultApiProvider.ipfsAdd
+                    Api.defaultApiProvider.ipfsAddFileCustom
                         { rpc = ipfsServer
                         , headers = headers
                         , file = file
@@ -2203,13 +2203,13 @@ pinRationaleFile fileAsValue (Model model) =
         ( Ok file, Done _ storageConfig, Validating _ _ ) ->
             ( Model model
             , case storageConfig of
-                UsePreconfigIpfs ->
-                    Api.defaultApiProvider.ipfsCfAdd
+                UsePreconfigIpfs _ ->
+                    Api.defaultApiProvider.ipfsAddFile
                         { file = file }
                         GotIpfsAnswer
 
                 UseCustomIpfs { ipfsServer, headers } ->
-                    Api.defaultApiProvider.ipfsAdd
+                    Api.defaultApiProvider.ipfsAddFileCustom
                         { rpc = ipfsServer
                         , headers = headers
                         , file = file
@@ -2371,6 +2371,7 @@ type alias ViewContext msg =
     , costModels : Maybe CostModels
     , networkId : NetworkId
     , signingLink : Transaction -> List { keyName : String, keyHash : Bytes CredentialHash } -> List (Html msg) -> Html msg
+    , ipfsPreconfig : { label : String, description : String }
     }
 
 
@@ -3183,12 +3184,18 @@ viewStorageConfigStep ctx step =
                             [ Html.input
                                 [ HA.type_ "radio"
                                 , HA.name "ipfs-method"
-                                , HA.checked (form.storageMethod == PreconfigIPFS)
-                                , onClick (StorageMethodSelected PreconfigIPFS)
+                                , HA.checked <|
+                                    case form.storageMethod of
+                                        PreconfigIPFS _ ->
+                                            True
+
+                                        _ ->
+                                            False
+                                , onClick (StorageMethodSelected <| PreconfigIPFS ctx.ipfsPreconfig)
                                 , HA.class "mr-2"
                                 ]
                                 []
-                            , Html.label [ HA.class "text-base" ] [ text "Pre-configured IPFS (Cardano Foundation)" ]
+                            , Html.label [ HA.class "text-base" ] [ text ctx.ipfsPreconfig.label ]
                             ]
                         , div [ HA.class "flex items-center mb-4" ]
                             [ Html.input
@@ -3243,13 +3250,13 @@ viewStorageConfigStep ctx step =
                         [ Html.strong [ HA.class "font-medium" ] [ text "Selected storage method:" ] ]
                     , div [ HA.class "p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
                         [ case storageConfig of
-                            UsePreconfigIpfs ->
+                            UsePreconfigIpfs { label, description } ->
                                 div [ HA.class "flex flex-col space-y-2" ]
                                     [ div [ HA.class "flex items-center" ]
-                                        [ Html.span [ HA.class "font-medium" ] [ text "Pre-configured IPFS (Cardano Foundation)" ]
+                                        [ Html.span [ HA.class "font-medium" ] [ text label ]
                                         ]
                                     , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
-                                        [ text "Files will be stored using the Cardano Foundation's IPFS gateway." ]
+                                        [ text description ]
                                     ]
 
                             UseCustomIpfs { ipfsServer } ->

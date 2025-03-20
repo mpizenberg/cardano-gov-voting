@@ -53,8 +53,8 @@ type alias ApiProvider msg =
     , getDrepInfo : NetworkId -> Credential -> (Result Http.Error DrepInfo -> msg) -> Cmd msg
     , getCcInfo : NetworkId -> Credential -> (Result Http.Error CcInfo -> msg) -> Cmd msg
     , getPoolLiveStake : NetworkId -> Bytes Pool.Id -> (Result Http.Error PoolInfo -> msg) -> Cmd msg
-    , ipfsAdd : { rpc : String, headers : List ( String, String ), file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
-    , ipfsCfAdd : { file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
+    , ipfsAddFileCustom : { rpc : String, headers : List ( String, String ), file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
+    , ipfsAddFile : { file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     , convertToPdf : String -> (Result Http.Error ElmBytes.Bytes -> msg) -> Cmd msg
     }
 
@@ -553,7 +553,7 @@ defaultApiProvider =
                 }
 
     -- Make a request to an IPFS RPC
-    , ipfsAdd =
+    , ipfsAddFileCustom =
         \{ rpc, headers, file } toMsg ->
             Http.request
                 { method = "POST"
@@ -566,7 +566,7 @@ defaultApiProvider =
                 }
 
     -- Make a request to an IPFS server at the CF
-    , ipfsCfAdd =
+    , ipfsAddFile =
         \{ file } toMsg ->
             Http.request
                 { method = "POST"

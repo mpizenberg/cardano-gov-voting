@@ -1,4 +1,4 @@
-port module Main exposing (main)
+port module Main exposing (Flags, Model, Msg, Page, TaskCompleted, main)
 
 {-| Main application module for the Cardano Governance Voting web app.
 
@@ -80,7 +80,16 @@ import Storage
 import Url
 
 
-main : Program { url : String, jsonLdContexts : JsonLdContexts, db : Value, networkId : Int } Model Msg
+type alias Flags =
+    { url : String
+    , jsonLdContexts : JsonLdContexts
+    , db : Value
+    , networkId : Int
+    , ipfsPreconfig : { label : String, description : String }
+    }
+
+
+main : Program Flags Model Msg
 main =
     -- The main entry point of our app
     -- More info about that in the Browser package docs:
@@ -165,6 +174,7 @@ type alias Model =
     , taskPool : ConcurrentTask.Pool Msg String TaskCompleted
     , db : Value
     , networkId : NetworkId
+    , ipfsPreconfig : { label : String, description : String }
     , errors : List String
     }
 
@@ -183,8 +193,8 @@ type TaskCompleted
     | PreparationTaskCompleted Page.Preparation.TaskCompleted
 
 
-init : { url : String, jsonLdContexts : JsonLdContexts, db : Value, networkId : Int } -> ( Model, Cmd Msg )
-init { url, jsonLdContexts, db, networkId } =
+init : Flags -> ( Model, Cmd Msg )
+init { url, jsonLdContexts, db, networkId, ipfsPreconfig } =
     let
         networkIdTyped =
             Address.networkIdFromInt networkId |> Maybe.withDefault Testnet
@@ -208,6 +218,7 @@ init { url, jsonLdContexts, db, networkId } =
         , taskPool = ConcurrentTask.pool
         , db = db
         , networkId = networkIdTyped
+        , ipfsPreconfig = ipfsPreconfig
         , errors = []
         }
         |> (\( model, cmd ) ->
@@ -605,7 +616,7 @@ handleUrlChange route model =
         RoutePreparation ->
             let
                 newModel =
-                    { model | errors = [], page = PreparationPage Page.Preparation.init }
+                    { model | errors = [], page = PreparationPage <| Page.Preparation.init model.ipfsPreconfig }
 
                 updateUrlCmd =
                     pushUrl <| AppUrl.toString <| routeToAppUrl route
@@ -1001,6 +1012,7 @@ viewContent model =
                 , signingLink =
                     \tx expectedSigners ->
                         link (RouteSigning { tx = Just tx, expectedSigners = expectedSigners }) []
+                , ipfsPreconfig = model.ipfsPreconfig
                 }
                 prepModel
 

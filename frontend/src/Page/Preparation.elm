@@ -63,6 +63,7 @@ import Markdown.Parser as Md
 import Markdown.Renderer as Md exposing (defaultHtmlRenderer)
 import Natural
 import Platform.Cmd as Cmd
+import ProposalMetadata exposing (ProposalMetadata)
 import RemoteData exposing (RemoteData, WebData)
 import ScriptInfo exposing (ScriptInfo)
 import Set exposing (Set)
@@ -2552,7 +2553,7 @@ viewDivider =
 
 sectionTitle : String -> Html msg
 sectionTitle title =
-    Html.h2 [ HA.class "text-3xl font-medium mb-4" ] [ text title ]
+    Html.h2 [ HA.class "text-3xl font-medium mt-4 mb-4" ] [ text title ]
 
 
 viewVoterIdentificationStep : ViewContext msg -> Step VoterPreparationForm VoterWitness VoterWitness -> Html msg
@@ -2876,200 +2877,130 @@ viewProposalSelectionStep : ViewContext msg -> InnerModel -> Html msg
 viewProposalSelectionStep ctx model =
     case model.pickProposalStep of
         Preparing _ ->
-            let
-                visibleCount =
-                    model.visibleProposalCount
-
-                networkBadgeStyle =
-                    case ctx.networkId of
-                        Mainnet ->
-                            [ HA.style "background-color" "rgba(16, 185, 129, 0.1)"
-                            , HA.style "color" "#065f46"
-                            ]
-
-                        Testnet ->
-                            [ HA.style "background-color" "rgba(124, 58, 237, 0.1)"
-                            , HA.style "color" "#5b21b6"
-                            ]
-            in
-            div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
-                [ div [ HA.class "flex items-center mb-4" ]
-                    [ Html.h2 [ HA.class "text-3xl font-medium" ] [ text "Pick a Proposal" ]
-                    , Html.span
-                        (networkBadgeStyle
-                            ++ [ HA.style "font-size" "0.7rem"
-                               , HA.style "font-weight" "600"
-                               , HA.style "padding" "0.15rem 0.5rem"
-                               , HA.style "border-radius" "9999px"
-                               , HA.style "white-space" "nowrap"
-                               , HA.style "margin-left" "8px"
-                               ]
-                        )
-                        [ text
-                            (if ctx.networkId == Mainnet then
-                                "Mainnet"
-
-                             else
-                                "Testnet"
-                            )
-                        ]
-                    ]
-                , case ctx.proposals of
-                    RemoteData.NotAsked ->
-                        text "Proposals are not loading, please report this error."
-
-                    RemoteData.Loading ->
-                        div [ HA.style "display" "flex", HA.style "justify-content" "center", HA.style "padding" "2rem" ]
-                            [ text "Loading proposals..." ]
-
-                    RemoteData.Failure httpError ->
-                        Html.pre []
-                            [ text "Something went wrong while loading proposals."
-                            , text <| Debug.toString httpError
-                            ]
-
-                    RemoteData.Success proposalsDict ->
-                        if Dict.isEmpty proposalsDict then
-                            div [ HA.style "text-align" "center", HA.style "padding" "2rem", HA.style "color" "#666" ]
-                                [ text "No active proposals found." ]
-
-                        else
-                            let
-                                epochVisibility =
-                                    Maybe.withDefault 0 ctx.epoch
-
-                                allProposals =
-                                    Dict.values proposalsDict
-                                        -- only keep those that aren’t expired
-                                        |> List.filter (\p -> p.epoch_validity.end >= epochVisibility)
-
-                                totalCount =
-                                    List.length allProposals
-
-                                visibleProposals =
-                                    -- Sort proposals by expiration date
-                                    List.sortBy (\proposal -> proposal.epoch_validity.end) allProposals
-                                        |> List.take visibleCount
-
-                                hasMore =
-                                    totalCount > visibleCount
-                            in
-                            div []
-                                [ Html.p [ HA.style "margin-bottom" "1rem" ]
-                                    [ text <| "Select a proposal to vote on (" ++ String.fromInt totalCount ++ " available):" ]
-                                , div [ HA.style "display" "grid", HA.style "grid-template-columns" "repeat(auto-fill, minmax(250px, 1fr))", HA.style "gap" "1.5rem" ]
-                                    (List.map (viewProposalCard ctx.wrapMsg ctx.networkId) visibleProposals)
-                                , if hasMore then
-                                    div
-                                        [ HA.style "text-align" "center"
-                                        , HA.style "margin-top" "2rem"
-                                        ]
-                                        [ button
-                                            [ HA.style "background-color" "#f9fafb"
-                                            , HA.style "color" "#272727"
-                                            , HA.style "font-weight" "500"
-                                            , HA.style "border" "1px solid #e2e8f0"
-                                            , HA.style "border-radius" "0.5rem"
-                                            , HA.style "padding" "0.75rem 1.5rem"
-                                            , HA.style "cursor" "pointer"
-                                            , HA.style "font-size" "0.875rem"
-                                            , onClick (ctx.wrapMsg (ShowMoreProposals visibleCount))
-                                            ]
-                                            [ text <| "Show More (" ++ String.fromInt (min 10 (totalCount - visibleCount)) ++ " of " ++ String.fromInt (totalCount - visibleCount) ++ " remaining)" ]
-                                        ]
-
-                                  else
-                                    text ""
-                                ]
-                ]
+            viewProposalSelectionForm ctx model
 
         Validating _ _ ->
             div []
-                [ Html.h2 [ HA.class "text-3xl font-medium mb-4" ] [ text "Pick a Proposal" ]
+                [ sectionTitle "Pick a Proposal"
                 , Html.p [] [ text "Validating the picked proposal ..." ]
                 ]
 
-        Done _ { id, actionType, metadata, metadataUrl } ->
-            let
-                ( title, content ) =
-                    case metadata of
-                        RemoteData.NotAsked ->
-                            ( "not loading", Nothing )
+        Done _ proposal ->
+            viewSelectedProposal ctx proposal
 
-                        RemoteData.Loading ->
-                            ( "loading ...", Nothing )
 
-                        RemoteData.Failure error ->
-                            ( "ERROR for " ++ metadataUrl ++ ": " ++ Debug.toString error
-                            , Nothing
-                            )
+viewProposalSelectionForm : ViewContext msg -> InnerModel -> Html msg
+viewProposalSelectionForm ctx model =
+    div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
+        [ viewProposalHeader ctx.networkId
+        , case ctx.proposals of
+            RemoteData.NotAsked ->
+                text "Proposals are not loading, please report this error."
 
-                        RemoteData.Success meta ->
-                            ( meta.body.title |> Maybe.withDefault "unknown (unexpected metadata format)"
-                            , Just <|
-                                div []
-                                    [ Html.strong [] [ text "Abstract: " ]
-                                    , text <| Maybe.withDefault "Unknown abstract (unexpected metadata format)" meta.body.abstract
-                                    ]
-                            )
+            RemoteData.Loading ->
+                div [ HA.style "display" "flex", HA.style "justify-content" "center", HA.style "padding" "2rem" ]
+                    [ text "Loading proposals..." ]
 
-                networkBadgeStyle =
-                    case ctx.networkId of
-                        Mainnet ->
-                            [ HA.style "background-color" "rgba(16, 185, 129, 0.1)"
-                            , HA.style "color" "#065f46"
-                            ]
-
-                        Testnet ->
-                            [ HA.style "background-color" "rgba(124, 58, 237, 0.1)"
-                            , HA.style "color" "#5b21b6"
-                            ]
-            in
-            div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
-                [ div [ HA.class "flex items-center mb-4" ]
-                    [ Html.h2 [ HA.class "text-3xl font-medium" ] [ text "Pick a Proposal" ]
-                    , Html.span
-                        (networkBadgeStyle
-                            ++ [ HA.style "font-size" "0.7rem"
-                               , HA.style "font-weight" "600"
-                               , HA.style "padding" "0.15rem 0.5rem"
-                               , HA.style "border-radius" "9999px"
-                               , HA.style "white-space" "nowrap"
-                               , HA.style "margin-left" "8px"
-                               ]
-                        )
-                        [ text
-                            (if ctx.networkId == Mainnet then
-                                "Mainnet"
-
-                             else
-                                "Testnet"
-                            )
-                        ]
+            RemoteData.Failure httpError ->
+                Html.pre []
+                    [ text "Something went wrong while loading proposals."
+                    , text <| Debug.toString httpError
                     ]
-                , Helper.formContainer
-                    [ Html.p [ HA.class "mb-4" ]
-                        [ Html.strong [ HA.class "font-medium" ] [ text "Selected proposal:" ]
-                        ]
-                    , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
-                        [ div [ HA.class "mb-2" ]
-                            [ Html.span [ HA.class "font-bold mr-2" ] [ text "Proposal ID:" ]
-                            , cardanoScanActionLink ctx.networkId id
-                            ]
-                        , div [ HA.class "mb-2" ]
-                            [ Html.span [ HA.class "font-bold mr-2" ] [ text "Type:" ]
-                            , Html.span [] [ text actionType ]
-                            ]
-                        , div [ HA.class "mb-2" ]
-                            [ Html.span [ HA.class "font-bold mr-2" ] [ text "Title:" ]
-                            , Html.span [] [ text title ]
-                            ]
-                        , content
-                            |> Maybe.withDefault (text "")
-                        ]
-                    ]
-                , Html.p [ HA.style "margin-top" "4px" ] [ Helper.viewButton "Change Proposal" (ctx.wrapMsg ChangeProposalButtonClicked) ]
+
+            RemoteData.Success proposalsDict ->
+                viewProposalList ctx proposalsDict model.visibleProposalCount
+        ]
+
+
+viewProposalHeader : NetworkId -> Html msg
+viewProposalHeader networkId =
+    div [ HA.class "flex items-center mb-4" ]
+        [ Html.h2 [ HA.class "text-3xl font-medium" ] [ text "Pick a Proposal" ]
+        , viewNetworkBadge networkId
+        ]
+
+
+viewNetworkBadge : NetworkId -> Html msg
+viewNetworkBadge networkId =
+    let
+        ( bgColor, textColor, networkName ) =
+            case networkId of
+                Mainnet ->
+                    ( "rgba(16, 185, 129, 0.1)", "#065f46", "Mainnet" )
+
+                Testnet ->
+                    ( "rgba(124, 58, 237, 0.1)", "#5b21b6", "Testnet" )
+    in
+    Html.span
+        [ HA.style "background-color" bgColor
+        , HA.style "color" textColor
+        , HA.style "font-size" "0.7rem"
+        , HA.style "font-weight" "600"
+        , HA.style "padding" "0.15rem 0.5rem"
+        , HA.style "border-radius" "9999px"
+        , HA.style "white-space" "nowrap"
+        , HA.style "margin-left" "8px"
+        ]
+        [ text networkName ]
+
+
+viewProposalList : ViewContext msg -> Dict String ActiveProposal -> Int -> Html msg
+viewProposalList ctx proposalsDict visibleCount =
+    if Dict.isEmpty proposalsDict then
+        div [ HA.style "text-align" "center", HA.style "padding" "2rem", HA.style "color" "#666" ]
+            [ text "No active proposals found." ]
+
+    else
+        let
+            epochVisibility =
+                Maybe.withDefault 0 ctx.epoch
+
+            allProposals =
+                Dict.values proposalsDict
+                    |> List.filter (\p -> p.epoch_validity.end >= epochVisibility)
+
+            totalProposalCount =
+                List.length allProposals
+
+            visibleProposals =
+                List.sortBy (\proposal -> proposal.epoch_validity.end) allProposals
+                    |> List.take visibleCount
+
+            hasMore =
+                totalProposalCount > visibleCount
+        in
+        div []
+            [ Html.p [ HA.style "margin-bottom" "1rem" ]
+                [ text <| "Select a proposal to vote on (" ++ String.fromInt totalProposalCount ++ " available):" ]
+            , div [ HA.style "display" "grid", HA.style "grid-template-columns" "repeat(auto-fill, minmax(250px, 1fr))", HA.style "gap" "1.5rem" ]
+                (List.map (viewProposalCard ctx.wrapMsg ctx.networkId) visibleProposals)
+            , viewShowMoreButton ctx.wrapMsg hasMore visibleCount totalProposalCount
+            ]
+
+
+viewShowMoreButton : (Msg -> msg) -> Bool -> Int -> Int -> Html msg
+viewShowMoreButton wrapMsg hasMore visibleCount totalCount =
+    if hasMore then
+        div
+            [ HA.style "text-align" "center"
+            , HA.style "margin-top" "2rem"
+            ]
+            [ button
+                [ HA.style "background-color" "#f9fafb"
+                , HA.style "color" "#272727"
+                , HA.style "font-weight" "500"
+                , HA.style "border" "1px solid #e2e8f0"
+                , HA.style "border-radius" "0.5rem"
+                , HA.style "padding" "0.75rem 1.5rem"
+                , HA.style "cursor" "pointer"
+                , HA.style "font-size" "0.875rem"
+                , onClick (wrapMsg (ShowMoreProposals visibleCount))
                 ]
+                [ text <| "Show More (" ++ String.fromInt (min 10 (totalCount - visibleCount)) ++ " of " ++ String.fromInt (totalCount - visibleCount) ++ " remaining)" ]
+            ]
+
+    else
+        text ""
 
 
 viewProposalCard : (Msg -> msg) -> NetworkId -> ActiveProposal -> Html msg
@@ -3275,6 +3206,66 @@ strBothEnds startLength endLength str =
             ++ String.slice (strLength - endLength) strLength str
 
 
+viewSelectedProposal : ViewContext msg -> ActiveProposal -> Html msg
+viewSelectedProposal ctx { id, actionType, metadata, metadataUrl } =
+    let
+        ( title, content ) =
+            getProposalContent metadata metadataUrl
+    in
+    div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+        [ div [ HA.class "flex items-center mb-4" ]
+            [ sectionTitle "Pick a Proposal"
+            , viewNetworkBadge ctx.networkId
+            ]
+        , Helper.formContainer
+            [ Html.p [ HA.class "mb-4" ]
+                [ Html.strong [ HA.class "font-medium" ] [ text "Selected proposal:" ]
+                ]
+            , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
+                [ div [ HA.class "mb-2" ]
+                    [ Html.span [ HA.class "font-bold mr-2" ] [ text "Proposal ID:" ]
+                    , cardanoScanActionLink ctx.networkId id
+                    ]
+                , div [ HA.class "mb-2" ]
+                    [ Html.span [ HA.class "font-bold mr-2" ] [ text "Type:" ]
+                    , Html.span [] [ text actionType ]
+                    ]
+                , div [ HA.class "mb-2" ]
+                    [ Html.span [ HA.class "font-bold mr-2" ] [ text "Title:" ]
+                    , Html.span [] [ text title ]
+                    ]
+                , content
+                    |> Maybe.withDefault (text "")
+                ]
+            ]
+        , Html.p [ HA.style "margin-top" "4px" ] [ Helper.viewButton "Change Proposal" (ctx.wrapMsg ChangeProposalButtonClicked) ]
+        ]
+
+
+getProposalContent : RemoteData String ProposalMetadata -> String -> ( String, Maybe (Html msg) )
+getProposalContent metadata metadataUrl =
+    case metadata of
+        RemoteData.NotAsked ->
+            ( "not loading", Nothing )
+
+        RemoteData.Loading ->
+            ( "loading ...", Nothing )
+
+        RemoteData.Failure error ->
+            ( "ERROR for " ++ metadataUrl ++ ": " ++ Debug.toString error
+            , Nothing
+            )
+
+        RemoteData.Success meta ->
+            ( meta.body.title |> Maybe.withDefault "unknown (unexpected metadata format)"
+            , Just <|
+                div []
+                    [ Html.strong [] [ text "Abstract: " ]
+                    , text <| Maybe.withDefault "Unknown abstract (unexpected metadata format)" meta.body.abstract
+                    ]
+            )
+
+
 
 --
 -- Storage Configuration Step
@@ -3287,7 +3278,7 @@ viewStorageConfigStep ctx step =
         Preparing form ->
             Html.map ctx.wrapMsg <|
                 div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Storage Configuration" ]
+                    [ sectionTitle "Storage Configuration"
                     , Html.p [ HA.class "mb-4" ]
                         [ text "Only the hash of your rationale is stored on Cardano,"
                         , text " so it's recommended to also store the actual JSON file containing the rationale in a permanent storage solution."
@@ -3460,22 +3451,11 @@ viewRationaleStep ctx pickProposalStep storageConfigStep step =
     Html.map ctx.wrapMsg <|
         case ( pickProposalStep, storageConfigStep, step ) of
             ( Done _ _, Done _ _, Preparing form ) ->
-                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
-                    , Helper.formContainer [ viewSummaryForm form.summary ]
-                    , Helper.formContainer [ viewStatementForm form.pdfAutogen form.rationaleStatement ]
-                    , Helper.formContainer [ viewPrecedentDiscussionForm form.precedentDiscussion ]
-                    , Helper.formContainer [ viewCounterArgumentForm form.counterArgumentDiscussion ]
-                    , Helper.formContainer [ viewConclusionForm form.conclusion ]
-                    , Helper.formContainer [ viewInternalVoteForm form.internalVote ]
-                    , viewReferencesForm form.references
-                    , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Confirm rationale" ValidateRationaleButtonClicked ]
-                    , viewError form.error
-                    ]
+                viewRationaleForm form
 
             ( Done _ _, Done _ _, Validating _ _ ) ->
-                div []
-                    [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
+                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                    [ sectionTitle "Vote Rationale"
                     , Helper.formContainer
                         [ Html.p [ HA.class "text-gray-600" ] [ text "Auto-generation of PDF in progress ..." ]
                         , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
@@ -3483,78 +3463,41 @@ viewRationaleStep ctx pickProposalStep storageConfigStep step =
                     ]
 
             ( Done _ _, Done _ _, Done _ rationale ) ->
-                div []
-                    [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
-                    , div [ HA.class "space-y-6" ]
-                        [ Helper.formContainer
-                            [ div [ HA.class "bg-gray-50 p-4 rounded-md border", HA.style "border-color" "#e5e7eb" ]
-                                [ viewSummary rationale.summary ]
-                            ]
-                        , Helper.formContainer
-                            [ div [ HA.class "bg-gray-50 p-4 rounded-md border", HA.style "border-color" "#e5e7eb" ]
-                                [ viewStatementMd rationale.rationaleStatement ]
-                            ]
-                        , if rationale.precedentDiscussion /= Nothing then
-                            Helper.formContainer
-                                [ div [ HA.class "bg-gray-50 p-4 rounded-md border", HA.style "border-color" "#e5e7eb" ]
-                                    [ viewPrecedentDiscussionMd rationale.precedentDiscussion ]
-                                ]
-
-                          else
-                            text ""
-                        , if rationale.counterArgumentDiscussion /= Nothing then
-                            Helper.formContainer
-                                [ div [ HA.class "bg-gray-50 p-4 rounded-md border", HA.style "border-color" "#e5e7eb" ]
-                                    [ viewCounterArgumentMd rationale.counterArgumentDiscussion ]
-                                ]
-
-                          else
-                            text ""
-                        , if rationale.conclusion /= Nothing then
-                            Helper.formContainer
-                                [ div [ HA.class "bg-gray-50 p-4 rounded-md border", HA.style "border-color" "#e5e7eb" ]
-                                    [ viewConclusion rationale.conclusion ]
-                                ]
-
-                          else
-                            text ""
-                        , if rationale.internalVote /= noInternalVote then
-                            Helper.formContainer
-                                [ div [ HA.class "bg-gray-50 p-4 rounded-md border", HA.style "border-color" "#e5e7eb" ]
-                                    [ viewInternalVote rationale.internalVote ]
-                                ]
-
-                          else
-                            text ""
-                        , if not (List.isEmpty rationale.references) then
-                            Helper.formContainer
-                                [ div [ HA.class "bg-gray-50 p-4 rounded-md border", HA.style "border-color" "#e5e7eb" ]
-                                    [ viewReferences rationale.references ]
-                                ]
-
-                          else
-                            text ""
-                        ]
-                    , Html.p [ HA.class "mt-6" ] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
-                    ]
+                viewCompletedRationale rationale
 
             ( _, Done _ _, _ ) ->
                 div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
+                    [ sectionTitle "Vote Rationale"
                     , Html.p [] [ text "Please pick a proposal first." ]
                     ]
 
             ( Done _ _, _, _ ) ->
                 div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
+                    [ sectionTitle "Vote Rationale"
                     , Html.p [] [ text "Please validate the IPFS config step first." ]
                     ]
 
             _ ->
                 div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Vote Rationale" ]
+                    [ sectionTitle "Vote Rationale"
                     , Html.p [] [ text "Please pick a proposal and  validate the IPFS config step first." ]
                     ]
+
+
+viewRationaleForm : RationaleForm -> Html Msg
+viewRationaleForm form =
+    div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+        [ sectionTitle "Vote Rationale"
+        , Helper.formContainer [ viewSummaryForm form.summary ]
+        , Helper.formContainer [ viewStatementForm form.pdfAutogen form.rationaleStatement ]
+        , Helper.formContainer [ viewPrecedentDiscussionForm form.precedentDiscussion ]
+        , Helper.formContainer [ viewCounterArgumentForm form.counterArgumentDiscussion ]
+        , Helper.formContainer [ viewConclusionForm form.conclusion ]
+        , Helper.formContainer [ viewInternalVoteForm form.internalVote ]
+        , viewReferencesForm form.references
+        , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Confirm rationale" ValidateRationaleButtonClicked ]
+        , viewError form.error
+        ]
 
 
 viewSummaryForm : MarkdownForm -> Html Msg
@@ -3617,7 +3560,7 @@ viewPrecedentDiscussionForm form =
         , div [ HA.class "mt-2 mb-4" ]
             [ Html.p [ HA.class "text-sm text-gray-600" ] [ text "Optional" ]
             , Html.p [ HA.class "text-sm text-gray-600" ] [ text "Discuss what you feel is relevant precedent." ]
-            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "No size limit and markdown is supported (preview below)." ]
+            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "No size limit and markdown is supported." ]
             ]
         , Helper.viewTextarea form PrecedentDiscussionChange
         ]
@@ -3630,7 +3573,7 @@ viewCounterArgumentForm form =
         , div [ HA.class "mt-2 mb-4" ]
             [ Html.p [ HA.class "text-sm text-gray-600" ] [ text "Optional" ]
             , Html.p [ HA.class "text-sm text-gray-600" ] [ text "Discuss significant counter arguments to your position." ]
-            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "No size limit and markdown is supported (preview below)." ]
+            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "No size limit and markdown is supported." ]
             ]
         , Helper.viewTextarea form CounterArgumentChange
         ]
@@ -3708,6 +3651,56 @@ viewRefOption refType =
         [ text <| refTypeToString refType ]
 
 
+viewCompletedRationale : Rationale -> Html Msg
+viewCompletedRationale rationale =
+    div []
+        [ sectionTitle "Vote Rationale"
+        , div [ HA.class "space-y-6" ]
+            [ maybeViewSection viewSummary (Just rationale.summary)
+            , maybeViewSection (viewMd "Rationale Statement") (Just rationale.rationaleStatement)
+            , maybeViewSection (viewMd "Precedent Discussion") rationale.precedentDiscussion
+            , maybeViewSection (viewMd "Counter Argument") rationale.counterArgumentDiscussion
+            , maybeViewSection viewConclusion rationale.conclusion
+            , let
+                internalVote =
+                    if rationale.internalVote == noInternalVote then
+                        Nothing
+
+                    else
+                        Just rationale.internalVote
+              in
+              maybeViewSection viewInternalVote internalVote
+            , let
+                references =
+                    if List.isEmpty rationale.references then
+                        Nothing
+
+                    else
+                        Just rationale.references
+              in
+              maybeViewSection viewReferences references
+            ]
+        , Html.p [ HA.class "mt-6" ] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
+        ]
+
+
+
+-- Helper to conditionally render a section if content exists
+
+
+maybeViewSection : (a -> Html msg) -> Maybe a -> Html msg
+maybeViewSection viewFn maybeValue =
+    case maybeValue of
+        Nothing ->
+            text ""
+
+        Just value ->
+            Helper.formContainer
+                [ div [ HA.class "bg-gray-50 p-4 rounded-md border", HA.style "border-color" "#e5e7eb" ]
+                    [ viewFn value ]
+                ]
+
+
 viewSummary : String -> Html msg
 viewSummary summary =
     div []
@@ -3716,40 +3709,35 @@ viewSummary summary =
         ]
 
 
-viewStatementMd : String -> Html msg
-viewStatementMd statement =
+viewMd : String -> String -> Html msg
+viewMd section str =
     div []
-        [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "Rationale Statement" ]
-        , viewMd statement
+        [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text section ]
+        , case Md.parse str of
+            Err deadEnds ->
+                let
+                    deadEndsString =
+                        List.map Md.deadEndToString deadEnds
+                            |> String.join "\n"
+                in
+                Html.p []
+                    [ Html.pre [] [ text "Unexpected error while parsing markdown:" ]
+                    , Html.pre [] [ text deadEndsString ]
+                    ]
+
+            Ok blocks ->
+                case Md.render markdownRenderer blocks of
+                    Err errors ->
+                        Html.p []
+                            [ Html.pre [] [ text "Unexpected error while rendering markdown:" ]
+                            , Html.pre [] [ text errors ]
+                            ]
+
+                    Ok rendered ->
+                        Html.div
+                            [ HA.class "markdown-content" ]
+                            rendered
         ]
-
-
-viewMd : String -> Html msg
-viewMd str =
-    case Md.parse str of
-        Err deadEnds ->
-            let
-                deadEndsString =
-                    List.map Md.deadEndToString deadEnds
-                        |> String.join "\n"
-            in
-            Html.p []
-                [ Html.pre [] [ text "Unexpected error while parsing markdown:" ]
-                , Html.pre [] [ text deadEndsString ]
-                ]
-
-        Ok blocks ->
-            case Md.render markdownRenderer blocks of
-                Err errors ->
-                    Html.p []
-                        [ Html.pre [] [ text "Unexpected error while rendering markdown:" ]
-                        , Html.pre [] [ text errors ]
-                        ]
-
-                Ok rendered ->
-                    Html.div
-                        [ HA.class "markdown-content" ]
-                        rendered
 
 
 markdownRenderer : Md.Renderer (Html msg)
@@ -3826,43 +3814,12 @@ customHeadingRenderer { level, children } =
                 children
 
 
-viewPrecedentDiscussionMd : Maybe String -> Html msg
-viewPrecedentDiscussionMd maybeDiscussion =
-    case maybeDiscussion of
-        Nothing ->
-            text ""
-
-        Just discussion ->
-            div []
-                [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "Precedent Discussion" ]
-                , viewMd discussion
-                ]
-
-
-viewCounterArgumentMd : Maybe String -> Html msg
-viewCounterArgumentMd maybeArgument =
-    case maybeArgument of
-        Nothing ->
-            text ""
-
-        Just argument ->
-            div []
-                [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "Counter Argument" ]
-                , viewMd argument
-                ]
-
-
-viewConclusion : Maybe String -> Html msg
-viewConclusion maybeConclusion =
-    case maybeConclusion of
-        Nothing ->
-            text ""
-
-        Just conclusion ->
-            div []
-                [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "Conclusion" ]
-                , Html.p [ HA.class "text-gray-800 whitespace-pre-wrap" ] [ text conclusion ]
-                ]
+viewConclusion : String -> Html msg
+viewConclusion conclusion =
+    div []
+        [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "Conclusion" ]
+        , Html.p [ HA.class "text-gray-800 whitespace-pre-wrap" ] [ text conclusion ]
+        ]
 
 
 viewInternalVote : InternalVote -> Html msg

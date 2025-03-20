@@ -113,13 +113,13 @@ type Step prep validating done
     | Done prep done
 
 
-init : Model
-init =
+init : { label : String, description : String } -> Model
+init ipfsPreconfig =
     Model
         { someRefUtxos = Utxo.emptyRefDict
         , voterStep = Preparing initVoterForm
         , pickProposalStep = Preparing {}
-        , storageConfigStep = Preparing initStorageForm
+        , storageConfigStep = Preparing (initStorageForm ipfsPreconfig)
         , rationaleCreationStep = Preparing initRationaleForm
         , rationaleSignatureStep = Preparing initRationaleSignatureForm
         , permanentStorageStep = Preparing { error = Nothing }
@@ -321,21 +321,29 @@ initAuthorForm =
 
 
 type StorageMethod
-    = PreconfigIPFS
+    = PreconfigIPFS { label : String, description : String }
+    | NmkrIPFS
+    | BlockfrostIPFS
     | CustomIPFS
 
 
 type alias StorageForm =
     { storageMethod : StorageMethod
+    , nmkrUserId : String
+    , nmkrApiToken : String
+    , blockfrostProjectId : String
     , ipfsServer : String
     , headers : List ( String, String )
     , error : Maybe String
     }
 
 
-initStorageForm : StorageForm
-initStorageForm =
-    { storageMethod = PreconfigIPFS
+initStorageForm : { label : String, description : String } -> StorageForm
+initStorageForm ipfsPreconfig =
+    { storageMethod = PreconfigIPFS ipfsPreconfig
+    , nmkrUserId = ""
+    , nmkrApiToken = ""
+    , blockfrostProjectId = ""
     , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
     , headers = [ ( "project_id", "" ) ]
     , error = Nothing
@@ -343,13 +351,13 @@ initStorageForm =
 
 
 type StorageConfig
-    = UsePreconfigIpfs
-    | UseCustomIpfs { ipfsServer : String, headers : List ( String, String ) }
+    = UsePreconfigIpfs { label : String, description : String }
+    | UseNmkrIpfs { label : String, description : String, userId : String, apiToken : String }
+    | UseCustomIpfs { label : String, description : String, ipfsServer : String, headers : List ( String, String ) }
 
 
 type alias Storage =
-    { config : StorageConfig
-    , jsonFile : IpfsFile
+    { jsonFile : IpfsFile
     }
 
 
@@ -434,6 +442,9 @@ type Msg
     | ShowMoreProposals Int
       -- Storage Config Step
     | StorageMethodSelected StorageMethod
+    | BlockfrostProjectIdChange String
+    | NmkrUserIdChange String
+    | NmkrApiTokenChange String
     | IpfsServerChange String
     | AddHeaderButtonClicked
     | DeleteHeaderButtonClicked Int
@@ -695,6 +706,24 @@ innerUpdate ctx msg model =
             , Nothing
             )
 
+        BlockfrostProjectIdChange projectId ->
+            ( updateStorageConfigForm (\form -> { form | blockfrostProjectId = projectId }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        NmkrUserIdChange userId ->
+            ( updateStorageConfigForm (\form -> { form | nmkrUserId = userId }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        NmkrApiTokenChange token ->
+            ( updateStorageConfigForm (\form -> { form | nmkrApiToken = token }) model
+            , Cmd.none
+            , Nothing
+            )
+
         IpfsServerChange ipfsServer ->
             ( updateStorageConfigForm (\form -> { form | ipfsServer = ipfsServer }) model
             , Cmd.none
@@ -728,32 +757,23 @@ innerUpdate ctx msg model =
         ValidateStorageConfigButtonClicked ->
             case model.storageConfigStep of
                 Preparing form ->
-                    case form.storageMethod of
-                        -- When using the preconfigured IPFS server, no need to validate anything.
-                        PreconfigIPFS ->
-                            ( { model | storageConfigStep = Done form UsePreconfigIpfs }
+                    case validateIpfsForm form of
+                        Ok storageConfig ->
+                            -- TODO: test some endpoint to check custom config validity,
+                            -- and return a "Validating" step instead of a "Done" step.
+                            ( { model | storageConfigStep = Done { form | error = Nothing } storageConfig }
                             , Cmd.none
                             , Nothing
                             )
 
-                        -- When using a custom IPFS server, in theory, we should check that it’s valid with some endpoint.
-                        CustomIPFS ->
-                            case validateIpfsForm form of
-                                Ok _ ->
-                                    -- TODO: test some IPFS endpoint to check custom config validity,
-                                    -- and return a "Validating" step instead of a "Done" step.
-                                    ( { model | storageConfigStep = Done form (UseCustomIpfs { ipfsServer = form.ipfsServer, headers = form.headers }) }
-                                    , Cmd.none
-                                    , Nothing
-                                    )
-
-                                Err error ->
-                                    ( { model | storageConfigStep = Preparing { form | error = Just error } }
-                                    , Cmd.none
-                                    , Nothing
-                                    )
+                        Err error ->
+                            ( { model | storageConfigStep = Preparing { form | error = Just error } }
+                            , Cmd.none
+                            , Nothing
+                            )
 
                 -- When the user clicks on "Change storage configuration"
+                -- TODO: Should be another msg
                 Done prep _ ->
                     ( { model | storageConfigStep = Preparing prep }
                     , Cmd.none
@@ -1063,16 +1083,16 @@ innerUpdate ctx msg model =
                     ( model, Cmd.none, Nothing )
 
         GotIpfsAnswer (Ok ipfsAnswer) ->
-            case ( model.storageConfigStep, model.rationaleCreationStep, model.permanentStorageStep ) of
+            case ( model.rationaleCreationStep, model.permanentStorageStep ) of
                 -- If we are validating the rationale form, it means the IPFS answer
                 -- is most likely the PDF we got back for PDF auto-gen.
-                ( Done _ _, Validating form rationale, _ ) ->
+                ( Validating form rationale, _ ) ->
                     handlePdfIpfsAnswer ctx model form rationale ipfsAnswer
 
                 -- Otherwise, if we are validating the permanent storage step, it means the IPFS answer
                 -- is most likely for the signed JSON rationale.
-                ( Done _ storageConfig, _, Validating _ _ ) ->
-                    handleRationaleIpfsAnswer model storageConfig ipfsAnswer
+                ( _, Validating _ _ ) ->
+                    handleRationaleIpfsAnswer model ipfsAnswer
 
                 _ ->
                     ( model, Cmd.none, Nothing )
@@ -1613,12 +1633,40 @@ updateStorageConfigForm formUpdate model =
             model
 
 
-validateIpfsForm : StorageForm -> Result String ()
+validateIpfsForm : StorageForm -> Result String StorageConfig
 validateIpfsForm form =
     case form.storageMethod of
-        PreconfigIPFS ->
-            -- For standard IPFS, no validation needed
-            Ok ()
+        -- For standard IPFS, no validation needed
+        PreconfigIPFS { label, description } ->
+            Ok (UsePreconfigIpfs { label = label, description = description })
+
+        BlockfrostIPFS ->
+            case String.trim form.blockfrostProjectId of
+                "" ->
+                    Err "Missing blockfrost project id"
+
+                projectId ->
+                    Ok <|
+                        UseCustomIpfs
+                            { label = "Blockfrost IPFS"
+                            , description = "Using Blockfrost IPFS server to store your files."
+                            , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
+                            , headers = [ ( "project_id", projectId ) ]
+                            }
+
+        NmkrIPFS ->
+            case String.trim form.nmkrUserId of
+                "" ->
+                    Err "Missing nmkr user id"
+
+                userId ->
+                    Ok <|
+                        UseNmkrIpfs
+                            { label = "NMKR IPFS"
+                            , description = "Using NMKR IPFS server to store your files."
+                            , userId = userId
+                            , apiToken = form.nmkrApiToken
+                            }
 
         CustomIPFS ->
             let
@@ -1641,6 +1689,15 @@ validateIpfsForm form =
             in
             ipfsServerUrlSeemsLegit
                 |> Result.andThen (\_ -> nonEmptyHeadersResult form.headers)
+                |> Result.map
+                    (\_ ->
+                        UseCustomIpfs
+                            { label = "Custom IPFS Server"
+                            , description = "Using a custom IPFS server configuration to store your files."
+                            , ipfsServer = form.ipfsServer
+                            , headers = form.headers
+                            }
+                    )
 
 
 
@@ -1871,13 +1928,21 @@ pinPdfFile fileAsValue (Model model) =
         ( Ok file, Done _ storageConfig, Validating _ _ ) ->
             ( Model model
             , case storageConfig of
-                UsePreconfigIpfs ->
-                    Api.defaultApiProvider.ipfsCfAdd
+                UsePreconfigIpfs _ ->
+                    Api.defaultApiProvider.ipfsAddFile
                         { file = file }
                         GotIpfsAnswer
 
+                UseNmkrIpfs { userId, apiToken } ->
+                    Api.defaultApiProvider.ipfsAddFileNmkr
+                        { userId = userId
+                        , apiToken = apiToken
+                        , file = file
+                        }
+                        GotIpfsAnswer
+
                 UseCustomIpfs { ipfsServer, headers } ->
-                    Api.defaultApiProvider.ipfsAdd
+                    Api.defaultApiProvider.ipfsAddFileCustom
                         { rpc = ipfsServer
                         , headers = headers
                         , file = file
@@ -2203,13 +2268,21 @@ pinRationaleFile fileAsValue (Model model) =
         ( Ok file, Done _ storageConfig, Validating _ _ ) ->
             ( Model model
             , case storageConfig of
-                UsePreconfigIpfs ->
-                    Api.defaultApiProvider.ipfsCfAdd
+                UsePreconfigIpfs _ ->
+                    Api.defaultApiProvider.ipfsAddFile
                         { file = file }
                         GotIpfsAnswer
 
+                UseNmkrIpfs { userId, apiToken } ->
+                    Api.defaultApiProvider.ipfsAddFileNmkr
+                        { userId = userId
+                        , apiToken = apiToken
+                        , file = file
+                        }
+                        GotIpfsAnswer
+
                 UseCustomIpfs { ipfsServer, headers } ->
-                    Api.defaultApiProvider.ipfsAdd
+                    Api.defaultApiProvider.ipfsAddFileCustom
                         { rpc = ipfsServer
                         , headers = headers
                         , file = file
@@ -2280,8 +2353,8 @@ handlePdfIpfsAnswer ctx model form rationale ipfsAnswer =
             ( model, Cmd.none, Nothing )
 
 
-handleRationaleIpfsAnswer : InnerModel -> StorageConfig -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
-handleRationaleIpfsAnswer model storageConfig ipfsAnswer =
+handleRationaleIpfsAnswer : InnerModel -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
+handleRationaleIpfsAnswer model ipfsAnswer =
     case ipfsAnswer of
         IpfsError error ->
             ( { model | permanentStorageStep = Preparing { error = Just error } }
@@ -2290,7 +2363,7 @@ handleRationaleIpfsAnswer model storageConfig ipfsAnswer =
             )
 
         IpfsAddSuccessful file ->
-            ( { model | permanentStorageStep = Done { error = Nothing } { config = storageConfig, jsonFile = file } }
+            ( { model | permanentStorageStep = Done { error = Nothing } { jsonFile = file } }
             , Cmd.none
             , Nothing
             )
@@ -2371,6 +2444,7 @@ type alias ViewContext msg =
     , costModels : Maybe CostModels
     , networkId : NetworkId
     , signingLink : Transaction -> List { keyName : String, keyHash : Bytes CredentialHash } -> List (Html msg) -> Html msg
+    , ipfsPreconfig : { label : String, description : String }
     }
 
 
@@ -3183,12 +3257,40 @@ viewStorageConfigStep ctx step =
                             [ Html.input
                                 [ HA.type_ "radio"
                                 , HA.name "ipfs-method"
-                                , HA.checked (form.storageMethod == PreconfigIPFS)
-                                , onClick (StorageMethodSelected PreconfigIPFS)
+                                , HA.checked <|
+                                    case form.storageMethod of
+                                        PreconfigIPFS _ ->
+                                            True
+
+                                        _ ->
+                                            False
+                                , onClick (StorageMethodSelected <| PreconfigIPFS ctx.ipfsPreconfig)
                                 , HA.class "mr-2"
                                 ]
                                 []
-                            , Html.label [ HA.class "text-base" ] [ text "Pre-configured IPFS (Cardano Foundation)" ]
+                            , Html.label [ HA.class "text-base" ] [ text ctx.ipfsPreconfig.label ]
+                            ]
+                        , div [ HA.class "flex items-center mb-4" ]
+                            [ Html.input
+                                [ HA.type_ "radio"
+                                , HA.name "ipfs-method"
+                                , HA.checked (form.storageMethod == BlockfrostIPFS)
+                                , onClick (StorageMethodSelected BlockfrostIPFS)
+                                , HA.class "mr-2"
+                                ]
+                                []
+                            , Html.label [ HA.class "text-base" ] [ text "Blockfrost IPFS Provider" ]
+                            ]
+                        , div [ HA.class "flex items-center mb-4" ]
+                            [ Html.input
+                                [ HA.type_ "radio"
+                                , HA.name "ipfs-method"
+                                , HA.checked (form.storageMethod == NmkrIPFS)
+                                , onClick (StorageMethodSelected NmkrIPFS)
+                                , HA.class "mr-2"
+                                ]
+                                []
+                            , Html.label [ HA.class "text-base" ] [ text "NMKR IPFS Provider" ]
                             ]
                         , div [ HA.class "flex items-center mb-4" ]
                             [ Html.input
@@ -3201,29 +3303,44 @@ viewStorageConfigStep ctx step =
                                 []
                             , Html.label [ HA.class "text-base" ] [ text "Custom IPFS Provider" ]
                             ]
-                        , if form.storageMethod == CustomIPFS then
-                            div []
-                                [ Helper.labeledField "IPFS RPC server:"
-                                    (Helper.textFieldInline form.ipfsServer IpfsServerChange)
-                                , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
-                                , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
-                                    [ text "For example, use "
-                                    , Html.a
-                                        [ HA.href "https://blockfrost.dev/start-building/ipfs/"
-                                        , HA.target "_blank"
-                                        , HA.rel "noopener noreferrer"
-                                        , HA.style "color" "#2563eb"
-                                        , HA.style "text-decoration" "underline"
-                                        ]
-                                        [ text "Blockfrost" ]
-                                    , text " or other IPFS providers."
-                                    , div [ HA.class "mt-4" ]
-                                        [ Helper.viewButton "Add HTTP header" AddHeaderButtonClicked ]
+                        , case form.storageMethod of
+                            BlockfrostIPFS ->
+                                div []
+                                    [ Helper.labeledField "Blockfrost project ID:"
+                                        (Helper.textFieldInline form.blockfrostProjectId BlockfrostProjectIdChange)
                                     ]
-                                ]
 
-                          else
-                            text ""
+                            NmkrIPFS ->
+                                div []
+                                    [ Helper.labeledField "NMKR user ID:"
+                                        (Helper.textFieldInline form.nmkrUserId NmkrUserIdChange)
+                                    , Helper.labeledField "NMKR API token:"
+                                        (Helper.textFieldInline form.nmkrApiToken NmkrApiTokenChange)
+                                    ]
+
+                            CustomIPFS ->
+                                div []
+                                    [ Helper.labeledField "IPFS RPC server:"
+                                        (Helper.textFieldInline form.ipfsServer IpfsServerChange)
+                                    , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
+                                    , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
+                                        [ text "For example, use "
+                                        , Html.a
+                                            [ HA.href "https://blockfrost.dev/start-building/ipfs/"
+                                            , HA.target "_blank"
+                                            , HA.rel "noopener noreferrer"
+                                            , HA.style "color" "#2563eb"
+                                            , HA.style "text-decoration" "underline"
+                                            ]
+                                            [ text "Blockfrost" ]
+                                        , text " or other IPFS providers."
+                                        , div [ HA.class "mt-4" ]
+                                            [ Helper.viewButton "Add HTTP header" AddHeaderButtonClicked ]
+                                        ]
+                                    ]
+
+                            PreconfigIPFS _ ->
+                                text ""
                         ]
                     , Html.p [] [ Helper.viewButton "Validate storage config" ValidateStorageConfigButtonClicked ]
                     , viewError form.error
@@ -3243,20 +3360,31 @@ viewStorageConfigStep ctx step =
                         [ Html.strong [ HA.class "font-medium" ] [ text "Selected storage method:" ] ]
                     , div [ HA.class "p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
                         [ case storageConfig of
-                            UsePreconfigIpfs ->
+                            UsePreconfigIpfs { label, description } ->
                                 div [ HA.class "flex flex-col space-y-2" ]
                                     [ div [ HA.class "flex items-center" ]
-                                        [ Html.span [ HA.class "font-medium" ] [ text "Pre-configured IPFS (Cardano Foundation)" ]
+                                        [ Html.span [ HA.class "font-medium" ] [ text label ]
                                         ]
                                     , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
-                                        [ text "Files will be stored using the Cardano Foundation's IPFS gateway." ]
+                                        [ text description ]
                                     ]
 
-                            UseCustomIpfs { ipfsServer } ->
+                            UseNmkrIpfs { label, description } ->
                                 div [ HA.class "flex flex-col space-y-2" ]
                                     [ div [ HA.class "flex items-center" ]
-                                        [ Html.span [ HA.class "font-medium" ] [ text "Custom IPFS Provider" ]
+                                        [ Html.span [ HA.class "font-medium" ] [ text label ]
                                         ]
+                                    , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
+                                        [ text description ]
+                                    ]
+
+                            UseCustomIpfs { label, description, ipfsServer } ->
+                                div [ HA.class "flex flex-col space-y-2" ]
+                                    [ div [ HA.class "flex items-center" ]
+                                        [ Html.span [ HA.class "font-medium" ] [ text label ]
+                                        ]
+                                    , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
+                                        [ text description ]
                                     , Html.p [ HA.class "ml-8" ]
                                         [ Html.span [ HA.class "font-bold mr-2" ] [ text "Server:" ]
                                         , Html.a

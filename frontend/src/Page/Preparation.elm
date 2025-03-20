@@ -322,11 +322,13 @@ initAuthorForm =
 
 type StorageMethod
     = PreconfigIPFS { label : String, description : String }
+    | BlockfrostIPFS
     | CustomIPFS
 
 
 type alias StorageForm =
     { storageMethod : StorageMethod
+    , blockfrostProjectId : String
     , ipfsServer : String
     , headers : List ( String, String )
     , error : Maybe String
@@ -336,6 +338,7 @@ type alias StorageForm =
 initStorageForm : { label : String, description : String } -> StorageForm
 initStorageForm ipfsPreconfig =
     { storageMethod = PreconfigIPFS ipfsPreconfig
+    , blockfrostProjectId = ""
     , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
     , headers = [ ( "project_id", "" ) ]
     , error = Nothing
@@ -344,7 +347,7 @@ initStorageForm ipfsPreconfig =
 
 type StorageConfig
     = UsePreconfigIpfs { label : String, description : String }
-    | UseCustomIpfs { ipfsServer : String, headers : List ( String, String ) }
+    | UseCustomIpfs { label : String, description : String, ipfsServer : String, headers : List ( String, String ) }
 
 
 type alias Storage =
@@ -433,6 +436,7 @@ type Msg
     | ShowMoreProposals Int
       -- Storage Config Step
     | StorageMethodSelected StorageMethod
+    | BlockfrostProjectIdChange String
     | IpfsServerChange String
     | AddHeaderButtonClicked
     | DeleteHeaderButtonClicked Int
@@ -694,6 +698,12 @@ innerUpdate ctx msg model =
             , Nothing
             )
 
+        BlockfrostProjectIdChange projectId ->
+            ( updateStorageConfigForm (\form -> { form | blockfrostProjectId = projectId }) model
+            , Cmd.none
+            , Nothing
+            )
+
         IpfsServerChange ipfsServer ->
             ( updateStorageConfigForm (\form -> { form | ipfsServer = ipfsServer }) model
             , Cmd.none
@@ -735,13 +745,47 @@ innerUpdate ctx msg model =
                             , Nothing
                             )
 
+                        BlockfrostIPFS ->
+                            case validateIpfsForm form of
+                                Err error ->
+                                    ( { model | storageConfigStep = Preparing { form | error = Just error } }
+                                    , Cmd.none
+                                    , Nothing
+                                    )
+
+                                Ok _ ->
+                                    -- TODO: test IPFS endpoint to check config validity,
+                                    -- and return a "Validating" step instead of a "Done" step.
+                                    ( { model
+                                        | storageConfigStep =
+                                            Done { form | error = Nothing } <|
+                                                UseCustomIpfs
+                                                    { label = "Blockfrost IPFS"
+                                                    , description = "Using Blockfrost IPFS server to store our files."
+                                                    , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
+                                                    , headers = [ ( "project_id", String.trim form.blockfrostProjectId ) ]
+                                                    }
+                                      }
+                                    , Cmd.none
+                                    , Nothing
+                                    )
+
                         -- When using a custom IPFS server, in theory, we should check that it’s valid with some endpoint.
                         CustomIPFS ->
                             case validateIpfsForm form of
                                 Ok _ ->
                                     -- TODO: test some IPFS endpoint to check custom config validity,
                                     -- and return a "Validating" step instead of a "Done" step.
-                                    ( { model | storageConfigStep = Done form (UseCustomIpfs { ipfsServer = form.ipfsServer, headers = form.headers }) }
+                                    ( { model
+                                        | storageConfigStep =
+                                            Done { form | error = Nothing } <|
+                                                UseCustomIpfs
+                                                    { label = "Custom IPFS Server"
+                                                    , description = "Using a custom IPFS server configuration to store our files."
+                                                    , ipfsServer = form.ipfsServer
+                                                    , headers = form.headers
+                                                    }
+                                      }
                                     , Cmd.none
                                     , Nothing
                                     )
@@ -1618,6 +1662,14 @@ validateIpfsForm form =
         PreconfigIPFS _ ->
             -- For standard IPFS, no validation needed
             Ok ()
+
+        BlockfrostIPFS ->
+            case String.trim form.blockfrostProjectId of
+                "" ->
+                    Err "Missing blockfrost project id"
+
+                _ ->
+                    Ok ()
 
         CustomIPFS ->
             let
@@ -3200,6 +3252,17 @@ viewStorageConfigStep ctx step =
                             [ Html.input
                                 [ HA.type_ "radio"
                                 , HA.name "ipfs-method"
+                                , HA.checked (form.storageMethod == BlockfrostIPFS)
+                                , onClick (StorageMethodSelected BlockfrostIPFS)
+                                , HA.class "mr-2"
+                                ]
+                                []
+                            , Html.label [ HA.class "text-base" ] [ text "Blockfrost IPFS Provider" ]
+                            ]
+                        , div [ HA.class "flex items-center mb-4" ]
+                            [ Html.input
+                                [ HA.type_ "radio"
+                                , HA.name "ipfs-method"
                                 , HA.checked (form.storageMethod == CustomIPFS)
                                 , onClick (StorageMethodSelected CustomIPFS)
                                 , HA.class "mr-2"
@@ -3207,29 +3270,36 @@ viewStorageConfigStep ctx step =
                                 []
                             , Html.label [ HA.class "text-base" ] [ text "Custom IPFS Provider" ]
                             ]
-                        , if form.storageMethod == CustomIPFS then
-                            div []
-                                [ Helper.labeledField "IPFS RPC server:"
-                                    (Helper.textFieldInline form.ipfsServer IpfsServerChange)
-                                , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
-                                , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
-                                    [ text "For example, use "
-                                    , Html.a
-                                        [ HA.href "https://blockfrost.dev/start-building/ipfs/"
-                                        , HA.target "_blank"
-                                        , HA.rel "noopener noreferrer"
-                                        , HA.style "color" "#2563eb"
-                                        , HA.style "text-decoration" "underline"
-                                        ]
-                                        [ text "Blockfrost" ]
-                                    , text " or other IPFS providers."
-                                    , div [ HA.class "mt-4" ]
-                                        [ Helper.viewButton "Add HTTP header" AddHeaderButtonClicked ]
+                        , case form.storageMethod of
+                            BlockfrostIPFS ->
+                                div []
+                                    [ Helper.labeledField "Blockfrost project ID:"
+                                        (Helper.textFieldInline form.blockfrostProjectId BlockfrostProjectIdChange)
                                     ]
-                                ]
 
-                          else
-                            text ""
+                            CustomIPFS ->
+                                div []
+                                    [ Helper.labeledField "IPFS RPC server:"
+                                        (Helper.textFieldInline form.ipfsServer IpfsServerChange)
+                                    , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
+                                    , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
+                                        [ text "For example, use "
+                                        , Html.a
+                                            [ HA.href "https://blockfrost.dev/start-building/ipfs/"
+                                            , HA.target "_blank"
+                                            , HA.rel "noopener noreferrer"
+                                            , HA.style "color" "#2563eb"
+                                            , HA.style "text-decoration" "underline"
+                                            ]
+                                            [ text "Blockfrost" ]
+                                        , text " or other IPFS providers."
+                                        , div [ HA.class "mt-4" ]
+                                            [ Helper.viewButton "Add HTTP header" AddHeaderButtonClicked ]
+                                        ]
+                                    ]
+
+                            _ ->
+                                text ""
                         ]
                     , Html.p [] [ Helper.viewButton "Validate storage config" ValidateStorageConfigButtonClicked ]
                     , viewError form.error
@@ -3258,11 +3328,13 @@ viewStorageConfigStep ctx step =
                                         [ text description ]
                                     ]
 
-                            UseCustomIpfs { ipfsServer } ->
+                            UseCustomIpfs { label, description, ipfsServer } ->
                                 div [ HA.class "flex flex-col space-y-2" ]
                                     [ div [ HA.class "flex items-center" ]
-                                        [ Html.span [ HA.class "font-medium" ] [ text "Custom IPFS Provider" ]
+                                        [ Html.span [ HA.class "font-medium" ] [ text label ]
                                         ]
+                                    , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
+                                        [ text description ]
                                     , Html.p [ HA.class "ml-8" ]
                                         [ Html.span [ HA.class "font-bold mr-2" ] [ text "Server:" ]
                                         , Html.a

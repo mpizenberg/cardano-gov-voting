@@ -348,8 +348,7 @@ type StorageConfig
 
 
 type alias Storage =
-    { config : StorageConfig
-    , jsonFile : IpfsFile
+    { jsonFile : IpfsFile
     }
 
 
@@ -1063,16 +1062,16 @@ innerUpdate ctx msg model =
                     ( model, Cmd.none, Nothing )
 
         GotIpfsAnswer (Ok ipfsAnswer) ->
-            case ( model.storageConfigStep, model.rationaleCreationStep, model.permanentStorageStep ) of
+            case ( model.rationaleCreationStep, model.permanentStorageStep ) of
                 -- If we are validating the rationale form, it means the IPFS answer
                 -- is most likely the PDF we got back for PDF auto-gen.
-                ( Done _ _, Validating form rationale, _ ) ->
+                ( Validating form rationale, _ ) ->
                     handlePdfIpfsAnswer ctx model form rationale ipfsAnswer
 
                 -- Otherwise, if we are validating the permanent storage step, it means the IPFS answer
                 -- is most likely for the signed JSON rationale.
-                ( Done _ storageConfig, _, Validating _ _ ) ->
-                    handleRationaleIpfsAnswer model storageConfig ipfsAnswer
+                ( _, Validating _ _ ) ->
+                    handleRationaleIpfsAnswer model ipfsAnswer
 
                 _ ->
                     ( model, Cmd.none, Nothing )
@@ -2280,8 +2279,8 @@ handlePdfIpfsAnswer ctx model form rationale ipfsAnswer =
             ( model, Cmd.none, Nothing )
 
 
-handleRationaleIpfsAnswer : InnerModel -> StorageConfig -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
-handleRationaleIpfsAnswer model storageConfig ipfsAnswer =
+handleRationaleIpfsAnswer : InnerModel -> IpfsAnswer -> ( InnerModel, Cmd msg, Maybe MsgToParent )
+handleRationaleIpfsAnswer model ipfsAnswer =
     case ipfsAnswer of
         IpfsError error ->
             ( { model | permanentStorageStep = Preparing { error = Just error } }
@@ -2290,7 +2289,7 @@ handleRationaleIpfsAnswer model storageConfig ipfsAnswer =
             )
 
         IpfsAddSuccessful file ->
-            ( { model | permanentStorageStep = Done { error = Nothing } { config = storageConfig, jsonFile = file } }
+            ( { model | permanentStorageStep = Done { error = Nothing } { jsonFile = file } }
             , Cmd.none
             , Nothing
             )

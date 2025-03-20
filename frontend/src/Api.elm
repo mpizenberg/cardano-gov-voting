@@ -21,6 +21,7 @@ import Natural exposing (Natural)
 import ProposalMetadata exposing (ProposalMetadata)
 import RemoteData exposing (RemoteData)
 import ScriptInfo exposing (ScriptInfo)
+import Task
 
 
 {-| Free Tier Koios API token.
@@ -54,6 +55,7 @@ type alias ApiProvider msg =
     , getCcInfo : NetworkId -> Credential -> (Result Http.Error CcInfo -> msg) -> Cmd msg
     , getPoolLiveStake : NetworkId -> Bytes Pool.Id -> (Result Http.Error PoolInfo -> msg) -> Cmd msg
     , ipfsAddFileCustom : { rpc : String, headers : List ( String, String ), file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
+    , ipfsAddFileNmkr : { userId : String, apiToken : String, file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     , ipfsAddFile : { file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     , convertToPdf : String -> (Result Http.Error ElmBytes.Bytes -> msg) -> Cmd msg
     }
@@ -375,6 +377,8 @@ ipfsAnswerDecoder =
             (JD.field "message" JD.string)
             (JD.field "status_code" JD.int)
         , JD.map IpfsError
+            (JD.field "errorMessage" JD.string)
+        , JD.map IpfsError
             (JD.field "detail" JD.string)
         , JD.map (\json -> IpfsError <| JE.encode 2 json)
             (JD.field "detail" JD.value)
@@ -390,6 +394,10 @@ ipfsAnswerDecoder =
             (JD.field "Name" JD.string)
             (JD.field "Hash" JD.string)
             (JD.field "Size" JD.string)
+
+        -- NMKR format
+        , JD.map (\cid -> IpfsAddSuccessful <| IpfsFile "unkown" cid "unknown")
+            JD.string
         ]
 
 
@@ -565,7 +573,46 @@ defaultApiProvider =
                 , tracker = Nothing
                 }
 
-    -- Make a request to an IPFS server at the CF
+    -- Make a request to NMKR IPFS server
+    , ipfsAddFileNmkr =
+        \{ userId, apiToken, file } toMsg ->
+            File.toUrl file
+                |> Task.andThen
+                    (\fileAsBase64Url ->
+                        let
+                            -- Remove the uri prefix for NMKR which doesn’t accept it
+                            prefixSize =
+                                String.length <| "data:" ++ File.mime file ++ ";base64,"
+
+                            fileAsBase64 =
+                                String.dropLeft prefixSize fileAsBase64Url
+                        in
+                        Http.task
+                            { method = "POST"
+                            , url = "/proxy/json"
+                            , headers = []
+                            , body =
+                                Http.jsonBody
+                                    (JE.object
+                                        [ ( "url", JE.string <| "https://studio-api.nmkr.io/v2/UploadToIpfs/" ++ userId )
+                                        , ( "method", JE.string "POST" )
+                                        , ( "headers", JE.object [ ( "Authorization", JE.string ("Bearer " ++ apiToken) ) ] )
+                                        , ( "body"
+                                          , JE.object
+                                                [ ( "mimetype", JE.string <| File.mime file )
+                                                , ( "name", JE.string <| File.name file )
+                                                , ( "fileFromBase64", JE.string fileAsBase64 )
+                                                ]
+                                          )
+                                        ]
+                                    )
+                            , resolver = Http.stringResolver responseToIpfsAnswer
+                            , timeout = Nothing
+                            }
+                    )
+                |> Task.attempt toMsg
+
+    -- Make a request to the pre-configured IPFS RPC via the server
     , ipfsAddFile =
         \{ file } toMsg ->
             Http.request

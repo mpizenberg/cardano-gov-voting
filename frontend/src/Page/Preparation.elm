@@ -322,12 +322,15 @@ initAuthorForm =
 
 type StorageMethod
     = PreconfigIPFS { label : String, description : String }
+    | NmkrIPFS
     | BlockfrostIPFS
     | CustomIPFS
 
 
 type alias StorageForm =
     { storageMethod : StorageMethod
+    , nmkrUserId : String
+    , nmkrApiToken : String
     , blockfrostProjectId : String
     , ipfsServer : String
     , headers : List ( String, String )
@@ -338,6 +341,8 @@ type alias StorageForm =
 initStorageForm : { label : String, description : String } -> StorageForm
 initStorageForm ipfsPreconfig =
     { storageMethod = PreconfigIPFS ipfsPreconfig
+    , nmkrUserId = ""
+    , nmkrApiToken = ""
     , blockfrostProjectId = ""
     , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
     , headers = [ ( "project_id", "" ) ]
@@ -347,6 +352,7 @@ initStorageForm ipfsPreconfig =
 
 type StorageConfig
     = UsePreconfigIpfs { label : String, description : String }
+    | UseNmkrIpfs { label : String, description : String, userId : String, apiToken : String }
     | UseCustomIpfs { label : String, description : String, ipfsServer : String, headers : List ( String, String ) }
 
 
@@ -437,6 +443,8 @@ type Msg
       -- Storage Config Step
     | StorageMethodSelected StorageMethod
     | BlockfrostProjectIdChange String
+    | NmkrUserIdChange String
+    | NmkrApiTokenChange String
     | IpfsServerChange String
     | AddHeaderButtonClicked
     | DeleteHeaderButtonClicked Int
@@ -704,6 +712,18 @@ innerUpdate ctx msg model =
             , Nothing
             )
 
+        NmkrUserIdChange userId ->
+            ( updateStorageConfigForm (\form -> { form | nmkrUserId = userId }) model
+            , Cmd.none
+            , Nothing
+            )
+
+        NmkrApiTokenChange token ->
+            ( updateStorageConfigForm (\form -> { form | nmkrApiToken = token }) model
+            , Cmd.none
+            , Nothing
+            )
+
         IpfsServerChange ipfsServer ->
             ( updateStorageConfigForm (\form -> { form | ipfsServer = ipfsServer }) model
             , Cmd.none
@@ -737,66 +757,23 @@ innerUpdate ctx msg model =
         ValidateStorageConfigButtonClicked ->
             case model.storageConfigStep of
                 Preparing form ->
-                    case form.storageMethod of
-                        -- When using the preconfigured IPFS server, no need to validate anything.
-                        PreconfigIPFS { label, description } ->
-                            ( { model | storageConfigStep = Done form <| UsePreconfigIpfs { label = label, description = description } }
+                    case validateIpfsForm form of
+                        Ok storageConfig ->
+                            -- TODO: test some endpoint to check custom config validity,
+                            -- and return a "Validating" step instead of a "Done" step.
+                            ( { model | storageConfigStep = Done { form | error = Nothing } storageConfig }
                             , Cmd.none
                             , Nothing
                             )
 
-                        BlockfrostIPFS ->
-                            case validateIpfsForm form of
-                                Err error ->
-                                    ( { model | storageConfigStep = Preparing { form | error = Just error } }
-                                    , Cmd.none
-                                    , Nothing
-                                    )
-
-                                Ok _ ->
-                                    -- TODO: test IPFS endpoint to check config validity,
-                                    -- and return a "Validating" step instead of a "Done" step.
-                                    ( { model
-                                        | storageConfigStep =
-                                            Done { form | error = Nothing } <|
-                                                UseCustomIpfs
-                                                    { label = "Blockfrost IPFS"
-                                                    , description = "Using Blockfrost IPFS server to store our files."
-                                                    , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
-                                                    , headers = [ ( "project_id", String.trim form.blockfrostProjectId ) ]
-                                                    }
-                                      }
-                                    , Cmd.none
-                                    , Nothing
-                                    )
-
-                        -- When using a custom IPFS server, in theory, we should check that it’s valid with some endpoint.
-                        CustomIPFS ->
-                            case validateIpfsForm form of
-                                Ok _ ->
-                                    -- TODO: test some IPFS endpoint to check custom config validity,
-                                    -- and return a "Validating" step instead of a "Done" step.
-                                    ( { model
-                                        | storageConfigStep =
-                                            Done { form | error = Nothing } <|
-                                                UseCustomIpfs
-                                                    { label = "Custom IPFS Server"
-                                                    , description = "Using a custom IPFS server configuration to store our files."
-                                                    , ipfsServer = form.ipfsServer
-                                                    , headers = form.headers
-                                                    }
-                                      }
-                                    , Cmd.none
-                                    , Nothing
-                                    )
-
-                                Err error ->
-                                    ( { model | storageConfigStep = Preparing { form | error = Just error } }
-                                    , Cmd.none
-                                    , Nothing
-                                    )
+                        Err error ->
+                            ( { model | storageConfigStep = Preparing { form | error = Just error } }
+                            , Cmd.none
+                            , Nothing
+                            )
 
                 -- When the user clicks on "Change storage configuration"
+                -- TODO: Should be another msg
                 Done prep _ ->
                     ( { model | storageConfigStep = Preparing prep }
                     , Cmd.none
@@ -1656,20 +1633,40 @@ updateStorageConfigForm formUpdate model =
             model
 
 
-validateIpfsForm : StorageForm -> Result String ()
+validateIpfsForm : StorageForm -> Result String StorageConfig
 validateIpfsForm form =
     case form.storageMethod of
-        PreconfigIPFS _ ->
-            -- For standard IPFS, no validation needed
-            Ok ()
+        -- For standard IPFS, no validation needed
+        PreconfigIPFS { label, description } ->
+            Ok (UsePreconfigIpfs { label = label, description = description })
 
         BlockfrostIPFS ->
             case String.trim form.blockfrostProjectId of
                 "" ->
                     Err "Missing blockfrost project id"
 
-                _ ->
-                    Ok ()
+                projectId ->
+                    Ok <|
+                        UseCustomIpfs
+                            { label = "Blockfrost IPFS"
+                            , description = "Using Blockfrost IPFS server to store your files."
+                            , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
+                            , headers = [ ( "project_id", projectId ) ]
+                            }
+
+        NmkrIPFS ->
+            case String.trim form.nmkrUserId of
+                "" ->
+                    Err "Missing nmkr user id"
+
+                userId ->
+                    Ok <|
+                        UseNmkrIpfs
+                            { label = "NMKR IPFS"
+                            , description = "Using NMKR IPFS server to store your files."
+                            , userId = userId
+                            , apiToken = form.nmkrApiToken
+                            }
 
         CustomIPFS ->
             let
@@ -1692,6 +1689,15 @@ validateIpfsForm form =
             in
             ipfsServerUrlSeemsLegit
                 |> Result.andThen (\_ -> nonEmptyHeadersResult form.headers)
+                |> Result.map
+                    (\_ ->
+                        UseCustomIpfs
+                            { label = "Custom IPFS Server"
+                            , description = "Using a custom IPFS server configuration to store your files."
+                            , ipfsServer = form.ipfsServer
+                            , headers = form.headers
+                            }
+                    )
 
 
 
@@ -1925,6 +1931,14 @@ pinPdfFile fileAsValue (Model model) =
                 UsePreconfigIpfs _ ->
                     Api.defaultApiProvider.ipfsAddFile
                         { file = file }
+                        GotIpfsAnswer
+
+                UseNmkrIpfs { userId, apiToken } ->
+                    Api.defaultApiProvider.ipfsAddFileNmkr
+                        { userId = userId
+                        , apiToken = apiToken
+                        , file = file
+                        }
                         GotIpfsAnswer
 
                 UseCustomIpfs { ipfsServer, headers } ->
@@ -2257,6 +2271,14 @@ pinRationaleFile fileAsValue (Model model) =
                 UsePreconfigIpfs _ ->
                     Api.defaultApiProvider.ipfsAddFile
                         { file = file }
+                        GotIpfsAnswer
+
+                UseNmkrIpfs { userId, apiToken } ->
+                    Api.defaultApiProvider.ipfsAddFileNmkr
+                        { userId = userId
+                        , apiToken = apiToken
+                        , file = file
+                        }
                         GotIpfsAnswer
 
                 UseCustomIpfs { ipfsServer, headers } ->
@@ -3263,6 +3285,17 @@ viewStorageConfigStep ctx step =
                             [ Html.input
                                 [ HA.type_ "radio"
                                 , HA.name "ipfs-method"
+                                , HA.checked (form.storageMethod == NmkrIPFS)
+                                , onClick (StorageMethodSelected NmkrIPFS)
+                                , HA.class "mr-2"
+                                ]
+                                []
+                            , Html.label [ HA.class "text-base" ] [ text "NMKR IPFS Provider" ]
+                            ]
+                        , div [ HA.class "flex items-center mb-4" ]
+                            [ Html.input
+                                [ HA.type_ "radio"
+                                , HA.name "ipfs-method"
                                 , HA.checked (form.storageMethod == CustomIPFS)
                                 , onClick (StorageMethodSelected CustomIPFS)
                                 , HA.class "mr-2"
@@ -3275,6 +3308,14 @@ viewStorageConfigStep ctx step =
                                 div []
                                     [ Helper.labeledField "Blockfrost project ID:"
                                         (Helper.textFieldInline form.blockfrostProjectId BlockfrostProjectIdChange)
+                                    ]
+
+                            NmkrIPFS ->
+                                div []
+                                    [ Helper.labeledField "NMKR user ID:"
+                                        (Helper.textFieldInline form.nmkrUserId NmkrUserIdChange)
+                                    , Helper.labeledField "NMKR API token:"
+                                        (Helper.textFieldInline form.nmkrApiToken NmkrApiTokenChange)
                                     ]
 
                             CustomIPFS ->
@@ -3298,7 +3339,7 @@ viewStorageConfigStep ctx step =
                                         ]
                                     ]
 
-                            _ ->
+                            PreconfigIPFS _ ->
                                 text ""
                         ]
                     , Html.p [] [ Helper.viewButton "Validate storage config" ValidateStorageConfigButtonClicked ]
@@ -3320,6 +3361,15 @@ viewStorageConfigStep ctx step =
                     , div [ HA.class "p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
                         [ case storageConfig of
                             UsePreconfigIpfs { label, description } ->
+                                div [ HA.class "flex flex-col space-y-2" ]
+                                    [ div [ HA.class "flex items-center" ]
+                                        [ Html.span [ HA.class "font-medium" ] [ text label ]
+                                        ]
+                                    , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
+                                        [ text description ]
+                                    ]
+
+                            UseNmkrIpfs { label, description } ->
                                 div [ HA.class "flex flex-col space-y-2" ]
                                     [ div [ HA.class "flex items-center" ]
                                         [ Html.span [ HA.class "font-medium" ] [ text label ]

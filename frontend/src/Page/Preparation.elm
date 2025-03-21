@@ -3415,6 +3415,21 @@ viewStorageConfigStep ctx step =
                 ]
 
 
+viewHeader : Int -> ( String, String ) -> Html Msg
+viewHeader n ( field, value ) =
+    Helper.formContainer
+        [ div [ HA.class "flex items-center" ]
+            [ div [ HA.class "flex-1 flex gap-12" ]
+                [ Helper.labeledField "Request Header Title"
+                    (Helper.textFieldInline field (StorageHeaderFieldChange n))
+                , Helper.labeledField "Request Header Value"
+                    (Helper.textFieldInline value (StorageHeaderValueChange n))
+                , Helper.viewButton "Delete" (DeleteHeaderButtonClicked n)
+                ]
+            ]
+        ]
+
+
 
 --
 -- Rationale Step
@@ -3633,7 +3648,7 @@ viewRefOption refType =
 
 viewCompletedRationale : Rationale -> Html Msg
 viewCompletedRationale rationale =
-    div []
+    div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
         [ sectionTitle "Vote Rationale"
         , div [ HA.class "space-y-6" ]
             [ maybeViewSection viewSummary (Just rationale.summary)
@@ -3889,19 +3904,19 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
     case ( pickProposalStep, rationaleCreationStep, step ) of
         ( _, Preparing _, _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
+                [ sectionTitle "Rationale Signature"
                 , Html.p [] [ text "Please validate the rationale creation step first." ]
                 ]
 
         ( _, Validating _ _, _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
+                [ sectionTitle "Rationale Signature"
                 , Html.p [] [ text "Please validate the rationale creation step first." ]
                 ]
 
         ( Done _ { id }, Done _ _, Preparing form ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
+                [ sectionTitle "Rationale Signature"
                 , Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts id form
                 , Html.p []
                     [ Helper.viewButton "Skip rationale signing" (ctx.wrapMsg SkipRationaleSignaturesButtonClicked)
@@ -3913,13 +3928,13 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
 
         ( _, Done _ _, Preparing _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
+                [ sectionTitle "Rationale Signature"
                 , Html.p [] [ text "Please pick a proposal first." ]
                 ]
 
         ( _, Done _ _, Validating _ _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Signature" ]
+                [ sectionTitle "Rationale Signature"
                 , Html.p [] [ text "Validating rationale author signatures ..." ]
                 ]
 
@@ -3931,34 +3946,28 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
                         , HA.download "rationale-signed.json"
                         ]
                         [ Helper.viewButton "Download signed JSON rationale" NoMsg ]
+
+                viewAuthors content =
+                    Html.map ctx.wrapMsg <|
+                        div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                            [ sectionTitle "Rationale Signature"
+                            , div [ HA.style "display" "flex", HA.style "align-items" "center" ]
+                                [ div [ HA.style "margin-right" "12px" ]
+                                    [ downloadButton ]
+                                , div [ HA.style "margin-right" "12px" ]
+                                    [ Helper.viewButton "Generate PDF" (ConvertToPdfButtonClicked ratSig.signedJson) ]
+                                ]
+                            , content
+                            , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Update authors" ChangeAuthorsButtonClicked ]
+                            ]
             in
             if List.isEmpty ratSig.authors then
-                Html.map ctx.wrapMsg <|
-                    div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                        [ Html.h4 [ HA.class "text-3xl font-medium mb-4" ] [ text "Rationale Signature" ]
-                        , div [ HA.style "display" "flex", HA.style "align-items" "center" ]
-                            [ div [ HA.style "margin-right" "12px" ]
-                                [ downloadButton ]
-                            , div [ HA.style "margin-right" "12px" ]
-                                [ Helper.viewButton "Generate PDF" (ConvertToPdfButtonClicked ratSig.signedJson) ]
-                            ]
-                        , Html.p [ HA.class "mt-4" ] [ text "No registered author." ]
-                        , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Update authors" ChangeAuthorsButtonClicked ]
-                        ]
+                viewAuthors <|
+                    Html.p [ HA.class "mt-4" ] [ text "No registered author." ]
 
             else
-                Html.map ctx.wrapMsg <|
-                    div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                        [ Html.h4 [ HA.class "text-3xl font-medium" ] [ text "Rationale Signature" ]
-                        , div [ HA.style "display" "flex", HA.style "align-items" "center" ]
-                            [ div [ HA.style "margin-right" "12px" ]
-                                [ downloadButton ]
-                            , div [ HA.style "margin-right" "12px" ]
-                                [ Helper.viewButton "Generate PDF" (ConvertToPdfButtonClicked ratSig.signedJson) ]
-                            ]
-                        , Html.ul [] (List.map viewSigner ratSig.authors)
-                        , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Update authors" ChangeAuthorsButtonClicked ]
-                        ]
+                viewAuthors <|
+                    Html.ul [] (List.map viewSigner ratSig.authors)
 
 
 viewRationaleSignatureForm : JsonLdContexts -> Gov.ActionId -> RationaleSignatureForm -> Html Msg
@@ -4124,91 +4133,75 @@ viewPermanentStorageStep :
     -> Step { error : Maybe String } {} Storage
     -> Html msg
 viewPermanentStorageStep ctx rationaleSigStep storageConfigStep step =
-    case ( rationaleSigStep, storageConfigStep, step ) of
-        ( Done _ _, Done _ _, Preparing form ) ->
-            Html.map ctx.wrapMsg <|
-                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
-                    , Html.p [] [ Helper.viewButton "Add to IPFS" PinJsonIpfsButtonClicked ]
-                    , viewError form.error
-                    ]
+    Html.map ctx.wrapMsg <|
+        div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+            [ sectionTitle "Rationale Storage"
+            , case ( rationaleSigStep, storageConfigStep, step ) of
+                ( Done _ _, Done _ _, Preparing form ) ->
+                    div []
+                        [ Html.p [] [ Helper.viewButton "Add to IPFS" PinJsonIpfsButtonClicked ]
+                        , viewError form.error
+                        ]
 
-        ( Done _ _, Done _ _, Validating _ _ ) ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
-                , Html.p [] [ text "Uploading rationale to IPFS server ..." ]
+                ( Done _ _, Done _ _, Validating _ _ ) ->
+                    Html.p [] [ text "Uploading rationale to IPFS server ..." ]
+
+                ( Done _ r, Done _ _, Done _ storage ) ->
+                    viewCompletedStorage r storage
+
+                _ ->
+                    Html.p [] [ text "Please complete the storage config and rationale signature steps first." ]
+            ]
+
+
+viewCompletedStorage : RationaleSignature -> Storage -> Html Msg
+viewCompletedStorage r storage =
+    let
+        link =
+            "https://ipfs.io/ipfs/" ++ storage.jsonFile.cid
+
+        dataHash =
+            Bytes.fromText r.signedJson
+                |> Bytes.toU8
+                |> blake2b256 Nothing
+                |> Bytes.fromU8
+    in
+    div []
+        [ Helper.formContainer
+            [ Html.p [ HA.class "mb-4" ]
+                [ Html.strong [ HA.class "font-medium" ] [ text "File uploaded successfully:" ]
                 ]
-
-        ( Done _ r, Done _ _, Done _ storage ) ->
-            let
-                link =
-                    "https://ipfs.io/ipfs/" ++ storage.jsonFile.cid
-
-                dataHash =
-                    Bytes.fromText r.signedJson
-                        |> Bytes.toU8
-                        |> blake2b256 Nothing
-                        |> Bytes.fromU8
-            in
-            Html.map ctx.wrapMsg <|
-                div [ HA.style "padding-top" "8px" ]
-                    [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
-                    , Helper.formContainer
-                        [ Html.p [ HA.class "mb-4" ]
-                            [ Html.strong [ HA.class "font-medium" ] [ text "File uploaded successfully:" ]
-                            ]
-                        , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
-                            [ div [ HA.class "mb-2" ]
-                                [ Html.span [ HA.class "font-medium mr-2" ] [ text "Link:" ]
-                                , Html.a
-                                    [ HA.href link
-                                    , HA.download storage.jsonFile.name
-                                    , HA.target "_blank"
-                                    , HA.class "text-blue-600 hover:text-blue-800 underline font-mono"
-                                    ]
-                                    [ text link ]
-                                ]
-                            , Html.ul [ HA.class "space-y-2 text-sm" ]
-                                [ Html.li [ HA.class "flex" ]
-                                    [ Html.span [ HA.class "font-bold w-24" ] [ text "Name: " ]
-                                    , Html.span [ HA.class "font-mono" ] [ text storage.jsonFile.name ]
-                                    ]
-                                , Html.li [ HA.class "flex" ]
-                                    [ Html.span [ HA.class "font-bold w-24" ] [ text "CID: " ]
-                                    , Html.span [ HA.class "font-mono" ] [ text storage.jsonFile.cid ]
-                                    ]
-                                , Html.li [ HA.class "flex" ]
-                                    [ Html.span [ HA.class "font-bold w-24" ] [ text "Size: " ]
-                                    , Html.span [ HA.class "font-mono" ] [ text storage.jsonFile.size, text " Bytes" ]
-                                    ]
-                                , Html.li [ HA.class "flex" ]
-                                    [ Html.span [ HA.class "font-bold w-24" ] [ text "File Hash: " ]
-                                    , Html.span [ HA.class "font-mono break-all" ] [ text (Bytes.toHex dataHash) ]
-                                    ]
-                                ]
-                            ]
-                        , Html.p [] [ Helper.viewButton "Add another storage" AddOtherStorageButtonCLicked ]
+            , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
+                [ div [ HA.class "mb-2" ]
+                    [ Html.span [ HA.class "font-medium mr-2" ] [ text "Link:" ]
+                    , Html.a
+                        [ HA.href link
+                        , HA.download storage.jsonFile.name
+                        , HA.target "_blank"
+                        , HA.class "text-blue-600 hover:text-blue-800 underline font-mono"
+                        ]
+                        [ text link ]
+                    ]
+                , Html.ul [ HA.class "space-y-2 text-sm" ]
+                    [ Html.li [ HA.class "flex" ]
+                        [ Html.span [ HA.class "font-bold w-24" ] [ text "Name: " ]
+                        , Html.span [ HA.class "font-mono" ] [ text storage.jsonFile.name ]
+                        ]
+                    , Html.li [ HA.class "flex" ]
+                        [ Html.span [ HA.class "font-bold w-24" ] [ text "CID: " ]
+                        , Html.span [ HA.class "font-mono" ] [ text storage.jsonFile.cid ]
+                        ]
+                    , Html.li [ HA.class "flex" ]
+                        [ Html.span [ HA.class "font-bold w-24" ] [ text "Size: " ]
+                        , Html.span [ HA.class "font-mono" ] [ text storage.jsonFile.size, text " Bytes" ]
+                        ]
+                    , Html.li [ HA.class "flex" ]
+                        [ Html.span [ HA.class "font-bold w-24" ] [ text "File Hash: " ]
+                        , Html.span [ HA.class "font-mono break-all" ] [ text (Bytes.toHex dataHash) ]
                         ]
                     ]
-
-        _ ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Rationale Storage" ]
-                , Html.p [] [ text "Please complete the storage config and rationale signature steps first." ]
                 ]
-
-
-viewHeader : Int -> ( String, String ) -> Html Msg
-viewHeader n ( field, value ) =
-    Helper.formContainer
-        [ div [ HA.class "flex items-center" ]
-            [ div [ HA.class "flex-1 flex gap-12" ]
-                [ Helper.labeledField "Request Header Title"
-                    (Helper.textFieldInline field (StorageHeaderFieldChange n))
-                , Helper.labeledField "Request Header Value"
-                    (Helper.textFieldInline value (StorageHeaderValueChange n))
-                , Helper.viewButton "Delete" (DeleteHeaderButtonClicked n)
-                ]
+            , Html.p [] [ Helper.viewButton "Add another storage" AddOtherStorageButtonCLicked ]
             ]
         ]
 
@@ -4388,7 +4381,7 @@ viewSignTxStep ctx voterStep buildTxStep =
                     Dict.fromList (voterId ++ walletSpendingCredential ++ walletStakeCredential)
             in
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Signing" ]
+                [ sectionTitle "Tx Signing"
                 , Helper.formContainer
                     [ Html.h5 [ HA.class "text-xl font-medium mb-4" ] [ text "Finalize Your Vote" ]
                     , Html.p [ HA.class "mb-4" ] [ text "Expecting signatures for the following public key hashes:" ]
@@ -4458,7 +4451,7 @@ viewSignTxStep ctx voterStep buildTxStep =
 
         _ ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Signing" ]
+                [ sectionTitle "Tx Signing"
                 , Helper.formContainer
                     [ Html.p [ HA.class "text-gray-600" ]
                         [ text "Please complete the Tx building step first." ]

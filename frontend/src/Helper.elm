@@ -4,10 +4,12 @@ module Helper exposing
     , applyMobileDropdownContainerStyle
     , applyWalletIconContainerStyle
     , applyWalletIconStyle
+    , boxContainer
     , firstTextField
     , formContainer
     , labeledField
     , prettyAdaLovelace
+    , radioInput
     , shortenedHex
     , textField
     , textFieldInline
@@ -155,6 +157,17 @@ formContainer content =
     Html.div [ HA.class "py-4" ] content
 
 
+boxContainer : List (Html msg) -> Html msg
+boxContainer content =
+    Html.div
+        [ HA.style "background-color" "#ffffff"
+        , HA.style "border-radius" "0.5rem"
+        , HA.style "box-shadow" "0 4px 6px rgba(0, 0, 0, 0.1)"
+        , HA.style "padding" "1.5rem"
+        ]
+        content
+
+
 
 -- Add an actionRow for the delete button
 
@@ -261,7 +274,40 @@ viewTextarea value onInputMsg =
         []
 
 
+radioInput : { group : String, label : String, checked : Bool, onClick : msg } -> Html msg
+radioInput { group, label, checked, onClick } =
+    Html.div [ HA.class "flex items-center mb-4" ]
+        [ Html.input
+            [ HA.type_ "radio"
+            , HA.name group
+            , HA.id label
+            , HA.value label
+            , HA.checked checked
+            , Html.Events.onInput (\_ -> onClick)
+            , HA.class "mr-2"
+            ]
+            []
+        , Html.label [ HA.for label, HA.class "text-base" ] [ text label ]
+        ]
 
+
+
+-- , div [ HA.class "flex items-center mb-2" ]
+--     [ Html.input
+--         [ HA.type_ "radio"
+--         , HA.name "ipfs-method"
+--         , HA.checked <|
+--             case form.storageMethod of
+--                 PreconfigIPFS _ ->
+--                     True
+--                 _ ->
+--                     False
+--         , onClick (StorageMethodSelected <| PreconfigIPFS ctx.ipfsPreconfig)
+--         , HA.class "mr-2"
+--         ]
+--         []
+--     , Html.label [ HA.class "text-base" ] [ text ctx.ipfsPreconfig.label ]
+--     ]
 -- Add these wallet styling functions after the existing functions
 -- Styling for wallet-related components
 

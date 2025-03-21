@@ -3,17 +3,27 @@ Minimalist server for Cardano governance uses
 ## Getting Started
 
 First create and modify the `.env` file containing the IPFS node access config.
+You can either configure it as a regular IPFS RPC server with basic auth,
+or as NMKR server.
 
 > Remark: This is required for direct usage of this server endpoints.
 > However, if you use the frontend web app to communicate with this server,
 > you can fill this `.env` file with the default (incorrect) values below,
 > since IPFS RPC config can be done directly in the frontend.
 
-```
-# IPFS RPC config
+```env
+# Regular IPFS RPC config with basic auth
+IPFS_FORMAT=basic
 IPFS_RPC_URL=https://ipfs-rpc.mycompany.org/api/v0
-IPFS_RPC_USER=user
-IPFS_RPC_PASSWORD=password
+IPFS_USER_ID=user
+IPFS_PASSWORD=password
+
+# Alternative IPFS config using NMKR servers
+# IPFS_FORMAT=nmkr
+# IPFS_RPC_URL=https://studio-api.nmkr.io/v2/UploadToIpfs
+# IPFS_USER_ID=000000
+# IPFS_BEARER_TOKEN=ffffffffffffffffffffffffffffffff
+
 # Network config: 0 for Preview, 1 for Mainnet
 NETWORK_ID=0
 ```

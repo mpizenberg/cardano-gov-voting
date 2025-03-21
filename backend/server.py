@@ -74,6 +74,12 @@ IPFS_USER_ID = os.getenv("IPFS_USER_ID", "")
 IPFS_PASSWORD = os.getenv("IPFS_PASSWORD", "")
 IPFS_BEARER_TOKEN = os.getenv("IPFS_BEARER_TOKEN", "")
 
+# Set variables for the IPFS server textual description
+IPFS_LABEL = os.getenv("IPFS_LABEL", "Pre-configured IPFS server")
+IPFS_DESCRIPTION = os.getenv(
+    "IPFS_DESCRIPTION", "Files will be pinned using the pre-configured IPFS server."
+)
+
 
 # Define an async HTTP client (using httpx) and attach it to the FastAPI app
 @asynccontextmanager
@@ -107,7 +113,13 @@ async def read_root(request: Request):
 @app.get("/page/{full_path:path}", response_class=HTMLResponse)
 async def get_page(full_path: str, request: Request):
     return templates.TemplateResponse(
-        "index.html", {"request": request, "network_id": NETWORK_ID}
+        "index.html",
+        {
+            "request": request,
+            "network_id": NETWORK_ID,
+            "ipfs_label": IPFS_LABEL,
+            "ipfs_description": IPFS_DESCRIPTION,
+        },
     )
 
 

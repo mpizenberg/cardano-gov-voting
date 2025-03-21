@@ -17,12 +17,16 @@ IPFS_FORMAT=basic
 IPFS_RPC_URL=https://ipfs-rpc.mycompany.org/api/v0
 IPFS_USER_ID=user
 IPFS_PASSWORD=password
+IPFS_LABEL="Pre-configured IPFS server"
+IPFS_DESCRIPTION="Files will be stored using the pre-configured IPFS servers."
 
 # Alternative IPFS config using NMKR servers
 # IPFS_FORMAT=nmkr
 # IPFS_RPC_URL=https://studio-api.nmkr.io/v2/UploadToIpfs
 # IPFS_USER_ID=000000
 # IPFS_BEARER_TOKEN=ffffffffffffffffffffffffffffffff
+# IPFS_LABEL="Pre-configured IPFS server (sponsored by NMKR)"
+# IPFS_DESCRIPTION="Files will be stored using NMKR's IPFS servers."
 
 # Network config: 0 for Preview, 1 for Mainnet
 NETWORK_ID=0

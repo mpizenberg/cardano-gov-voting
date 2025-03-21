@@ -45,8 +45,8 @@
                 db,
                 networkId: {{network_id}}, // 0: Preview, 1: Mainnet
                 ipfsPreconfig: {
-                    label: "Pre-configured IPFS (Cardano Foundation)",
-                    description: "Files will be stored using the Cardano Foundation's IPFS gateway.",
+                    label: {{ipfs_label|tojson}},
+                    description: {{ipfs_description|tojson}},
                 },
             },
         });

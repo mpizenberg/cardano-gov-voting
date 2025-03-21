@@ -5,8 +5,9 @@ import shutil
 import base64
 import subprocess
 import tempfile
+import mimetypes
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 import httpx
 from pydantic import BaseModel
@@ -26,14 +27,58 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
-# Add environment variable validation at startup
 load_dotenv()
-required_vars = ["IPFS_RPC_URL", "IPFS_RPC_USER", "IPFS_RPC_PASSWORD", "NETWORK_ID"]
-missing_vars = [var for var in required_vars if not os.getenv(var)]
+
+# Check for basic auth format completeness
+basic_auth_vars = ["IPFS_RPC_URL", "IPFS_USER_ID", "IPFS_PASSWORD"]
+basic_auth_missing = [var for var in basic_auth_vars if not os.getenv(var)]
+basic_auth_complete = len(basic_auth_missing) == 0
+
+# Check for nmkr format completeness
+nmkr_auth_vars = ["IPFS_RPC_URL", "IPFS_USER_ID", "IPFS_BEARER_TOKEN"]
+nmkr_auth_missing = [var for var in nmkr_auth_vars if not os.getenv(var)]
+nmkr_auth_complete = len(nmkr_auth_missing) == 0
+
+# Only show warnings if both formats are incomplete
+if not basic_auth_complete and not nmkr_auth_complete:
+    logger.warning(
+        "Neither basic nor nmkr IPFS authentication is completely configured."
+    )
+    if basic_auth_missing:
+        logger.warning(f"Basic auth missing: {', '.join(basic_auth_missing)}")
+    if nmkr_auth_missing:
+        logger.warning(f"Nmkr auth missing: {', '.join(nmkr_auth_missing)}")
+    logger.warning("All IPFS requests will need to provide RPC config or will fail")
+
+# Check for NETWORK_ID
 NETWORK_ID = os.getenv("NETWORK_ID", "0")  # defaults to 0 if not set
-if missing_vars:
-    logger.warn(f"Missing environment variables: {', '.join(missing_vars)}")
-    logger.warn("All IPFS requests will need to provide RPC config or will fail")
+if not os.getenv("NETWORK_ID"):
+    logger.warning("NETWORK_ID not set, using default value of 0 (Preview)")
+
+# Check if using Nmkr format - default to basic if both are available
+IPFS_FORMAT = os.getenv("IPFS_FORMAT", "basic").lower()
+if IPFS_FORMAT not in ["basic", "nmkr"]:
+    logger.warning(f"Unknown IPFS_FORMAT '{IPFS_FORMAT}', defaulting to 'basic'")
+    IPFS_FORMAT = "basic"
+
+# If the configured format is incomplete but the other one is complete, use the complete one
+if IPFS_FORMAT == "basic" and not basic_auth_complete and nmkr_auth_complete:
+    logger.info("Basic auth incomplete but nmkr auth complete. Using nmkr format.")
+    IPFS_FORMAT = "nmkr"
+elif IPFS_FORMAT == "nmkr" and not nmkr_auth_complete and basic_auth_complete:
+    logger.info("Nmkr auth incomplete but basic auth complete. Using basic format.")
+    IPFS_FORMAT = "basic"
+
+# Set variables for selected format
+IPFS_USER_ID = os.getenv("IPFS_USER_ID", "")
+IPFS_PASSWORD = os.getenv("IPFS_PASSWORD", "")
+IPFS_BEARER_TOKEN = os.getenv("IPFS_BEARER_TOKEN", "")
+
+# Set variables for the IPFS server textual description
+IPFS_LABEL = os.getenv("IPFS_LABEL", "Pre-configured IPFS server")
+IPFS_DESCRIPTION = os.getenv(
+    "IPFS_DESCRIPTION", "Files will be pinned using the pre-configured IPFS server."
+)
 
 
 # Define an async HTTP client (using httpx) and attach it to the FastAPI app
@@ -68,7 +113,13 @@ async def read_root(request: Request):
 @app.get("/page/{full_path:path}", response_class=HTMLResponse)
 async def get_page(full_path: str, request: Request):
     return templates.TemplateResponse(
-        "index.html", {"request": request, "network_id": NETWORK_ID}
+        "index.html",
+        {
+            "request": request,
+            "network_id": NETWORK_ID,
+            "ipfs_label": IPFS_LABEL,
+            "ipfs_description": IPFS_DESCRIPTION,
+        },
     )
 
 
@@ -153,6 +204,7 @@ async def create_pretty_pdf(data: dict = Body(...)):
 class IPFSPinRequest(BaseModel):
     ipfsServer: str | None = None
     headers: List[Tuple[str, str]] | None = None
+    userId: str | None = None  # user ID for both formats
 
 
 class IPFSPinJSONRequest(IPFSPinRequest):
@@ -160,37 +212,103 @@ class IPFSPinJSONRequest(IPFSPinRequest):
     jsonContent: str
 
 
+def get_ipfs_config(
+    request_user_id: Optional[str] = None,
+    ipfs_server: Optional[str] = None,
+    custom_headers: Optional[List[Tuple[str, str]]] = None,
+) -> Tuple[str, Dict[str, str]]:
+    """Get the appropriate IPFS configuration based on request parameters or environment variables."""
+
+    # Use default IPFS settings if not provided
+    server_url = ipfs_server or os.getenv("IPFS_RPC_URL") or ""
+
+    # If custom headers are provided, use them (this overrides both formats)
+    if ipfs_server and custom_headers:
+        return server_url, dict(custom_headers)
+
+    # Handle different authentication formats
+    if IPFS_FORMAT == "nmkr":
+        # Use Nmkr format (user ID + bearer token)
+        user_id = request_user_id or IPFS_USER_ID
+        bearer_token = os.getenv("IPFS_BEARER_TOKEN", "")
+
+        # For Nmkr, the URL ends with the user ID
+        if not server_url.endswith(f"/{user_id}"):
+            server_url = f"{server_url}/{user_id}"
+
+        return server_url, {
+            "Authorization": f"Bearer {bearer_token}",
+            "Accept": "application/json",
+        }
+    else:
+        # Default to basic auth format
+        user_id = request_user_id or IPFS_USER_ID
+        password = IPFS_PASSWORD
+        auth_string = f"{user_id}:{password}"
+        token = base64.b64encode(auth_string.encode("utf-8")).decode("ascii")
+        return server_url, {
+            "Authorization": f"Basic {token}",
+            "Accept": "application/json",
+        }
+
+
 async def pin_to_ipfs_common(
     temp_file_path: Path,
     ipfs_server: Optional[str] = None,
     custom_headers: Optional[List[Tuple[str, str]]] = None,
+    user_id: Optional[str] = None,
 ):
     """Common IPFS pinning logic used by both endpoints."""
     try:
-        # Use default IPFS settings if not provided
-        server_url = ipfs_server or os.getenv("IPFS_RPC_URL") or ""
-        username = os.getenv("IPFS_RPC_USER", "")
-        password = os.getenv("IPFS_RPC_PASSWORD", "")
-        auth_string = f"{username}:{password}"
-        token = base64.b64encode(auth_string.encode("utf-8")).decode("ascii")
-        headers = {"Authorization": f"Basic {token}"}
+        server_url, headers = get_ipfs_config(user_id, ipfs_server, custom_headers)
 
-        # Use custom headers if a custom IPFS RPC URL was provided in the request
-        if ipfs_server:
-            headers = dict(custom_headers or [])
+        # Different handling based on format
+        if IPFS_FORMAT == "nmkr":
+            # For Nmkr format, we need to convert file to base64 and include metadata
+            file_name = temp_file_path.name
 
-        # Open the file and create the files parameter for the request
-        with open(temp_file_path, "rb") as f:
+            # Determine MIME type
+            mime_type, _ = mimetypes.guess_type(file_name)
+            if not mime_type:
+                mime_type = "application/octet-stream"
+
+            # Read file and convert to base64
+            with open(temp_file_path, "rb") as f:
+                file_bytes = f.read()
+                file_base64 = base64.b64encode(file_bytes).decode("utf-8")
+
+            # Create JSON payload
+            payload = {
+                "mimetype": mime_type,
+                "name": file_name,
+                "fileFromBase64": file_base64,
+            }
+
+            # Make request
             response = await app.async_client.post(  # type: ignore
-                url=f"{server_url}/add",
+                url=server_url,  # Not adding /add for Nmkr
                 headers=headers,
-                files={"file": f},
+                json=payload,
             )
             return Response(
                 content=response.content,
                 status_code=response.status_code,
                 media_type=response.headers.get("content-type"),
             )
+
+        else:
+            # Basic format - uses /add endpoint with file upload
+            with open(temp_file_path, "rb") as f:
+                response = await app.async_client.post(  # type: ignore
+                    url=f"{server_url}/add",
+                    headers=headers,
+                    files={"file": f},
+                )
+                return Response(
+                    content=response.content,
+                    status_code=response.status_code,
+                    media_type=response.headers.get("content-type"),
+                )
 
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse IPFS output: {str(e)}")
@@ -205,6 +323,7 @@ async def pin_file_to_ipfs(
     file: UploadFile,
     ipfs_server: Optional[str] = None,
     headers: Optional[List[Tuple[str, str]]] = None,
+    user_id: Optional[str] = None,
 ):
     """Pin a file to IPFS and return the hash."""
     logger.info("IPFS file pin attempt")
@@ -216,7 +335,7 @@ async def pin_file_to_ipfs(
         with open(temp_file_path, "wb") as f:
             f.write(content)
 
-        return await pin_to_ipfs_common(temp_file_path, ipfs_server, headers)
+        return await pin_to_ipfs_common(temp_file_path, ipfs_server, headers, user_id)
 
 
 @app.post("/ipfs-pin/json")
@@ -231,7 +350,10 @@ async def pin_json_to_ipfs(request: IPFSPinJSONRequest):
             f.write(request.jsonContent)
 
         return await pin_to_ipfs_common(
-            temp_file_path, request.ipfsServer, request.headers
+            temp_file_path,
+            request.ipfsServer,
+            request.headers,
+            request.userId,
         )
 
 

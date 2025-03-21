@@ -3286,56 +3286,36 @@ viewStorageConfigStep ctx step =
                         ]
                     , Helper.formContainer
                         [ Html.h4 [ HA.class "text-xl mt-4 mb-2" ] [ text "IPFS Method" ]
-                        , div [ HA.class "flex items-center mb-2" ]
-                            [ Html.input
-                                [ HA.type_ "radio"
-                                , HA.name "ipfs-method"
-                                , HA.checked <|
-                                    case form.storageMethod of
-                                        PreconfigIPFS _ ->
-                                            True
+                        , Helper.radioInput
+                            { group = "ipfs-method"
+                            , label = ctx.ipfsPreconfig.label
+                            , checked =
+                                case form.storageMethod of
+                                    PreconfigIPFS _ ->
+                                        True
 
-                                        _ ->
-                                            False
-                                , onClick (StorageMethodSelected <| PreconfigIPFS ctx.ipfsPreconfig)
-                                , HA.class "mr-2"
-                                ]
-                                []
-                            , Html.label [ HA.class "text-base" ] [ text ctx.ipfsPreconfig.label ]
-                            ]
-                        , div [ HA.class "flex items-center mb-4" ]
-                            [ Html.input
-                                [ HA.type_ "radio"
-                                , HA.name "ipfs-method"
-                                , HA.checked (form.storageMethod == BlockfrostIPFS)
-                                , onClick (StorageMethodSelected BlockfrostIPFS)
-                                , HA.class "mr-2"
-                                ]
-                                []
-                            , Html.label [ HA.class "text-base" ] [ text "Blockfrost IPFS Provider" ]
-                            ]
-                        , div [ HA.class "flex items-center mb-4" ]
-                            [ Html.input
-                                [ HA.type_ "radio"
-                                , HA.name "ipfs-method"
-                                , HA.checked (form.storageMethod == NmkrIPFS)
-                                , onClick (StorageMethodSelected NmkrIPFS)
-                                , HA.class "mr-2"
-                                ]
-                                []
-                            , Html.label [ HA.class "text-base" ] [ text "NMKR IPFS Provider" ]
-                            ]
-                        , div [ HA.class "flex items-center mb-4" ]
-                            [ Html.input
-                                [ HA.type_ "radio"
-                                , HA.name "ipfs-method"
-                                , HA.checked (form.storageMethod == CustomIPFS)
-                                , onClick (StorageMethodSelected CustomIPFS)
-                                , HA.class "mr-2"
-                                ]
-                                []
-                            , Html.label [ HA.class "text-base" ] [ text "Custom IPFS Provider" ]
-                            ]
+                                    _ ->
+                                        False
+                            , onClick = StorageMethodSelected <| PreconfigIPFS ctx.ipfsPreconfig
+                            }
+                        , Helper.radioInput
+                            { group = "ipfs-method"
+                            , label = "Blockfrost IPFS Provider"
+                            , checked = form.storageMethod == BlockfrostIPFS
+                            , onClick = StorageMethodSelected BlockfrostIPFS
+                            }
+                        , Helper.radioInput
+                            { group = "ipfs-method"
+                            , label = "NMKR IPFS Provider"
+                            , checked = form.storageMethod == NmkrIPFS
+                            , onClick = StorageMethodSelected NmkrIPFS
+                            }
+                        , Helper.radioInput
+                            { group = "ipfs-method"
+                            , label = "Custom IPFS Provider"
+                            , checked = form.storageMethod == CustomIPFS
+                            , onClick = StorageMethodSelected CustomIPFS
+                            }
                         , case form.storageMethod of
                             BlockfrostIPFS ->
                                 div []
@@ -3344,7 +3324,7 @@ viewStorageConfigStep ctx step =
                                     ]
 
                             NmkrIPFS ->
-                                div []
+                                div [ HA.class "flex-1 flex gap-12" ]
                                     [ Helper.labeledField "NMKR user ID:"
                                         (Helper.textFieldInline form.nmkrUserId NmkrUserIdChange)
                                     , Helper.labeledField "NMKR API token:"

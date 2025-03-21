@@ -4221,134 +4221,105 @@ viewHeader n ( field, value ) =
 
 viewBuildTxStep : ViewContext msg -> InnerModel -> Html msg
 viewBuildTxStep ctx model =
-    case ( allPrepSteps ctx model, model.buildTxStep ) of
-        ( Err _, _ ) ->
-            let
-                missingStepsDisplay =
-                    case model.voterStep of
-                        Preparing _ ->
-                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "Voter identification not completed" ]
+    div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+        [ sectionTitle "Tx Building"
+        , case ( allPrepSteps ctx model, model.buildTxStep ) of
+            ( Err _, _ ) ->
+                viewMissingStepsMessage ctx model
 
-                        Validating _ _ ->
-                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "Voter validation in progress" ]
+            ( Ok _, Preparing { error } ) ->
+                viewVoteOptionsForm ctx error
 
-                        Done _ _ ->
-                            text ""
-
-                proposalStepDisplay =
-                    case model.pickProposalStep of
-                        Preparing _ ->
-                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "No proposal selected" ]
-
-                        Validating _ _ ->
-                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "Proposal validation in progress" ]
-
-                        Done _ _ ->
-                            text ""
-
-                rationaleStepDisplay =
-                    case model.rationaleCreationStep of
-                        Preparing _ ->
-                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "Rationale not completed" ]
-
-                        Validating _ _ ->
-                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "Rationale validation in progress" ]
-
-                        Done _ _ ->
-                            text ""
-
-                storageStepDisplay =
-                    case model.permanentStorageStep of
-                        Preparing _ ->
-                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "Rationale not stored permanently" ]
-
-                        Validating _ _ ->
-                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "Storage validation in progress" ]
-
-                        Done _ _ ->
-                            text ""
-
-                connectedWalletDisplay =
-                    case ctx.loadedWallet of
-                        Nothing ->
-                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "Connect the wallet please" ]
-
-                        Just _ ->
-                            text ""
-
-                costModelsDisplay =
-                    case ctx.costModels of
-                        Nothing ->
-                            Html.div [ HA.class " mb-2" ] [ Html.strong [] [ text "⚠️ Missing: " ], text "Protocol parameters not loaded" ]
-
-                        Just _ ->
-                            text ""
-            in
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Building" ]
-                , Helper.formContainer
-                    [ Html.p [ HA.class "text-gray-600 mb-4" ] [ text "Please complete the following steps before building the transaction:" ]
-                    , div []
-                        [ missingStepsDisplay
-                        , proposalStepDisplay
-                        , rationaleStepDisplay
-                        , storageStepDisplay
-                        , connectedWalletDisplay
-                        , costModelsDisplay
-                        ]
-                    ]
-                ]
-
-        ( Ok _, Preparing { error } ) ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Building" ]
-                , Helper.formContainer
-                    [ Html.p [ HA.class "mb-4" ] [ text "Choose your vote:" ]
-                    , div [ HA.style "display" "flex", HA.style "align-items" "center" ]
-                        [ div [ HA.style "margin-right" "12px" ]
-                            [ Helper.viewButton "Vote YES" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteYes)) ]
-                        , div [ HA.style "margin-right" "12px" ]
-                            [ Helper.viewButton "Vote NO" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteNo)) ]
-                        , div []
-                            [ Helper.viewButton "Vote ABSTAIN" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteAbstain)) ]
-                        ]
-                    ]
-                , viewError error
-                ]
-
-        ( Ok _, Validating _ _ ) ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Building" ]
-                , Helper.formContainer
+            ( Ok _, Validating _ _ ) ->
+                Helper.formContainer
                     [ Html.p [ HA.class "text-gray-600" ] [ text "Validating transaction information..." ] ]
-                ]
 
-        ( Ok _, Done _ { tx } ) ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Tx Building" ]
-                , Helper.formContainer
-                    [ Html.p [ HA.class "mb-2" ] [ text "Transaction generated successfully", Html.span [ HA.style "color" "red" ] [ text " (₳ displayed as lovelaces)" ], Html.span [] [ text ":" ] ]
-                    , div [ HA.class "relative" ]
-                        [ Html.pre
-                            [ HA.style "padding" "1rem"
-                            , HA.style "border-radius" "0.375rem"
-                            , HA.style "border" "1px solid #C6C6C6"
-                            , HA.style "overflow-x" "auto"
-                            , HA.style "overflow-y" "auto"
-                            , HA.style "margin-top" "0.5rem"
-                            , HA.style "font-size" "0.875rem"
-                            , HA.style "white-space" "pre-wrap"
-                            , HA.style "word-break" "break-all"
-                            , HA.style "word-wrap" "break-word"
-                            , HA.style "max-height" "300px"
-                            , HA.style "font-family" "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                            ]
-                            [ text <| prettyTx tx ]
-                        ]
-                    , div [ HA.class "mt-4" ]
-                        [ Helper.viewButton "Change vote" (ctx.wrapMsg ChangeVoteButtonClicked) ]
-                    ]
+            ( Ok _, Done _ { tx } ) ->
+                viewBuiltTransaction ctx tx
+        ]
+
+
+viewMissingStepsMessage : ViewContext msg -> InnerModel -> Html msg
+viewMissingStepsMessage ctx model =
+    Helper.formContainer
+        [ Html.p [ HA.class "text-gray-600 mb-4" ] [ text "Please complete the following steps before building the transaction:" ]
+        , div []
+            [ viewMissingStep "Voter identification" (isStepIncomplete model.voterStep)
+            , viewMissingStep "Proposal selection" (isStepIncomplete model.pickProposalStep)
+            , viewMissingStep "Rationale creation" (isStepIncomplete model.rationaleCreationStep)
+            , viewMissingStep "Rationale storage" (isStepIncomplete model.permanentStorageStep)
+            , viewMissingStep "Connect wallet" (ctx.loadedWallet == Nothing)
+            , viewMissingStep "Protocol parameters" (ctx.costModels == Nothing)
+            ]
+        ]
+
+
+viewMissingStep : String -> Bool -> Html msg
+viewMissingStep stepName isMissing =
+    if isMissing then
+        Html.div [ HA.class " mb-2" ]
+            [ Html.strong [] [ text "⚠️ Missing: " ]
+            , text stepName
+            ]
+
+    else
+        text ""
+
+
+isStepIncomplete : Step a b c -> Bool
+isStepIncomplete step =
+    case step of
+        Done _ _ ->
+            False
+
+        _ ->
+            True
+
+
+viewVoteOptionsForm : ViewContext msg -> Maybe String -> Html msg
+viewVoteOptionsForm ctx error =
+    Helper.formContainer
+        [ Html.p [ HA.class "mb-4" ] [ text "Choose your vote:" ]
+        , div [ HA.style "display" "flex", HA.style "align-items" "center" ]
+            [ div [ HA.style "margin-right" "12px" ]
+                [ Helper.viewButton "Vote YES" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteYes)) ]
+            , div [ HA.style "margin-right" "12px" ]
+                [ Helper.viewButton "Vote NO" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteNo)) ]
+            , div []
+                [ Helper.viewButton "Vote ABSTAIN" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteAbstain)) ]
+            ]
+        , viewError error
+        ]
+
+
+viewBuiltTransaction : ViewContext msg -> Transaction -> Html msg
+viewBuiltTransaction ctx tx =
+    Helper.formContainer
+        [ Html.p [ HA.class "mb-2" ]
+            [ text "Transaction generated successfully"
+            , Html.span [ HA.style "color" "red" ] [ text " (₳ displayed as lovelaces)" ]
+            , Html.span [] [ text ":" ]
+            ]
+        , div [ HA.class "relative" ]
+            [ Html.pre
+                [ HA.style "padding" "1rem"
+                , HA.style "border-radius" "0.375rem"
+                , HA.style "border" "1px solid #C6C6C6"
+                , HA.style "overflow-x" "auto"
+                , HA.style "overflow-y" "auto"
+                , HA.style "margin-top" "0.5rem"
+                , HA.style "font-size" "0.875rem"
+                , HA.style "white-space" "pre-wrap"
+                , HA.style "word-break" "break-all"
+                , HA.style "word-wrap" "break-word"
+                , HA.style "max-height" "300px"
+                , HA.style "font-family" "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
                 ]
+                [ text <| prettyTx tx ]
+            ]
+        , div [ HA.class "mt-4" ]
+            [ Helper.viewButton "Change vote" (ctx.wrapMsg ChangeVoteButtonClicked) ]
+        ]
 
 
 

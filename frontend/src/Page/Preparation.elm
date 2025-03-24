@@ -1514,7 +1514,7 @@ validateScriptVoter ctx form loadedRefUtxos toVoter scriptInfo =
                     if scriptInfo.nativeCborEncodingMatchesHash == Just True then
                         let
                             witness =
-                                { script = WitnessValue nativeScript
+                                { script = WitnessByValue nativeScript
                                 , expectedSigners = keepOnlyExpectedSigners form.expectedSigners
                                 }
                         in
@@ -1530,7 +1530,7 @@ validateScriptVoter ctx form loadedRefUtxos toVoter scriptInfo =
                 Script.Plutus plutusScript ->
                     let
                         witness =
-                            { script = ( Script.plutusVersion plutusScript, WitnessValue <| Script.cborWrappedBytes plutusScript )
+                            { script = ( Script.plutusVersion plutusScript, WitnessByValue <| Script.cborWrappedBytes plutusScript )
                             , redeemerData = Debug.todo "Add forms for the redeemer Data"
                             , requiredSigners = Debug.todo "Add a required signers form for Plutus"
                             }
@@ -1549,7 +1549,7 @@ validateScriptVoter ctx form loadedRefUtxos toVoter scriptInfo =
                 Script.Native _ ->
                     let
                         witness =
-                            { script = WitnessReference outputRef
+                            { script = WitnessByReference outputRef
                             , expectedSigners = keepOnlyExpectedSigners form.expectedSigners
                             }
 

@@ -387,7 +387,7 @@ buildRegisterTx w costModels unsortedCreds model =
                     { drep =
                         WithScript scriptHash
                             (NativeWitness
-                                { script = WitnessValue nativeScript
+                                { script = WitnessByValue nativeScript
                                 , expectedSigners = sortedCredentials
                                 }
                             )
@@ -497,7 +497,7 @@ buildUnregisterTx w costModels unsortedCreds model =
                     { drep =
                         WithScript scriptHash
                             (NativeWitness
-                                { script = WitnessValue nativeScript
+                                { script = WitnessByValue nativeScript
                                 , expectedSigners = sortedCredentials
                                 }
                             )

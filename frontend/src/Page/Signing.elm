@@ -290,7 +290,7 @@ type alias ViewContext msg =
 
 view : ViewContext msg -> Model -> Html msg
 view ctx model =
-    div [ HA.class "container mx-auto" ]
+    div [ HA.style "max-width" "1024px", HA.style "margin" "0 auto", HA.style "padding" "0rem 2rem" ]
         [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Signing the Transaction" ]
         , Html.p [ HA.class "mb-4" ]
             [ text "This page aims to facilitate complex signatures, "
@@ -361,7 +361,7 @@ view ctx model =
                     [ Helper.formContainer
                         [ Html.p [ HA.class "mb-2" ]
                             [ Html.strong [] [ text "Transaction ID: " ]
-                            , Html.span [ HA.class "font-mono" ] [ text <| Bytes.toHex txId ]
+                            , Html.span [ HA.class "font-mono", HA.style "word-break" "break-all" ] [ text <| Bytes.toHex txId ]
                             ]
                         , Html.p [ HA.class "mb-2" ] [ text "Transaction details: (₳ amounts are in lovelaces)" ]
                         , div [ HA.class "relative" ]

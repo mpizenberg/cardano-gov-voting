@@ -2560,24 +2560,18 @@ viewNetworkSelectionSection ctx =
     div []
         [ sectionTitle "Select Network"
         , div [ HA.class "mb-4" ]
-            [ viewNetworkOption ctx "Mainnet" Mainnet (ctx.networkId == Mainnet)
+            [ viewNetworkOption ctx "Mainnet" Mainnet
             , Html.span [ HA.style "margin-left" "1rem" ] []
-            , viewNetworkOption ctx "Preview" Testnet (ctx.networkId == Testnet)
+            , viewNetworkOption ctx "Preview" Testnet
             ]
         ]
 
 
-viewNetworkOption : ViewContext msg -> String -> NetworkId -> Bool -> Html msg
-viewNetworkOption ctx label networkId isSelected =
+viewNetworkOption : ViewContext msg -> String -> NetworkId -> Html msg
+viewNetworkOption ctx label networkId =
     let
         styling =
             Helper.buttonCommonStyle
-                ++ (if isSelected then
-                        []
-
-                    else
-                        []
-                   )
     in
     ctx.changeNetworkLink networkId
         [ div
@@ -2933,7 +2927,7 @@ viewProposalSelectionStep ctx model =
 viewProposalSelectionForm : ViewContext msg -> InnerModel -> Html msg
 viewProposalSelectionForm ctx model =
     div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
-        [ viewProposalHeader ctx.networkId
+        [ viewProposalHeader
         , case ctx.proposals of
             RemoteData.NotAsked ->
                 text "Proposals are not loading, please report this error."
@@ -2953,36 +2947,11 @@ viewProposalSelectionForm ctx model =
         ]
 
 
-viewProposalHeader : NetworkId -> Html msg
-viewProposalHeader networkId =
+viewProposalHeader : Html msg
+viewProposalHeader =
     div [ HA.class "flex items-center mb-4" ]
         [ Html.h2 [ HA.class "text-3xl font-medium" ] [ text "Pick a Proposal" ]
-        , viewNetworkBadge networkId
         ]
-
-
-viewNetworkBadge : NetworkId -> Html msg
-viewNetworkBadge networkId =
-    let
-        ( bgColor, textColor, networkName ) =
-            case networkId of
-                Mainnet ->
-                    ( "rgba(16, 185, 129, 0.1)", "#065f46", "Mainnet" )
-
-                Testnet ->
-                    ( "rgba(124, 58, 237, 0.1)", "#5b21b6", "Testnet" )
-    in
-    Html.span
-        [ HA.style "background-color" bgColor
-        , HA.style "color" textColor
-        , HA.style "font-size" "0.7rem"
-        , HA.style "font-weight" "600"
-        , HA.style "padding" "0.15rem 0.5rem"
-        , HA.style "border-radius" "9999px"
-        , HA.style "white-space" "nowrap"
-        , HA.style "margin-left" "8px"
-        ]
-        [ text networkName ]
 
 
 viewProposalList : ViewContext msg -> Dict String ActiveProposal -> Int -> Html msg
@@ -3255,9 +3224,7 @@ viewSelectedProposal ctx { id, actionType, metadata, metadataUrl } =
     in
     div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
         [ div [ HA.class "flex items-center mb-4" ]
-            [ sectionTitle "Pick a Proposal"
-            , viewNetworkBadge ctx.networkId
-            ]
+            [ sectionTitle "Pick a Proposal" ]
         , Helper.formContainer
             [ Html.p [ HA.class "mb-4" ]
                 [ Html.strong [ HA.class "font-medium" ] [ text "Selected proposal:" ]

@@ -91,23 +91,20 @@ viewNumberInput label n msgOnInput =
             ]
             [ text label ]
         , Html.input
-            [ HA.type_ "number"
-            , HA.value (String.fromInt n)
-            , HA.min "0"
-            , Html.Events.onInput msgOnInput
-            , HA.style "background-color" "transparent"
-            , HA.style "border-top" "none"
-            , HA.style "border-left" "none"
-            , HA.style "border-right" "none"
-            , HA.style "border-bottom" "1px solid #C6C6C6"
-            , HA.style "padding-left" "0.25rem"
-            , HA.style "padding-right" "0.25rem"
-            , HA.style "padding-top" "0.5rem"
-            , HA.style "padding-bottom" "0.5rem"
-            , HA.style "margin-bottom" "0.5rem"
-            , HA.style "width" "8rem"
-            , HA.style "outline" "none"
-            ]
+            (inputBaseStyle
+                ++ [ HA.type_ "number"
+                   , HA.value (String.fromInt n)
+                   , HA.min "0"
+                   , Html.Events.onInput msgOnInput
+                   , HA.style "padding-left" "0.25rem"
+                   , HA.style "padding-right" "0.25rem"
+                   , HA.style "padding-top" "0.5rem"
+                   , HA.style "padding-bottom" "0.5rem"
+                   , HA.style "margin-bottom" "0.5rem"
+                   , HA.style "width" "8rem"
+                   , HA.style "outline" "none"
+                   ]
+            )
             []
         ]
 
@@ -116,20 +113,17 @@ textFieldInline : String -> (String -> msg) -> Html msg
 textFieldInline value toMsg =
     Html.span [ HA.class "inline-block mr-2" ]
         [ Html.input
-            [ HA.type_ "text"
-            , HA.value value
-            , Html.Events.onInput toMsg
-            , HA.style "background-color" "transparent"
-            , HA.style "width" "100%"
-            , HA.style "padding" "0.5rem 0"
-            , HA.style "border-top" "none"
-            , HA.style "border-left" "none"
-            , HA.style "border-right" "none"
-            , HA.style "border-bottom" "1px solid #7A7A7A"
-            , HA.style "border-radius" "0"
-            , HA.style "outline" "none"
-            , HA.style "box-shadow" "none"
-            ]
+            (inputBaseStyle
+                ++ [ HA.type_ "text"
+                   , HA.value value
+                   , Html.Events.onInput toMsg
+                   , HA.style "width" "100%"
+                   , HA.style "padding" "0.5rem 0"
+                   , HA.style "border-radius" "0"
+                   , HA.style "outline" "none"
+                   , HA.style "box-shadow" "none"
+                   ]
+            )
             []
         ]
 
@@ -175,48 +169,25 @@ boxContainer content =
 viewButton : String -> msg -> Html msg
 viewButton label msg =
     button
-        [ onClick msg
-        , HA.style "display" "inline-flex"
-        , HA.style "align-items" "center"
-        , HA.style "justify-content" "center"
-        , HA.style "white-space" "nowrap"
-        , HA.style "border-radius" "9999px"
-        , HA.style "font-size" "0.875rem"
-        , HA.style "font-weight" "500"
-        , HA.style "transition" "all 0.2s"
-        , HA.style "outline" "none"
-        , HA.style "ring-offset" "background"
-        , HA.style "focus-visible:ring" "2px"
-        , HA.style "focus-visible:ring-color" "ring"
-        , HA.style "focus-visible:ring-offset" "2px"
-        , HA.style "background-color" "#272727"
-        , HA.style "color" "#f7fafc"
-        , HA.style "hover:bg-color" "#f9fafb"
-        , HA.style "hover:text-color" "#1a202c"
-        , HA.style "height" "3rem"
-        , HA.style "padding-left" "1.5rem"
-        , HA.style "padding-right" "1.5rem"
-        , HA.style "margin-top" "0.5rem"
-        , HA.style "margin-bottom" "0.5em"
-        ]
+        (onClick msg
+            :: HA.style "margin-top" "0.5rem"
+            :: HA.style "margin-bottom" "0.5em"
+            :: buttonCommonStyle
+        )
         [ text label ]
 
 
 viewSelect : List (Html.Attribute msg) -> List (Html msg) -> Html msg
 viewSelect attributes options =
     Html.select
-        ([ HA.style "background-color" "transparent"
-         , HA.style "height" "40px"
-         , HA.style "border-top" "none"
-         , HA.style "border-left" "none"
-         , HA.style "border-right" "none"
-         , HA.style "border-bottom" "1px solid #7A7A7A"
+        ([ HA.style "height" "40px"
          , HA.style "border-radius" "0"
          , HA.style "outline" "none"
          , HA.style "box-shadow" "none"
          , HA.style "margin-top" "1px"
          , HA.class "w-full"
          ]
+            ++ inputBaseStyle
             ++ attributes
         )
         options
@@ -226,21 +197,28 @@ firstTextField : String -> String -> (String -> msg) -> Html msg
 firstTextField placeholder value toMsg =
     Html.span [ HA.style "display" "block", HA.style "margin-bottom" "0.5rem", HA.style "width" "100%" ]
         [ Html.input
-            [ HA.type_ "text"
-            , HA.value value
-            , HA.placeholder placeholder
-            , Html.Events.onInput toMsg
-            , HA.style "background-color" "transparent"
-            , HA.style "border-bottom" "1px solid #7A7A7A"
-            , HA.style "border-top" "none"
-            , HA.style "border-left" "none"
-            , HA.style "border-right" "none"
-            , HA.class "w-full"
-            , HA.style "width" "100%"
-            , HA.style "padding" "0.5rem 0.2rem"
-            ]
+            (inputBaseStyle
+                ++ [ HA.type_ "text"
+                   , HA.value value
+                   , HA.placeholder placeholder
+                   , Html.Events.onInput toMsg
+                   , HA.class "w-full"
+                   , HA.style "width" "100%"
+                   , HA.style "padding" "0.5rem 0.2rem"
+                   ]
+            )
             []
         ]
+
+
+inputBaseStyle : List (Html.Attribute msg)
+inputBaseStyle =
+    [ HA.style "background-color" "transparent"
+    , HA.style "border-top" "none"
+    , HA.style "border-left" "none"
+    , HA.style "border-right" "none"
+    , HA.style "border-bottom" "1px solid #7A7A7A"
+    ]
 
 
 textField : String -> String -> (String -> msg) -> Html msg
@@ -299,54 +277,52 @@ radioInput { group, label, checked, onClick } =
 viewWalletButton : String -> msg -> List (Html msg) -> Html msg
 viewWalletButton label msg content =
     button
-        [ onClick msg
-        , HA.style "display" "inline-flex"
-        , HA.style "align-items" "center"
-        , HA.style "justify-content" "center"
-        , HA.style "white-space" "nowrap"
-        , HA.style "border-radius" "9999px"
-        , HA.style "font-size" "0.875rem"
-        , HA.style "font-weight" "500"
-        , HA.style "transition" "all 0.2s"
-        , HA.style "outline" "none"
-        , HA.style "ring-offset" "background"
-        , HA.style "focus-visible:ring" "2px"
-        , HA.style "focus-visible:ring-color" "ring"
-        , HA.style "focus-visible:ring-offset" "2px"
-        , HA.style "background-color" "#272727"
-        , HA.style "color" "#f7fafc"
-        , HA.style "hover:bg-color" "#f9fafb"
-        , HA.style "hover:text-color" "#1a202c"
-        , HA.style "height" "3rem"
-        , HA.style "padding-left" "1.5rem"
-        , HA.style "padding-right" "1.5rem"
-        ]
+        (onClick msg :: buttonCommonStyle)
         (text label :: content)
+
+
+buttonCommonStyle : List (Html.Attribute msg)
+buttonCommonStyle =
+    [ HA.style "display" "inline-flex"
+    , HA.style "align-items" "center"
+    , HA.style "justify-content" "center"
+    , HA.style "white-space" "nowrap"
+    , HA.style "border-radius" "9999px"
+    , HA.style "font-size" "0.875rem"
+    , HA.style "font-weight" "500"
+    , HA.style "transition" "all 0.2s"
+    , HA.style "outline" "none"
+    , HA.style "ring-offset" "background"
+    , HA.style "focus-visible:ring" "2px"
+    , HA.style "focus-visible:ring-color" "ring"
+    , HA.style "focus-visible:ring-offset" "2px"
+    , HA.style "background-color" "#272727"
+    , HA.style "color" "#f7fafc"
+    , HA.style "hover:bg-color" "#f9fafb"
+    , HA.style "hover:text-color" "#1a202c"
+    , HA.style "height" "3rem"
+    , HA.style "padding-left" "1.5rem"
+    , HA.style "padding-right" "1.5rem"
+    ]
 
 
 applyDropdownContainerStyle : List (Html.Attribute msg)
 applyDropdownContainerStyle =
-    [ HA.style "position" "absolute"
-    , HA.style "top" "100%"
-    , HA.style "right" "0"
-    , HA.style "margin-top" "0.5rem"
-    , HA.style "width" "220px"
-    , HA.style "background-color" "#f8f9fa"
-    , HA.style "border" "1px solid #e2e8f0"
-    , HA.style "border-radius" "0.5rem"
-    , HA.style "box-shadow" "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)"
-    , HA.style "z-index" "50"
-    , HA.style "padding" "0.5rem 0"
-    , HA.style "max-height" "300px"
-    , HA.style "overflow-y" "auto"
-    ]
+    HA.style "top" "100%"
+        :: HA.style "right" "0"
+        :: HA.style "width" "220px"
+        :: baseDropdownContainerStyle
 
 
 applyMobileDropdownContainerStyle : List (Html.Attribute msg)
 applyMobileDropdownContainerStyle =
-    [ HA.style "position" "relative"
-    , HA.style "position" "absolute"
-    , HA.style "width" "100%"
+    HA.style "width" "100%"
+        :: baseDropdownContainerStyle
+
+
+baseDropdownContainerStyle : List (Html.Attribute msg)
+baseDropdownContainerStyle =
+    [ HA.style "position" "absolute"
     , HA.style "margin-top" "0.5rem"
     , HA.style "background-color" "#f8f9fa"
     , HA.style "border" "1px solid #e2e8f0"

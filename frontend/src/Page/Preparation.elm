@@ -1141,7 +1141,7 @@ innerUpdate ctx msg model =
                     in
                     case tryTx of
                         Err error ->
-                            ( { model | buildTxStep = Preparing { error = Just <| "Error while building the Tx: " ++ Debug.toString error } }
+                            ( { model | buildTxStep = Preparing { error = Just <| "Error while building the Tx: " ++ TxIntent.errorToString error } }
                             , Cmd.none
                             , Nothing
                             )

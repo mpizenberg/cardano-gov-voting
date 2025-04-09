@@ -1087,7 +1087,7 @@ viewLandingPage =
                     , HA.style "margin-bottom" "1.5rem"
                     , HA.style "color" "#444"
                     ]
-                    [ text "While this tool focuses specifically on voting, you may also find value in other platforms that support different aspects of Cardano governance. Below is a non-exhaustive list of alternatives, each with its own purpose and features:" ]
+                    [ text "While this tool focuses specifically on voting, you may also find value in other platforms that support different aspects of Cardano governance. Below is a non-exhaustive list of other projects, each with its own purpose and features:" ]
                 , div
                     [ HA.style "display" "grid"
                     , HA.style "grid-template-columns" "repeat(auto-fill, minmax(240px, 1fr))"

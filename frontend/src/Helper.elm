@@ -1,28 +1,48 @@
 module Helper exposing
-    ( applyDropdownContainerStyle
-    , applyDropdownItemStyle
-    , applyMobileDropdownContainerStyle
-    , applyWalletIconContainerStyle
-    , applyWalletIconStyle
-    , boxContainer
-    , firstTextField
-    , formContainer
-    , labeledField
-    , prettyAdaLovelace
-    , radioInput
-    , shortenedHex
-    , textField
-    , textFieldInline
+    ( shortenedHex, prettyAdaLovelace
+    , viewNumberInput, textFieldInline, firstTextField, viewSelect
+    , labeledField, textField, viewTextarea, radioInput
+    , formContainer, boxContainer
+    , viewButton, viewWalletButton
+    , applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle
     , viewActionTypeIcon
-    , viewButton
-    , viewNumberInput
-    , viewSelect
-    , viewTextarea
-    , viewWalletButton
     )
 
 {-| Helper module for miscellaneous functions that didn’t fit elsewhere,
 and are potentially useful in multiple places.
+
+
+# String formatting
+
+@docs shortenedHex, prettyAdaLovelace
+
+
+# Form elements
+
+@docs viewNumberInput, textFieldInline, firstTextField, viewSelect, inputBaseStyle
+
+@docs labeledField, textField, viewTextarea, radioInput
+
+
+# Containers
+
+@docs formContainer, boxContainer
+
+
+# Buttons
+
+@docs viewButton, viewWalletButton, buttonCommonStyle
+
+
+# Wallet Styling
+
+@docs applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle
+
+
+# Governance Icons
+
+@docs viewActionTypeIcon
+
 -}
 
 import Html exposing (Html, button, text)
@@ -33,7 +53,7 @@ import Numeral
 
 
 
--- String formatting
+-- STRING FORMATTING ###########################################################
 
 
 {-| Shorten some string, by only keeping the first and last few characters.
@@ -75,7 +95,7 @@ prettyAdaLovelace n =
 
 
 
--- View
+-- FORM ELEMENTS ###############################################################
 
 
 {-| Helper view function for a simple number input.
@@ -128,71 +148,6 @@ textFieldInline value toMsg =
         ]
 
 
-
--- The viewSelect already looks good!
--- Add a new labeledField function for the reference form layout
-
-
-labeledField : String -> Html msg -> Html msg
-labeledField labelText field =
-    Html.div [ HA.class " pl-4 first:pl-0" ]
-        [ Html.label [ HA.class "block mb-1 text-sm" ] [ text labelText ]
-        , field
-        ]
-
-
-
--- Add a formRow helper for reference form rows
--- Add a formContainer for each reference item
-
-
-formContainer : List (Html msg) -> Html msg
-formContainer content =
-    Html.div [ HA.class "py-4" ] content
-
-
-boxContainer : List (Html msg) -> Html msg
-boxContainer content =
-    Html.div
-        [ HA.style "background-color" "#ffffff"
-        , HA.style "border-radius" "0.5rem"
-        , HA.style "box-shadow" "0 4px 6px rgba(0, 0, 0, 0.1)"
-        , HA.style "padding" "1.5rem"
-        ]
-        content
-
-
-
--- Add an actionRow for the delete button
-
-
-viewButton : String -> msg -> Html msg
-viewButton label msg =
-    button
-        (onClick msg
-            :: HA.style "margin-top" "0.5rem"
-            :: HA.style "margin-bottom" "0.5em"
-            :: buttonCommonStyle
-        )
-        [ text label ]
-
-
-viewSelect : List (Html.Attribute msg) -> List (Html msg) -> Html msg
-viewSelect attributes options =
-    Html.select
-        ([ HA.style "height" "40px"
-         , HA.style "border-radius" "0"
-         , HA.style "outline" "none"
-         , HA.style "box-shadow" "none"
-         , HA.style "margin-top" "1px"
-         , HA.class "w-full"
-         ]
-            ++ inputBaseStyle
-            ++ attributes
-        )
-        options
-
-
 firstTextField : String -> String -> (String -> msg) -> Html msg
 firstTextField placeholder value toMsg =
     Html.span [ HA.style "display" "block", HA.style "margin-bottom" "0.5rem", HA.style "width" "100%" ]
@@ -211,6 +166,22 @@ firstTextField placeholder value toMsg =
         ]
 
 
+viewSelect : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+viewSelect attributes options =
+    Html.select
+        ([ HA.style "height" "40px"
+         , HA.style "border-radius" "0"
+         , HA.style "outline" "none"
+         , HA.style "box-shadow" "none"
+         , HA.style "margin-top" "1px"
+         , HA.class "w-full"
+         ]
+            ++ inputBaseStyle
+            ++ attributes
+        )
+        options
+
+
 inputBaseStyle : List (Html.Attribute msg)
 inputBaseStyle =
     [ HA.style "background-color" "transparent"
@@ -219,6 +190,15 @@ inputBaseStyle =
     , HA.style "border-right" "none"
     , HA.style "border-bottom" "1px solid #7A7A7A"
     ]
+
+
+labeledField : String -> Html msg -> Html msg
+labeledField labelText field =
+    -- Add a new labeledField function for the reference form layout
+    Html.div [ HA.class " pl-4 first:pl-0" ]
+        [ Html.label [ HA.class "block mb-1 text-sm" ] [ text labelText ]
+        , field
+        ]
 
 
 textField : String -> String -> (String -> msg) -> Html msg
@@ -270,8 +250,38 @@ radioInput { group, label, checked, onClick } =
 
 
 
--- Add these wallet styling functions after the existing functions
--- Styling for wallet-related components
+-- CONTAINERS ##################################################################
+
+
+formContainer : List (Html msg) -> Html msg
+formContainer content =
+    Html.div [ HA.class "py-4" ] content
+
+
+boxContainer : List (Html msg) -> Html msg
+boxContainer content =
+    Html.div
+        [ HA.style "background-color" "#ffffff"
+        , HA.style "border-radius" "0.5rem"
+        , HA.style "box-shadow" "0 4px 6px rgba(0, 0, 0, 0.1)"
+        , HA.style "padding" "1.5rem"
+        ]
+        content
+
+
+
+-- BUTTONS #####################################################################
+
+
+viewButton : String -> msg -> Html msg
+viewButton label msg =
+    button
+        (onClick msg
+            :: HA.style "margin-top" "0.5rem"
+            :: HA.style "margin-bottom" "0.5em"
+            :: buttonCommonStyle
+        )
+        [ text label ]
 
 
 viewWalletButton : String -> msg -> List (Html msg) -> Html msg
@@ -304,6 +314,10 @@ buttonCommonStyle =
     , HA.style "padding-left" "1.5rem"
     , HA.style "padding-right" "1.5rem"
     ]
+
+
+
+-- WALLET STYLING ##############################################################
 
 
 applyDropdownContainerStyle : List (Html.Attribute msg)
@@ -366,6 +380,10 @@ applyWalletIconStyle =
     , HA.style "max-width" "20px"
     , HA.style "object-fit" "contain"
     ]
+
+
+
+-- GOV ICONS ###################################################################
 
 
 viewActionTypeIcon : String -> Html msg

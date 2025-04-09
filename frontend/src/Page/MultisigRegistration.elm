@@ -21,17 +21,18 @@ Key design considerations:
 -}
 
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano exposing (CertificateIntent(..), CredentialWitness(..), ScriptWitness(..), SpendSource(..), TxFinalized, TxIntent(..), WitnessSource(..))
-import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash, NetworkId(..))
+import Cardano.Address as Address exposing (Address, Credential, CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
 import Cardano.Gov as Gov exposing (CostModels)
 import Cardano.Script as Script exposing (NativeScript)
 import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.TxExamples exposing (prettyTx)
+import Cardano.TxIntent as TxIntent exposing (CertificateIntent(..), Fee(..), SpendSource(..), TxFinalized, TxIntent(..))
 import Cardano.Uplc as Uplc
 import Cardano.Utxo as Utxo exposing (Output, OutputReference)
 import Cardano.Value
+import Cardano.Witness as Witness
 import Cbor.Encode
 import Helper
 import Html exposing (Html, div, text)
@@ -227,7 +228,7 @@ validateFormAndBuildRegister ctx model =
                                     , scriptRefInput =
                                         Transaction.locateScriptWithHash scriptHash tx.body.outputs
                                             |> Maybe.map (\( index, _ ) -> OutputReference (Transaction.computeTxId tx) index)
-                                    , drepId = Gov.DrepId (ScriptHash scriptHash)
+                                    , drepId = Gov.DrepId (Address.ScriptHash scriptHash)
                                     }
                             , error = Nothing
                           }
@@ -385,9 +386,9 @@ buildRegisterTx w costModels unsortedCreds model =
             IssueCertificate <|
                 RegisterDrep
                     { drep =
-                        WithScript scriptHash
-                            (NativeWitness
-                                { script = WitnessByValue nativeScript
+                        Witness.WithScript scriptHash
+                            (Witness.Native
+                                { script = Witness.ByValue nativeScript
                                 , expectedSigners = sortedCredentials
                                 }
                             )
@@ -465,14 +466,14 @@ buildRegisterTx w costModels unsortedCreds model =
     in
     txIntents
         |> Result.andThen
-            (Cardano.finalizeAdvanced
-                { govState = Cardano.emptyGovernanceState
+            (TxIntent.finalizeAdvanced
+                { govState = TxIntent.emptyGovernanceState
                 , localStateUtxos = w.utxos
                 , coinSelectionAlgo = CoinSelection.largestFirst
                 , evalScriptsCosts = Uplc.evalScriptsCosts Uplc.defaultVmConfig
                 , costModels = costModels
                 }
-                (Cardano.AutoFee { paymentSource = w.changeAddress })
+                (AutoFee { paymentSource = w.changeAddress })
                 []
                 >> Result.mapError Debug.toString
             )
@@ -495,9 +496,9 @@ buildUnregisterTx w costModels unsortedCreds model =
             IssueCertificate <|
                 UnregisterDrep
                     { drep =
-                        WithScript scriptHash
-                            (NativeWitness
-                                { script = WitnessByValue nativeScript
+                        Witness.WithScript scriptHash
+                            (Witness.Native
+                                { script = Witness.ByValue nativeScript
                                 , expectedSigners = sortedCredentials
                                 }
                             )
@@ -505,14 +506,14 @@ buildUnregisterTx w costModels unsortedCreds model =
                     }
     in
     [ unregistrationIntent, SendTo w.changeAddress <| Cardano.Value.onlyLovelace refundAmount ]
-        |> Cardano.finalizeAdvanced
-            { govState = Cardano.emptyGovernanceState
+        |> TxIntent.finalizeAdvanced
+            { govState = TxIntent.emptyGovernanceState
             , localStateUtxos = w.utxos
             , coinSelectionAlgo = CoinSelection.largestFirst
             , evalScriptsCosts = Uplc.evalScriptsCosts Uplc.defaultVmConfig
             , costModels = costModels
             }
-            (Cardano.AutoFee { paymentSource = w.changeAddress })
+            (AutoFee { paymentSource = w.changeAddress })
             []
         |> Result.mapError Debug.toString
         |> Result.map (\tx -> ( tx, nativeScript, scriptHash ))

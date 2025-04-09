@@ -29,7 +29,6 @@ import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), PoolInfo)
 import Blake2b exposing (blake2b256)
 import Bytes as ElmBytes
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano exposing (CredentialWitness(..), ScriptWitness(..), TxFinalized, VoterWitness(..), WitnessSource(..))
 import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
@@ -38,8 +37,10 @@ import Cardano.Pool as Pool
 import Cardano.Script as Script
 import Cardano.Transaction as Transaction exposing (Transaction, VKeyWitness)
 import Cardano.TxExamples exposing (prettyTx)
+import Cardano.TxIntent as TxIntent exposing (Fee(..), TxFinalized)
 import Cardano.Uplc as Uplc
 import Cardano.Utxo as Utxo exposing (Output, OutputReference, TransactionId)
+import Cardano.Witness as Witness
 import Cbor.Encode
 import ConcurrentTask exposing (ConcurrentTask)
 import ConcurrentTask.Extra
@@ -87,7 +88,7 @@ Each step uses the Step type to track its progress.
 -}
 type alias InnerModel =
     { someRefUtxos : Utxo.RefDict Output
-    , voterStep : Step VoterPreparationForm VoterWitness VoterWitness
+    , voterStep : Step VoterPreparationForm Witness.Voter Witness.Voter
     , pickProposalStep : Step {} {} ActiveProposal
     , storageConfigStep : Step StorageForm {} StorageConfig
     , rationaleCreationStep : Step RationaleForm Rationale Rationale
@@ -1126,16 +1127,16 @@ innerUpdate ctx msg model =
                 Ok { voter, actionId, rationaleAnchor, localStateUtxos, walletAddress, costModels } ->
                     let
                         tryTx =
-                            [ Cardano.Vote voter [ { actionId = actionId, vote = vote, rationale = Just rationaleAnchor } ]
+                            [ TxIntent.Vote voter [ { actionId = actionId, vote = vote, rationale = Just rationaleAnchor } ]
                             ]
-                                |> Cardano.finalizeAdvanced
-                                    { govState = Cardano.emptyGovernanceState
+                                |> TxIntent.finalizeAdvanced
+                                    { govState = TxIntent.emptyGovernanceState
                                     , localStateUtxos = localStateUtxos
                                     , coinSelectionAlgo = CoinSelection.largestFirst
                                     , evalScriptsCosts = Uplc.evalScriptsCosts Uplc.defaultVmConfig
                                     , costModels = costModels
                                     }
-                                    (Cardano.AutoFee { paymentSource = walletAddress })
+                                    (AutoFee { paymentSource = walletAddress })
                                     []
                     in
                     case tryTx of
@@ -1441,7 +1442,7 @@ checkGovId ctx str =
                         }
 
 
-confirmVoter : UpdateContext msg -> VoterPreparationForm -> Utxo.RefDict Output -> ( Step VoterPreparationForm VoterWitness VoterWitness, Cmd Msg, Maybe MsgToParent )
+confirmVoter : UpdateContext msg -> VoterPreparationForm -> Utxo.RefDict Output -> ( Step VoterPreparationForm Witness.Voter Witness.Voter, Cmd Msg, Maybe MsgToParent )
 confirmVoter ctx form loadedRefUtxos =
     let
         justError errorMsg =
@@ -1461,19 +1462,19 @@ confirmVoter ctx form loadedRefUtxos =
             justError "The proposal to vote on is selected later. For now please provide you voter ID. It can be a bech32 pool ID, a CIP 129 DRep ID or CC hot ID."
 
         Just (PoolId poolId) ->
-            ( Done form <| WithPoolCred poolId
+            ( Done form <| Witness.WithPoolCred poolId
             , Cmd.none
             , Nothing
             )
 
         Just (DrepId (VKeyHash keyHash)) ->
-            ( Done form <| WithDrepCred (WithKey keyHash)
+            ( Done form <| Witness.WithDrepCred (Witness.WithKey keyHash)
             , Cmd.none
             , Nothing
             )
 
         Just (CcHotCredId (VKeyHash keyHash)) ->
-            ( Done form <| WithCommitteeHotCred (WithKey keyHash)
+            ( Done form <| Witness.WithCommitteeHotCred (Witness.WithKey keyHash)
             , Cmd.none
             , Nothing
             )
@@ -1490,13 +1491,13 @@ confirmVoter ctx form loadedRefUtxos =
                     justError <| "There was an error loading the script info. Are you sure you registered? " ++ Debug.toString error
 
                 RemoteData.Success scriptInfo ->
-                    validateScriptVoter ctx form loadedRefUtxos WithDrepCred scriptInfo
+                    validateScriptVoter ctx form loadedRefUtxos Witness.WithDrepCred scriptInfo
 
         _ ->
             Debug.todo ""
 
 
-validateScriptVoter : UpdateContext msg -> VoterPreparationForm -> Utxo.RefDict Output -> (CredentialWitness -> VoterWitness) -> ScriptInfo -> ( Step VoterPreparationForm VoterWitness VoterWitness, Cmd Msg, Maybe MsgToParent )
+validateScriptVoter : UpdateContext msg -> VoterPreparationForm -> Utxo.RefDict Output -> (Witness.Credential -> Witness.Voter) -> ScriptInfo -> ( Step VoterPreparationForm Witness.Voter Witness.Voter, Cmd Msg, Maybe MsgToParent )
 validateScriptVoter ctx form loadedRefUtxos toVoter scriptInfo =
     let
         justError errorMsg =
@@ -1514,11 +1515,11 @@ validateScriptVoter ctx form loadedRefUtxos toVoter scriptInfo =
                     if scriptInfo.nativeCborEncodingMatchesHash == Just True then
                         let
                             witness =
-                                { script = WitnessByValue nativeScript
+                                { script = Witness.ByValue nativeScript
                                 , expectedSigners = keepOnlyExpectedSigners form.expectedSigners
                                 }
                         in
-                        ( Done { form | error = Nothing } <| toVoter <| WithScript scriptInfo.scriptHash <| NativeWitness witness
+                        ( Done { form | error = Nothing } <| toVoter <| Witness.WithScript scriptInfo.scriptHash <| Witness.Native witness
                         , Cmd.none
                         , Nothing
                         )
@@ -1530,12 +1531,12 @@ validateScriptVoter ctx form loadedRefUtxos toVoter scriptInfo =
                 Script.Plutus plutusScript ->
                     let
                         witness =
-                            { script = ( Script.plutusVersion plutusScript, WitnessByValue <| Script.cborWrappedBytes plutusScript )
+                            { script = ( Script.plutusVersion plutusScript, Witness.ByValue <| Script.cborWrappedBytes plutusScript )
                             , redeemerData = Debug.todo "Add forms for the redeemer Data"
                             , requiredSigners = Debug.todo "Add a required signers form for Plutus"
                             }
                     in
-                    ( Done { form | error = Nothing } <| toVoter <| WithScript scriptInfo.scriptHash <| PlutusWitness witness
+                    ( Done { form | error = Nothing } <| toVoter <| Witness.WithScript scriptInfo.scriptHash <| Witness.Plutus witness
                     , Cmd.none
                     , Nothing
                     )
@@ -1549,12 +1550,12 @@ validateScriptVoter ctx form loadedRefUtxos toVoter scriptInfo =
                 Script.Native _ ->
                     let
                         witness =
-                            { script = WitnessByReference outputRef
+                            { script = Witness.ByReference outputRef
                             , expectedSigners = keepOnlyExpectedSigners form.expectedSigners
                             }
 
                         voter =
-                            toVoter <| WithScript scriptInfo.scriptHash <| NativeWitness witness
+                            toVoter <| Witness.WithScript scriptInfo.scriptHash <| Witness.Native witness
                     in
                     if Dict.Any.member outputRef loadedRefUtxos then
                         ( Done { form | error = Nothing } voter
@@ -2384,7 +2385,7 @@ handleRationaleIpfsAnswer model ipfsAnswer =
 
 -}
 type alias TxRequirements =
-    { voter : VoterWitness
+    { voter : Witness.Voter
     , actionId : ActionId
     , rationaleAnchor : Anchor
     , localStateUtxos : Utxo.RefDict Output
@@ -2556,7 +2557,7 @@ sectionTitle title =
     Html.h2 [ HA.class "text-3xl font-medium mt-4 mb-4" ] [ text title ]
 
 
-viewVoterIdentificationStep : ViewContext msg -> Step VoterPreparationForm VoterWitness VoterWitness -> Html msg
+viewVoterIdentificationStep : ViewContext msg -> Step VoterPreparationForm Witness.Voter Witness.Voter -> Html msg
 viewVoterIdentificationStep ctx step =
     case step of
         Preparing form ->
@@ -2776,7 +2777,7 @@ viewExpectedSignerCheckbox { expected, key } =
         ]
 
 
-viewIdentifiedVoter : VoterPreparationForm -> VoterWitness -> Html Msg
+viewIdentifiedVoter : VoterPreparationForm -> Witness.Voter -> Html Msg
 viewIdentifiedVoter form voter =
     let
         govIdStr =
@@ -2794,7 +2795,7 @@ viewIdentifiedVoter form voter =
                 ]
             , Html.div []
                 [ case voterCred of
-                    WithKey cred ->
+                    Witness.WithKey cred ->
                         Html.div [ HA.class "flex flex-col space-y-1" ]
                             [ Html.div []
                                 [ Html.span [ HA.class "font-medium mr-2" ] [ text "Using key with hash:" ]
@@ -2802,7 +2803,7 @@ viewIdentifiedVoter form voter =
                                 ]
                             ]
 
-                    WithScript hash (NativeWitness { expectedSigners }) ->
+                    Witness.WithScript hash (Witness.Native { expectedSigners }) ->
                         Html.div [ HA.class "flex flex-col space-y-2" ]
                             [ Html.div []
                                 [ Html.span [ HA.class "font-medium mr-2" ] [ text "Using native script with hash:" ]
@@ -2825,7 +2826,7 @@ viewIdentifiedVoter form voter =
                                     ]
                             ]
 
-                    WithScript _ (PlutusWitness _) ->
+                    Witness.WithScript _ (Witness.Plutus _) ->
                         Html.div []
                             [ Html.span [ HA.class "" ] [ text "Using Plutus script (details not available)" ] ]
                 ]
@@ -2834,13 +2835,13 @@ viewIdentifiedVoter form voter =
         ]
 
 
-getVoterDisplayInfo : VoterWitness -> VoterPreparationForm -> String -> ( String, CredentialWitness )
+getVoterDisplayInfo : Witness.Voter -> VoterPreparationForm -> String -> ( String, Witness.Credential )
 getVoterDisplayInfo voter form govIdStr =
     case voter of
-        WithCommitteeHotCred cred ->
+        Witness.WithCommitteeHotCred cred ->
             ( "Constitutional Committee Voter: " ++ govIdStr, cred )
 
-        WithDrepCred cred ->
+        Witness.WithDrepCred cred ->
             let
                 votingPowerStr =
                     case form.drepInfo of
@@ -2852,7 +2853,7 @@ getVoterDisplayInfo voter form govIdStr =
             in
             ( "DRep Voter (voting power: " ++ votingPowerStr ++ "): " ++ govIdStr, cred )
 
-        WithPoolCred hash ->
+        Witness.WithPoolCred hash ->
             let
                 votingPower =
                     case form.poolInfo of
@@ -2863,7 +2864,7 @@ getVoterDisplayInfo voter form govIdStr =
                             "?"
             in
             ( "SPO Voter (voting power: " ++ votingPower ++ "): " ++ Pool.toBech32 hash
-            , WithKey hash
+            , Witness.WithKey hash
             )
 
 
@@ -4321,7 +4322,7 @@ viewBuiltTransaction ctx tx =
 --
 
 
-viewSignTxStep : ViewContext msg -> Step a b VoterWitness -> Step BuildTxPrep {} TxFinalized -> Html msg
+viewSignTxStep : ViewContext msg -> Step a b Witness.Voter -> Step BuildTxPrep {} TxFinalized -> Html msg
 viewSignTxStep ctx voterStep buildTxStep =
     case ( buildTxStep, voterStep ) of
         ( Done _ { tx, expectedSignatures }, Done _ voterWitness ) ->
@@ -4329,31 +4330,31 @@ viewSignTxStep ctx voterStep buildTxStep =
                 -- Extract the main voter credential information
                 voterId =
                     case voterWitness of
-                        Cardano.WithCommitteeHotCred (Cardano.WithKey hotkey) ->
+                        Witness.WithCommitteeHotCred (Witness.WithKey hotkey) ->
                             [ ( Bytes.toHex hotkey, "Committee hot key" ) ]
 
-                        Cardano.WithCommitteeHotCred (Cardano.WithScript scriptHash witness) ->
+                        Witness.WithCommitteeHotCred (Witness.WithScript scriptHash witness) ->
                             ( Bytes.toHex scriptHash, "Committee governance script" )
                                 :: extractMultisigKeys witness
 
-                        Cardano.WithDrepCred (Cardano.WithKey credKey) ->
+                        Witness.WithDrepCred (Witness.WithKey credKey) ->
                             [ ( Bytes.toHex credKey, "DRep key" ) ]
 
-                        Cardano.WithDrepCred (Cardano.WithScript scriptHash witness) ->
+                        Witness.WithDrepCred (Witness.WithScript scriptHash witness) ->
                             ( Bytes.toHex scriptHash, "DRep governance script" )
                                 :: extractMultisigKeys witness
 
-                        Cardano.WithPoolCred poolKey ->
+                        Witness.WithPoolCred poolKey ->
                             [ ( Bytes.toHex poolKey, "SPO key" ) ]
 
-                extractMultisigKeys : ScriptWitness -> List ( String, String )
+                extractMultisigKeys : Witness.Script -> List ( String, String )
                 extractMultisigKeys witness =
                     case witness of
-                        NativeWitness { expectedSigners } ->
+                        Witness.Native { expectedSigners } ->
                             List.map (\signer -> ( Bytes.toHex signer, "Multisig signer" )) expectedSigners
 
                         -- "let’s leave it as-is because we don’t handle them anyway for now"
-                        PlutusWitness _ ->
+                        Witness.Plutus _ ->
                             []
 
                 walletSpendingCredential =

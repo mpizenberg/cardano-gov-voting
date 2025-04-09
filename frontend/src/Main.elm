@@ -50,11 +50,11 @@ import Api exposing (ActiveProposal, CcInfo, DrepInfo, PoolInfo, ProtocolParams)
 import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano
 import Cardano.Address as Address exposing (Address, CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30 exposing (WalletDescriptor)
 import Cardano.Gov as Gov
 import Cardano.Transaction as Transaction exposing (Transaction)
+import Cardano.TxIntent
 import Cardano.Utxo as Utxo exposing (Output, TransactionId)
 import ConcurrentTask exposing (ConcurrentTask)
 import ConcurrentTask.Extra
@@ -762,7 +762,7 @@ knowing the given transaction was just submitted to the network.
 -}
 updateWalletUtxosWithTx : { tx : Transaction, txId : Bytes TransactionId } -> Utxo.RefDict Output -> Utxo.RefDict Output
 updateWalletUtxosWithTx { tx, txId } utxos =
-    (Cardano.updateLocalState txId tx utxos).updatedState
+    (Cardano.TxIntent.updateLocalState txId tx utxos).updatedState
 
 
 updateModelWithPrepToParentMsg : Maybe Page.Preparation.MsgToParent -> Model -> ( Model, Cmd Msg )

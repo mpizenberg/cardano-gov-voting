@@ -349,6 +349,21 @@ view ctx model =
                                 [ text "If additional signatures are required, please ask the relevant parties"
                                 , text " to partially sign the transaction,"
                                 , text " and use the button below to load their signatures."
+                                , text " You can simply share this page URL with them."
+                                , text " It contains all the details of the transaction which they can sign on their own device."
+                                ]
+                            , Html.p [ HA.class "mb-4" ]
+                                [ text "If you want to verify the transaction with an independent tool before signature,"
+                                , text " you can download it, and upload it on "
+                                , Html.a
+                                    [ HA.href "https://council-toolkit.gov.tools/"
+                                    , HA.target "_blank"
+                                    , HA.rel "noopener noreferrer"
+                                    , HA.class "text-blue-600 hover:text-blue-800 underline font-mono"
+                                    ]
+                                    [ text "https://council-toolkit.gov.tools/" ]
+                                , text ". PS: you will also need to connect a wallet for it to display the analysis."
+                                , text " Any wallet will do."
                                 ]
                             , Html.p [ HA.class "mb-4 flex items-center" ]
                                 [ downloadButton "Download unsigned Tx" "unsigned" "tx-unsigned.json" tx

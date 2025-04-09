@@ -289,7 +289,7 @@ type Msg
 type Route
     = RouteLanding
     | RoutePreparation { networkId : NetworkId }
-    | RouteSigning { expectedSigners : List { keyName : String, keyHash : Bytes CredentialHash }, tx : Maybe Transaction }
+    | RouteSigning { networkId : NetworkId, expectedSigners : List { keyName : String, keyHash : Bytes CredentialHash }, tx : Maybe Transaction }
     | RouteMultisigRegistration
     | RoutePdf
     | RouteDisclaimer
@@ -331,23 +331,24 @@ locationHrefToRoute locationHref =
             Route404
 
         Just { path, queryParameters, fragment } ->
+            let
+                networkId =
+                    Dict.get "networkId" queryParameters
+                        |> Maybe.andThen List.head
+                        |> Maybe.andThen networkIdFromString
+                        |> Maybe.withDefault Testnet
+            in
             case path of
                 [] ->
                     RouteLanding
 
                 [ "page", "preparation" ] ->
-                    let
-                        networkId =
-                            Dict.get "networkId" queryParameters
-                                |> Maybe.andThen List.head
-                                |> Maybe.andThen networkIdFromString
-                                |> Maybe.withDefault Testnet
-                    in
                     RoutePreparation { networkId = networkId }
 
                 [ "page", "signing" ] ->
                     RouteSigning
-                        { expectedSigners =
+                        { networkId = networkId
+                        , expectedSigners =
                             Dict.get "signer" queryParameters
                                 |> Maybe.withDefault []
                                 |> List.filterMap
@@ -392,9 +393,13 @@ routeToAppUrl route =
             , fragment = Nothing
             }
 
-        RouteSigning { expectedSigners, tx } ->
+        RouteSigning { networkId, expectedSigners, tx } ->
             { path = [ "page", "signing" ]
-            , queryParameters = Dict.singleton "signer" <| List.map (\{ keyName, keyHash } -> keyName ++ ";" ++ Bytes.toHex keyHash) expectedSigners
+            , queryParameters =
+                Dict.fromList
+                    [ ( "networkId", [ networkIdToString networkId ] )
+                    , ( "signer", List.map (\{ keyName, keyHash } -> keyName ++ ";" ++ Bytes.toHex keyHash) expectedSigners )
+                    ]
             , fragment = Maybe.map (Bytes.toHex << Transaction.serialize) tx
             }
 
@@ -695,13 +700,22 @@ handleUrlChange route model =
                     ]
                 )
 
-        RouteSigning { expectedSigners, tx } ->
-            ( { model
-                | errors = []
-                , page = SigningPage <| Page.Signing.initialModel expectedSigners tx
-              }
-            , pushUrl <| AppUrl.toString <| routeToAppUrl route
-            )
+        RouteSigning { networkId, expectedSigners, tx } ->
+            if networkId /= model.networkId then
+                initHelper route
+                    { jsonLdContexts = model.jsonLdContexts
+                    , db = model.db
+                    , networkId = networkId
+                    , ipfsPreconfig = model.ipfsPreconfig
+                    }
+
+            else
+                ( { model
+                    | errors = []
+                    , page = SigningPage <| Page.Signing.initialModel expectedSigners tx
+                  }
+                , pushUrl <| AppUrl.toString <| routeToAppUrl route
+                )
 
         RouteMultisigRegistration ->
             ( { model
@@ -1073,7 +1087,7 @@ viewContent model =
                 , networkId = model.networkId
                 , signingLink =
                     \tx expectedSigners ->
-                        link (RouteSigning { tx = Just tx, expectedSigners = expectedSigners }) []
+                        link (RouteSigning { networkId = model.networkId, tx = Just tx, expectedSigners = expectedSigners }) []
                 , ipfsPreconfig = model.ipfsPreconfig
                 }
                 prepModel
@@ -1092,7 +1106,7 @@ viewContent model =
                 , wallet = model.wallet
                 , signingLink =
                     \tx expectedSigners ->
-                        link (RouteSigning { tx = Just tx, expectedSigners = expectedSigners }) []
+                        link (RouteSigning { networkId = model.networkId, tx = Just tx, expectedSigners = expectedSigners }) []
                 }
                 pageModel
 

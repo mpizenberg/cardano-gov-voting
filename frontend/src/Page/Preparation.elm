@@ -1141,7 +1141,7 @@ innerUpdate ctx msg model =
                     in
                     case tryTx of
                         Err error ->
-                            ( { model | buildTxStep = Preparing { error = Just <| "Error while building the Tx: " ++ Debug.toString error } }
+                            ( { model | buildTxStep = Preparing { error = Just <| "Error while building the Tx: " ++ TxIntent.errorToString error } }
                             , Cmd.none
                             , Nothing
                             )
@@ -2448,6 +2448,7 @@ type alias ViewContext msg =
     , jsonLdContexts : JsonLdContexts
     , costModels : Maybe CostModels
     , networkId : NetworkId
+    , changeNetworkLink : NetworkId -> List (Html msg) -> Html msg
     , signingLink : Transaction -> List { keyName : String, keyHash : Bytes CredentialHash } -> List (Html msg) -> Html msg
     , ipfsPreconfig : { label : String, description : String }
     }
@@ -2462,7 +2463,9 @@ view ctx (Model model) =
             , HA.style "margin" "0 auto"
             , HA.style "padding" "0 1.5rem"
             ]
-            [ viewVoterIdentificationStep ctx model.voterStep
+            [ viewNetworkSelectionSection ctx
+            , viewDivider
+            , viewVoterIdentificationStep ctx model.voterStep
             , viewDivider
             , viewProposalSelectionStep ctx model
             , viewDivider
@@ -2544,6 +2547,37 @@ viewHeaderBackground =
 viewDivider : Html msg
 viewDivider =
     Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
+
+
+
+--
+-- Network Selection
+--
+
+
+viewNetworkSelectionSection : ViewContext msg -> Html msg
+viewNetworkSelectionSection ctx =
+    div []
+        [ sectionTitle "Select Network"
+        , div [ HA.class "mb-4" ]
+            [ viewNetworkOption ctx "Mainnet" Mainnet
+            , Html.span [ HA.style "margin-left" "1rem" ] []
+            , viewNetworkOption ctx "Preview" Testnet
+            ]
+        ]
+
+
+viewNetworkOption : ViewContext msg -> String -> NetworkId -> Html msg
+viewNetworkOption ctx label networkId =
+    let
+        styling =
+            Helper.buttonCommonStyle
+    in
+    ctx.changeNetworkLink networkId
+        [ div
+            (HA.attribute "role" "button" :: styling)
+            [ text label ]
+        ]
 
 
 
@@ -2893,7 +2927,7 @@ viewProposalSelectionStep ctx model =
 viewProposalSelectionForm : ViewContext msg -> InnerModel -> Html msg
 viewProposalSelectionForm ctx model =
     div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
-        [ viewProposalHeader ctx.networkId
+        [ viewProposalHeader
         , case ctx.proposals of
             RemoteData.NotAsked ->
                 text "Proposals are not loading, please report this error."
@@ -2913,36 +2947,11 @@ viewProposalSelectionForm ctx model =
         ]
 
 
-viewProposalHeader : NetworkId -> Html msg
-viewProposalHeader networkId =
+viewProposalHeader : Html msg
+viewProposalHeader =
     div [ HA.class "flex items-center mb-4" ]
         [ Html.h2 [ HA.class "text-3xl font-medium" ] [ text "Pick a Proposal" ]
-        , viewNetworkBadge networkId
         ]
-
-
-viewNetworkBadge : NetworkId -> Html msg
-viewNetworkBadge networkId =
-    let
-        ( bgColor, textColor, networkName ) =
-            case networkId of
-                Mainnet ->
-                    ( "rgba(16, 185, 129, 0.1)", "#065f46", "Mainnet" )
-
-                Testnet ->
-                    ( "rgba(124, 58, 237, 0.1)", "#5b21b6", "Testnet" )
-    in
-    Html.span
-        [ HA.style "background-color" bgColor
-        , HA.style "color" textColor
-        , HA.style "font-size" "0.7rem"
-        , HA.style "font-weight" "600"
-        , HA.style "padding" "0.15rem 0.5rem"
-        , HA.style "border-radius" "9999px"
-        , HA.style "white-space" "nowrap"
-        , HA.style "margin-left" "8px"
-        ]
-        [ text networkName ]
 
 
 viewProposalList : ViewContext msg -> Dict String ActiveProposal -> Int -> Html msg
@@ -3215,9 +3224,7 @@ viewSelectedProposal ctx { id, actionType, metadata, metadataUrl } =
     in
     div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
         [ div [ HA.class "flex items-center mb-4" ]
-            [ sectionTitle "Pick a Proposal"
-            , viewNetworkBadge ctx.networkId
-            ]
+            [ sectionTitle "Pick a Proposal" ]
         , Helper.formContainer
             [ Html.p [ HA.class "mb-4" ]
                 [ Html.strong [ HA.class "font-medium" ] [ text "Selected proposal:" ]

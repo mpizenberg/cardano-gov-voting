@@ -198,38 +198,59 @@ init { url, jsonLdContexts, db, networkId, ipfsPreconfig } =
     let
         networkIdTyped =
             Address.networkIdFromInt networkId |> Maybe.withDefault Testnet
+
+        config =
+            ModelConfig jsonLdContexts db networkIdTyped ipfsPreconfig
     in
-    handleUrlChange (locationHrefToRoute url)
-        { page = LandingPage
-        , mobileMenuIsOpen = False
-        , walletDropdownIsOpen = False
-        , walletsDiscovered = []
-        , wallet = Nothing
-        , walletUtxos = Nothing
-        , walletChangeAddress = Nothing
-        , protocolParams = Nothing
-        , epoch = RemoteData.NotAsked
-        , proposals = RemoteData.NotAsked
-        , scriptsInfo = Dict.empty
-        , drepsInfo = Dict.empty
-        , ccsInfo = Dict.empty
-        , poolsInfo = Dict.empty
-        , jsonLdContexts = jsonLdContexts
-        , taskPool = ConcurrentTask.pool
-        , db = db
-        , networkId = networkIdTyped
-        , ipfsPreconfig = ipfsPreconfig
-        , errors = []
-        }
-        |> (\( model, cmd ) ->
-                ( model
-                , Cmd.batch
-                    [ cmd
-                    , toWallet (Cip30.encodeRequest Cip30.discoverWallets)
-                    , Api.defaultApiProvider.loadProtocolParams networkIdTyped GotProtocolParams
-                    ]
-                )
-           )
+    initHelper (locationHrefToRoute url) config
+
+
+initHelper : Route -> ModelConfig -> ( Model, Cmd Msg )
+initHelper route config =
+    let
+        ( model, cmd ) =
+            handleUrlChange route (initialModel config)
+    in
+    ( model
+    , Cmd.batch
+        [ cmd
+        , toWallet (Cip30.encodeRequest Cip30.discoverWallets)
+        , Api.defaultApiProvider.loadProtocolParams model.networkId GotProtocolParams
+        ]
+    )
+
+
+type alias ModelConfig =
+    { jsonLdContexts : JsonLdContexts
+    , db : Value
+    , networkId : NetworkId
+    , ipfsPreconfig : { label : String, description : String }
+    }
+
+
+initialModel : ModelConfig -> Model
+initialModel { jsonLdContexts, db, networkId, ipfsPreconfig } =
+    { page = LandingPage
+    , mobileMenuIsOpen = False
+    , walletDropdownIsOpen = False
+    , walletsDiscovered = []
+    , wallet = Nothing
+    , walletUtxos = Nothing
+    , walletChangeAddress = Nothing
+    , protocolParams = Nothing
+    , epoch = RemoteData.NotAsked
+    , proposals = RemoteData.NotAsked
+    , scriptsInfo = Dict.empty
+    , drepsInfo = Dict.empty
+    , ccsInfo = Dict.empty
+    , poolsInfo = Dict.empty
+    , jsonLdContexts = jsonLdContexts
+    , taskPool = ConcurrentTask.pool
+    , db = db
+    , networkId = networkId
+    , ipfsPreconfig = ipfsPreconfig
+    , errors = []
+    }
 
 
 
@@ -267,7 +288,7 @@ type Msg
 
 type Route
     = RouteLanding
-    | RoutePreparation
+    | RoutePreparation { networkId : NetworkId }
     | RouteSigning { expectedSigners : List { keyName : String, keyHash : Bytes CredentialHash }, tx : Maybe Transaction }
     | RouteMultisigRegistration
     | RoutePdf
@@ -315,7 +336,14 @@ locationHrefToRoute locationHref =
                     RouteLanding
 
                 [ "page", "preparation" ] ->
-                    RoutePreparation
+                    let
+                        networkId =
+                            Dict.get "networkId" queryParameters
+                                |> Maybe.andThen List.head
+                                |> Maybe.andThen networkIdFromString
+                                |> Maybe.withDefault Testnet
+                    in
+                    RoutePreparation { networkId = networkId }
 
                 [ "page", "signing" ] ->
                     RouteSigning
@@ -358,8 +386,11 @@ routeToAppUrl route =
         RouteLanding ->
             AppUrl.fromPath []
 
-        RoutePreparation ->
-            AppUrl.fromPath [ "page", "preparation" ]
+        RoutePreparation { networkId } ->
+            { path = [ "page", "preparation" ]
+            , queryParameters = Dict.singleton "networkId" [ networkIdToString networkId ]
+            , fragment = Nothing
+            }
 
         RouteSigning { expectedSigners, tx } ->
             { path = [ "page", "signing" ]
@@ -375,6 +406,29 @@ routeToAppUrl route =
 
         RouteDisclaimer ->
             AppUrl.fromPath [ "page", "disclaimer" ]
+
+
+networkIdToString : NetworkId -> String
+networkIdToString networkId =
+    case networkId of
+        Mainnet ->
+            "Mainnet"
+
+        Testnet ->
+            "Preview"
+
+
+networkIdFromString : String -> Maybe NetworkId
+networkIdFromString str =
+    case str of
+        "Mainnet" ->
+            Just Mainnet
+
+        "Preview" ->
+            Just Testnet
+
+        _ ->
+            Nothing
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -613,7 +667,7 @@ handleUrlChange route model =
             , pushUrl <| AppUrl.toString <| routeToAppUrl route
             )
 
-        RoutePreparation ->
+        RoutePreparation { networkId } ->
             let
                 newModel =
                     { model | errors = [], page = PreparationPage <| Page.Preparation.init model.ipfsPreconfig }
@@ -621,7 +675,15 @@ handleUrlChange route model =
                 updateUrlCmd =
                     pushUrl <| AppUrl.toString <| routeToAppUrl route
             in
-            if RemoteData.isSuccess model.proposals then
+            if networkId /= model.networkId then
+                initHelper route
+                    { jsonLdContexts = model.jsonLdContexts
+                    , db = model.db
+                    , networkId = networkId
+                    , ipfsPreconfig = model.ipfsPreconfig
+                    }
+
+            else if RemoteData.isSuccess model.proposals then
                 ( newModel, updateUrlCmd )
 
             else
@@ -933,7 +995,7 @@ viewHeader model =
               , isActive = model.page == LandingPage
               }
             , { label = "Vote Preparation"
-              , link = link RoutePreparation
+              , link = link <| RoutePreparation { networkId = model.networkId }
               , isActive =
                     case model.page of
                         PreparationPage _ ->
@@ -986,7 +1048,7 @@ viewContent : Model -> Html Msg
 viewContent model =
     case model.page of
         LandingPage ->
-            viewLandingPage
+            viewLandingPage model.networkId
 
         DisclaimerPage ->
             Page.Disclaimer.view
@@ -1041,8 +1103,8 @@ viewContent model =
                 pageModel
 
 
-viewLandingPage : Html Msg
-viewLandingPage =
+viewLandingPage : NetworkId -> Html Msg
+viewLandingPage networkId =
     div [ HA.class "container mx-auto px-4" ]
         [ div [ HA.style "max-width" "800px", HA.style "margin" "0 auto" ]
             [ Html.h2
@@ -1068,7 +1130,7 @@ viewLandingPage =
                 ]
                 [ text "Create, sign, and submit governance votes with proper rationale documentation. Generate formatted PDFs for transparency and record-keeping." ]
             , Html.p [ HA.style "margin-bottom" "4rem" ]
-                [ link RoutePreparation
+                [ link (RoutePreparation { networkId = networkId })
                     [ HA.class "inline-block" ]
                     [ Helper.viewButton "Start Voting Process" NoMsg ]
                 ]

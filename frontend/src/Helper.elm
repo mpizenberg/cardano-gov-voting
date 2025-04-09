@@ -3,7 +3,7 @@ module Helper exposing
     , viewNumberInput, textFieldInline, firstTextField, viewSelect
     , labeledField, textField, viewTextarea, radioInput
     , formContainer, boxContainer
-    , viewButton, viewWalletButton
+    , viewButton, viewWalletButton, buttonCommonStyle
     , applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle
     , viewActionTypeIcon
     )
@@ -19,7 +19,7 @@ and are potentially useful in multiple places.
 
 # Form elements
 
-@docs viewNumberInput, textFieldInline, firstTextField, viewSelect, inputBaseStyle
+@docs viewNumberInput, textFieldInline, firstTextField, viewSelect
 
 @docs labeledField, textField, viewTextarea, radioInput
 

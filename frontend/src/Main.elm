@@ -1085,6 +1085,9 @@ viewContent model =
                 , jsonLdContexts = model.jsonLdContexts
                 , costModels = Maybe.map .costModels model.protocolParams
                 , networkId = model.networkId
+                , changeNetworkLink =
+                    \networkId ->
+                        link (RoutePreparation { networkId = networkId }) []
                 , signingLink =
                     \tx expectedSigners ->
                         link (RouteSigning { networkId = model.networkId, tx = Just tx, expectedSigners = expectedSigners }) []

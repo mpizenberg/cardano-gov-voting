@@ -2448,6 +2448,7 @@ type alias ViewContext msg =
     , jsonLdContexts : JsonLdContexts
     , costModels : Maybe CostModels
     , networkId : NetworkId
+    , changeNetworkLink : NetworkId -> List (Html msg) -> Html msg
     , signingLink : Transaction -> List { keyName : String, keyHash : Bytes CredentialHash } -> List (Html msg) -> Html msg
     , ipfsPreconfig : { label : String, description : String }
     }
@@ -2462,7 +2463,9 @@ view ctx (Model model) =
             , HA.style "margin" "0 auto"
             , HA.style "padding" "0 1.5rem"
             ]
-            [ viewVoterIdentificationStep ctx model.voterStep
+            [ viewNetworkSelectionSection ctx
+            , viewDivider
+            , viewVoterIdentificationStep ctx model.voterStep
             , viewDivider
             , viewProposalSelectionStep ctx model
             , viewDivider
@@ -2544,6 +2547,43 @@ viewHeaderBackground =
 viewDivider : Html msg
 viewDivider =
     Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
+
+
+
+--
+-- Network Selection
+--
+
+
+viewNetworkSelectionSection : ViewContext msg -> Html msg
+viewNetworkSelectionSection ctx =
+    div []
+        [ sectionTitle "Select Network"
+        , div [ HA.class "mb-4" ]
+            [ viewNetworkOption ctx "Mainnet" Mainnet (ctx.networkId == Mainnet)
+            , Html.span [ HA.style "margin-left" "1rem" ] []
+            , viewNetworkOption ctx "Preview" Testnet (ctx.networkId == Testnet)
+            ]
+        ]
+
+
+viewNetworkOption : ViewContext msg -> String -> NetworkId -> Bool -> Html msg
+viewNetworkOption ctx label networkId isSelected =
+    let
+        styling =
+            Helper.buttonCommonStyle
+                ++ (if isSelected then
+                        []
+
+                    else
+                        []
+                   )
+    in
+    ctx.changeNetworkLink networkId
+        [ div
+            (HA.attribute "role" "button" :: styling)
+            [ text label ]
+        ]
 
 
 

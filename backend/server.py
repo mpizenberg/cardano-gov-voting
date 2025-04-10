@@ -296,6 +296,8 @@ async def pin_to_ipfs_common(
                 headers=headers,
                 json=payload,
             )
+
+            # For Nmkr, pinning happens automatically
             return Response(
                 content=response.content,
                 status_code=response.status_code,
@@ -305,15 +307,25 @@ async def pin_to_ipfs_common(
         else:
             # Basic format - uses /add endpoint with file upload
             with open(temp_file_path, "rb") as f:
-                response = await app.async_client.post(  # type: ignore
-                    url=f"{server_url}/add",
+                add_response = await app.async_client.post(  # type: ignore
+                    url=f"{server_url}/add?pin=true",  # Add pin=true parameter
                     headers=headers,
                     files={"file": f},
                 )
+
+                # Check if the add request was successful
+                if add_response.status_code != 200:
+                    return Response(
+                        content=add_response.content,
+                        status_code=add_response.status_code,
+                        media_type=add_response.headers.get("content-type"),
+                    )
+
+                # Return the response directly since pinning is already done
                 return Response(
-                    content=response.content,
-                    status_code=response.status_code,
-                    media_type=response.headers.get("content-type"),
+                    content=add_response.content,
+                    status_code=add_response.status_code,
+                    media_type=add_response.headers.get("content-type"),
                 )
 
     except json.JSONDecodeError as e:

@@ -18,6 +18,7 @@ import Json.Decode as JD exposing (Decoder)
 import Json.Encode as JE
 import List.Extra
 import Natural exposing (Natural)
+import Platform exposing (Task)
 import ProposalMetadata exposing (ProposalMetadata)
 import RemoteData exposing (RemoteData)
 import ScriptInfo exposing (ScriptInfo)
@@ -56,6 +57,7 @@ type alias ApiProvider msg =
     , getPoolLiveStake : NetworkId -> Bytes Pool.Id -> (Result Http.Error PoolInfo -> msg) -> Cmd msg
     , ipfsAddFileCustom : { rpc : String, headers : List ( String, String ), file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     , ipfsAddFileNmkr : { userId : String, apiToken : String, file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
+    , ipfsAddFileBlockfrost : { projectId : String, file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     , ipfsAddFile : { file : File } -> (Result String IpfsAnswer -> msg) -> Cmd msg
     , convertToPdf : String -> (Result Http.Error ElmBytes.Bytes -> msg) -> Cmd msg
     }
@@ -566,7 +568,7 @@ defaultApiProvider =
             Http.request
                 { method = "POST"
                 , headers = List.map (\( k, v ) -> Http.header k v) headers
-                , url = rpc ++ "/add"
+                , url = rpc ++ "/add?pin=true"
                 , body = Http.multipartBody [ Http.filePart "file" file ]
                 , expect = Http.expectStringResponse toMsg responseToIpfsAnswer
                 , timeout = Nothing
@@ -610,6 +612,66 @@ defaultApiProvider =
                             , timeout = Nothing
                             }
                     )
+                |> Task.attempt toMsg
+
+    -- Make an add+pin request to Blockfrost IPFS servers
+    , ipfsAddFileBlockfrost =
+        let
+            addRequest : String -> File -> Task String IpfsAnswer
+            addRequest projectId file =
+                Http.task
+                    { method = "POST"
+                    , headers = [ Http.header "project_id" projectId ]
+                    , url = "https://ipfs.blockfrost.io/api/v0/ipfs/add"
+                    , body = Http.multipartBody [ Http.filePart "file" file ]
+                    , resolver = Http.stringResolver <| responseToIpfsAnswer
+                    , timeout = Nothing
+                    }
+
+            pinRequest : String -> IpfsAnswer -> Task String IpfsAnswer
+            pinRequest projectId ipfsAnswer =
+                case ipfsAnswer of
+                    IpfsError _ ->
+                        Task.succeed ipfsAnswer
+
+                    IpfsAddSuccessful { cid } ->
+                        Http.task
+                            { method = "POST"
+                            , headers = [ Http.header "project_id" projectId ]
+                            , url = "https://ipfs.blockfrost.io/api/v0/ipfs/pin/add/" ++ cid
+                            , body =
+                                Http.jsonBody <|
+                                    JE.object
+                                        [ ( "ipfs_hash", JE.string cid )
+                                        , ( "state", JE.string "queued" )
+                                        , ( "filecoin", JE.bool False )
+                                        ]
+                            , resolver =
+                                Http.stringResolver
+                                    (\pinResponse ->
+                                        case pinResponse of
+                                            Http.GoodStatus_ _ _ ->
+                                                -- Return the original /add answer
+                                                Ok ipfsAnswer
+
+                                            Http.BadStatus_ meta _ ->
+                                                Err <| "Pinning failed (" ++ String.fromInt meta.statusCode ++ "): " ++ meta.statusText
+
+                                            Http.NetworkError_ ->
+                                                Err "Network error during IPFS pinning."
+
+                                            Http.Timeout_ ->
+                                                Err "The pin request timed out."
+
+                                            Http.BadUrl_ str ->
+                                                Err <| "Incorrect URL for pinning: " ++ str
+                                    )
+                            , timeout = Nothing
+                            }
+        in
+        \{ projectId, file } toMsg ->
+            addRequest projectId file
+                |> Task.andThen (pinRequest projectId)
                 |> Task.attempt toMsg
 
     -- Make a request to the pre-configured IPFS RPC via the server

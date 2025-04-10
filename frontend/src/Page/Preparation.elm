@@ -346,14 +346,15 @@ initStorageForm ipfsPreconfig =
     , nmkrUserId = ""
     , nmkrApiToken = ""
     , blockfrostProjectId = ""
-    , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
-    , headers = [ ( "project_id", "" ) ]
+    , ipfsServer = "https://ipfs-rpc.mycompany.org/api/v0"
+    , headers = [ ( "Authorization", "Basic {token}" ) ]
     , error = Nothing
     }
 
 
 type StorageConfig
     = UsePreconfigIpfs { label : String, description : String }
+    | UseBlockfrostIpfs { label : String, description : String, projectId : String }
     | UseNmkrIpfs { label : String, description : String, userId : String, apiToken : String }
     | UseCustomIpfs { label : String, description : String, ipfsServer : String, headers : List ( String, String ) }
 
@@ -1649,11 +1650,10 @@ validateIpfsForm form =
 
                 projectId ->
                     Ok <|
-                        UseCustomIpfs
+                        UseBlockfrostIpfs
                             { label = "Blockfrost IPFS"
                             , description = "Using Blockfrost IPFS server to store your files."
-                            , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
-                            , headers = [ ( "project_id", projectId ) ]
+                            , projectId = projectId
                             }
 
         NmkrIPFS ->
@@ -1665,7 +1665,7 @@ validateIpfsForm form =
                     Ok <|
                         UseNmkrIpfs
                             { label = "NMKR IPFS"
-                            , description = "Using NMKR IPFS server to store your files."
+                            , description = "Using NMKR IPFS server to store your files. Remark that using NMKR own gateway will be faster to access pinned files: https://c-ipfs-gw.nmkr.io/ipfs/{file-hash-here}"
                             , userId = userId
                             , apiToken = form.nmkrApiToken
                             }
@@ -1695,7 +1695,7 @@ validateIpfsForm form =
                     (\_ ->
                         UseCustomIpfs
                             { label = "Custom IPFS Server"
-                            , description = "Using a custom IPFS server configuration to store your files."
+                            , description = "Using a custom IPFS server configuration to store your files. The RPC should provide the /add?pin=true endpoint with answers equivalent to those described in the official kubo IPFS RPC docs: https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-add"
                             , ipfsServer = form.ipfsServer
                             , headers = form.headers
                             }
@@ -1933,6 +1933,13 @@ pinPdfFile fileAsValue (Model model) =
                 UsePreconfigIpfs _ ->
                     Api.defaultApiProvider.ipfsAddFile
                         { file = file }
+                        GotIpfsAnswer
+
+                UseBlockfrostIpfs { projectId } ->
+                    Api.defaultApiProvider.ipfsAddFileBlockfrost
+                        { projectId = projectId
+                        , file = file
+                        }
                         GotIpfsAnswer
 
                 UseNmkrIpfs { userId, apiToken } ->
@@ -2273,6 +2280,13 @@ pinRationaleFile fileAsValue (Model model) =
                 UsePreconfigIpfs _ ->
                     Api.defaultApiProvider.ipfsAddFile
                         { file = file }
+                        GotIpfsAnswer
+
+                UseBlockfrostIpfs { projectId } ->
+                    Api.defaultApiProvider.ipfsAddFileBlockfrost
+                        { projectId = projectId
+                        , file = file
+                        }
                         GotIpfsAnswer
 
                 UseNmkrIpfs { userId, apiToken } ->
@@ -2680,7 +2694,7 @@ viewVoterIdentificationStep ctx step =
             Html.map ctx.wrapMsg <|
                 div []
                     [ sectionTitle "Voter governance ID (drep/pool/cc_hot)"
-                    , Html.p [] [ Helper.firstTextField "Enter drep/pool/cc_hot" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
+                    , Html.p [] [ Helper.firstTextField "Paste drep/pool/cc_hot ID" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
                     , Html.Lazy.lazy viewValidGovIdForm form
                     , Html.p [ HA.class "my-4" ] [ Helper.viewButton "Confirm Voter" ValidateVoterFormButtonClicked ]
                     , viewError form.error
@@ -3427,17 +3441,7 @@ viewStorageConfigStep ctx step =
                                         (Helper.textFieldInline form.ipfsServer IpfsServerChange)
                                     , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
                                     , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
-                                        [ text "For example, use "
-                                        , Html.a
-                                            [ HA.href "https://blockfrost.dev/start-building/ipfs/"
-                                            , HA.target "_blank"
-                                            , HA.rel "noopener noreferrer"
-                                            , HA.style "color" "#2563eb"
-                                            , HA.style "text-decoration" "underline"
-                                            ]
-                                            [ text "Blockfrost" ]
-                                        , text " or other IPFS providers."
-                                        , div [ HA.class "mt-4" ]
+                                        [ div [ HA.class "mt-4" ]
                                             [ Helper.viewButton "Add HTTP header" AddHeaderButtonClicked ]
                                         ]
                                     ]
@@ -3464,6 +3468,15 @@ viewStorageConfigStep ctx step =
                     , div [ HA.class "p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
                         [ case storageConfig of
                             UsePreconfigIpfs { label, description } ->
+                                div [ HA.class "flex flex-col space-y-2" ]
+                                    [ div [ HA.class "flex items-center" ]
+                                        [ Html.span [ HA.class "font-medium" ] [ text label ]
+                                        ]
+                                    , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
+                                        [ text description ]
+                                    ]
+
+                            UseBlockfrostIpfs { label, description } ->
                                 div [ HA.class "flex flex-col space-y-2" ]
                                     [ div [ HA.class "flex items-center" ]
                                         [ Html.span [ HA.class "font-medium" ] [ text label ]
@@ -4259,7 +4272,11 @@ viewCompletedStorage r storage =
     div []
         [ Helper.formContainer
             [ Html.p [ HA.class "mb-4" ]
-                [ Html.strong [ HA.class "font-medium" ] [ text "File uploaded successfully:" ]
+                [ Html.strong [ HA.class "font-medium" ] [ text "File uploaded successfully:" ] ]
+            , Html.p [ HA.class "mb-4" ]
+                [ text "Remark: file pinning is ongoing, but beware that it may take a few hours for your file to be fully pinned."
+                , text " And though unlikely, it could be garbage collected before that happens, or in the future."
+                , text " So make sure to keep a local copy of your JSON file in case you might need to re-upload it (its ID should not change)."
                 ]
             , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
                 [ div [ HA.class "mb-2" ]

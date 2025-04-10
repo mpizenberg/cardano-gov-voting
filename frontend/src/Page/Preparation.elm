@@ -1665,7 +1665,7 @@ validateIpfsForm form =
                     Ok <|
                         UseNmkrIpfs
                             { label = "NMKR IPFS"
-                            , description = "Using NMKR IPFS server to store your files."
+                            , description = "Using NMKR IPFS server to store your files. Remark that using NMKR own gateway will be faster to access pinned files: https://c-ipfs-gw.nmkr.io/ipfs/{file-hash-here}"
                             , userId = userId
                             , apiToken = form.nmkrApiToken
                             }
@@ -4259,7 +4259,11 @@ viewCompletedStorage r storage =
     div []
         [ Helper.formContainer
             [ Html.p [ HA.class "mb-4" ]
-                [ Html.strong [ HA.class "font-medium" ] [ text "File uploaded successfully:" ]
+                [ Html.strong [ HA.class "font-medium" ] [ text "File uploaded successfully:" ] ]
+            , Html.p [ HA.class "mb-4" ]
+                [ text "Remark: file pinning is ongoing, but beware that it may take a few hours for your file to be fully pinned."
+                , text " And though unlikely, it could be garbage collected before that happens, or in the future."
+                , text " So make sure to keep a local copy of your JSON file in case you might need to re-upload it (its ID should not change)."
                 ]
             , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
                 [ div [ HA.class "mb-2" ]

@@ -2680,7 +2680,7 @@ viewVoterIdentificationStep ctx step =
             Html.map ctx.wrapMsg <|
                 div []
                     [ sectionTitle "Voter governance ID (drep/pool/cc_hot)"
-                    , Html.p [] [ Helper.firstTextField "Enter drep/pool/cc_hot" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
+                    , Html.p [] [ Helper.firstTextField "Paste drep/pool/cc_hot ID" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
                     , Html.Lazy.lazy viewValidGovIdForm form
                     , Html.p [ HA.class "my-4" ] [ Helper.viewButton "Confirm Voter" ValidateVoterFormButtonClicked ]
                     , viewError form.error

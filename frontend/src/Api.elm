@@ -654,7 +654,7 @@ defaultApiProvider =
                                                 -- Return the original /add answer
                                                 Ok ipfsAnswer
 
-                                            Http.BadStatus_ meta pinBody ->
+                                            Http.BadStatus_ meta _ ->
                                                 Err <| "Pinning failed (" ++ String.fromInt meta.statusCode ++ "): " ++ meta.statusText
 
                                             Http.NetworkError_ ->

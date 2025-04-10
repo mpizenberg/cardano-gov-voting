@@ -354,6 +354,7 @@ initStorageForm ipfsPreconfig =
 
 type StorageConfig
     = UsePreconfigIpfs { label : String, description : String }
+    | UseBlockfrostIpfs { label : String, description : String, projectId : String }
     | UseNmkrIpfs { label : String, description : String, userId : String, apiToken : String }
     | UseCustomIpfs { label : String, description : String, ipfsServer : String, headers : List ( String, String ) }
 
@@ -1649,11 +1650,10 @@ validateIpfsForm form =
 
                 projectId ->
                     Ok <|
-                        UseCustomIpfs
+                        UseBlockfrostIpfs
                             { label = "Blockfrost IPFS"
                             , description = "Using Blockfrost IPFS server to store your files."
-                            , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
-                            , headers = [ ( "project_id", projectId ) ]
+                            , projectId = projectId
                             }
 
         NmkrIPFS ->
@@ -1695,7 +1695,7 @@ validateIpfsForm form =
                     (\_ ->
                         UseCustomIpfs
                             { label = "Custom IPFS Server"
-                            , description = "Using a custom IPFS server configuration to store your files."
+                            , description = "Using a custom IPFS server configuration to store your files. The RPC should provide the /add?pin=true endpoint with answers equivalent to those described in the official kubo IPFS RPC docs: https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-add"
                             , ipfsServer = form.ipfsServer
                             , headers = form.headers
                             }
@@ -1933,6 +1933,13 @@ pinPdfFile fileAsValue (Model model) =
                 UsePreconfigIpfs _ ->
                     Api.defaultApiProvider.ipfsAddFile
                         { file = file }
+                        GotIpfsAnswer
+
+                UseBlockfrostIpfs { projectId } ->
+                    Api.defaultApiProvider.ipfsAddFileBlockfrost
+                        { projectId = projectId
+                        , file = file
+                        }
                         GotIpfsAnswer
 
                 UseNmkrIpfs { userId, apiToken } ->
@@ -2273,6 +2280,13 @@ pinRationaleFile fileAsValue (Model model) =
                 UsePreconfigIpfs _ ->
                     Api.defaultApiProvider.ipfsAddFile
                         { file = file }
+                        GotIpfsAnswer
+
+                UseBlockfrostIpfs { projectId } ->
+                    Api.defaultApiProvider.ipfsAddFileBlockfrost
+                        { projectId = projectId
+                        , file = file
+                        }
                         GotIpfsAnswer
 
                 UseNmkrIpfs { userId, apiToken } ->
@@ -3464,6 +3478,15 @@ viewStorageConfigStep ctx step =
                     , div [ HA.class "p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
                         [ case storageConfig of
                             UsePreconfigIpfs { label, description } ->
+                                div [ HA.class "flex flex-col space-y-2" ]
+                                    [ div [ HA.class "flex items-center" ]
+                                        [ Html.span [ HA.class "font-medium" ] [ text label ]
+                                        ]
+                                    , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
+                                        [ text description ]
+                                    ]
+
+                            UseBlockfrostIpfs { label, description } ->
                                 div [ HA.class "flex flex-col space-y-2" ]
                                     [ div [ HA.class "flex items-center" ]
                                         [ Html.span [ HA.class "font-medium" ] [ text label ]

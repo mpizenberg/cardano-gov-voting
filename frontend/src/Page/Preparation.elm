@@ -346,8 +346,8 @@ initStorageForm ipfsPreconfig =
     , nmkrUserId = ""
     , nmkrApiToken = ""
     , blockfrostProjectId = ""
-    , ipfsServer = "https://ipfs.blockfrost.io/api/v0/ipfs"
-    , headers = [ ( "project_id", "" ) ]
+    , ipfsServer = "https://ipfs-rpc.mycompany.org/api/v0"
+    , headers = [ ( "Authorization", "Basic {token}" ) ]
     , error = Nothing
     }
 
@@ -3441,17 +3441,7 @@ viewStorageConfigStep ctx step =
                                         (Helper.textFieldInline form.ipfsServer IpfsServerChange)
                                     , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
                                     , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
-                                        [ text "For example, use "
-                                        , Html.a
-                                            [ HA.href "https://blockfrost.dev/start-building/ipfs/"
-                                            , HA.target "_blank"
-                                            , HA.rel "noopener noreferrer"
-                                            , HA.style "color" "#2563eb"
-                                            , HA.style "text-decoration" "underline"
-                                            ]
-                                            [ text "Blockfrost" ]
-                                        , text " or other IPFS providers."
-                                        , div [ HA.class "mt-4" ]
+                                        [ div [ HA.class "mt-4" ]
                                             [ Helper.viewButton "Add HTTP header" AddHeaderButtonClicked ]
                                         ]
                                     ]

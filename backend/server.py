@@ -308,7 +308,7 @@ async def pin_to_ipfs_common(
             # Basic format - uses /add endpoint with file upload
             with open(temp_file_path, "rb") as f:
                 add_response = await app.async_client.post(  # type: ignore
-                    url=f"{server_url}/add",
+                    url=f"{server_url}/add?pin=true",  # Add pin=true parameter
                     headers=headers,
                     files={"file": f},
                 )
@@ -321,31 +321,7 @@ async def pin_to_ipfs_common(
                         media_type=add_response.headers.get("content-type"),
                     )
 
-                # Parse the response to get the hash
-                add_result = json.loads(add_response.content)
-                file_hash = add_result.get("Hash")
-
-                if not file_hash:
-                    logger.error("Hash not found in IPFS /add response")
-                    raise HTTPException(
-                        status_code=500,
-                        detail="Failed to get hash from IPFS add response",
-                    )
-
-                # Now pin the file using the hash
-                pin_response = await app.async_client.post(  # type: ignore
-                    url=f"{server_url}/pin/add?arg={file_hash}", headers=headers
-                )
-
-                # Return the pin response if it errored
-                if pin_response.status_code != 200:
-                    return Response(
-                        content=pin_response.content,
-                        status_code=pin_response.status_code,
-                        media_type=pin_response.headers.get("content-type"),
-                    )
-
-                # Return the original add response to maintain backward compatibility
+                # Return the response directly since pinning is already done
                 return Response(
                     content=add_response.content,
                     status_code=add_response.status_code,

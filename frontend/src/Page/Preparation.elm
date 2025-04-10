@@ -2559,10 +2559,14 @@ viewNetworkSelectionSection : ViewContext msg -> Html msg
 viewNetworkSelectionSection ctx =
     div []
         [ sectionTitle "Select Network"
-        , div [ HA.class "mb-4" ]
+        , div
+            [ HA.style "display" "flex"
+            , HA.style "align-items" "center"
+            , HA.style "gap" "16px"
+            , HA.style "margin-bottom" "16px"
+            ]
             [ viewNetworkOption ctx "Mainnet" Mainnet
-            , Html.span [ HA.style "margin-left" "1rem" ] []
-            , viewNetworkOption ctx "Preview" Testnet
+            , viewNetworkOption ctx "Preview (Testnet)" Testnet
             ]
         ]
 
@@ -2570,13 +2574,91 @@ viewNetworkSelectionSection ctx =
 viewNetworkOption : ViewContext msg -> String -> NetworkId -> Html msg
 viewNetworkOption ctx label networkId =
     let
-        styling =
-            Helper.buttonCommonStyle
+        isSelected =
+            networkId == ctx.networkId
+
+        networkStyle =
+            case networkId of
+                Mainnet ->
+                    if isSelected then
+                        { backgroundColor = "#d1fae5"
+                        , textColor = "#065f46"
+                        , borderColor = "#6ee7b7"
+                        , dotColor = "#10B981"
+                        }
+
+                    else
+                        { backgroundColor = "white"
+                        , textColor = "#6b7280"
+                        , borderColor = "#d1d5db"
+                        , dotColor = "transparent"
+                        }
+
+                Testnet ->
+                    if isSelected then
+                        { backgroundColor = "#f3e8ff"
+                        , textColor = "#5b21b6"
+                        , borderColor = "#d8b4fe"
+                        , dotColor = "#8B5CF6"
+                        }
+
+                    else
+                        { backgroundColor = "white"
+                        , textColor = "#6b7280"
+                        , borderColor = "#d1d5db"
+                        , dotColor = "transparent"
+                        }
     in
     ctx.changeNetworkLink networkId
         [ div
-            (HA.attribute "role" "button" :: styling)
-            [ text label ]
+            [ HA.style "display" "inline-flex"
+            , HA.style "align-items" "center"
+            , HA.style "justify-content" "center"
+            , HA.style "white-space" "nowrap"
+            , HA.style "border-radius" "9999px"
+            , HA.style "font-size" "0.875rem"
+            , HA.style "font-weight" "500"
+            , HA.style "transition" "all 0.2s"
+            , HA.style "outline" "none"
+            , HA.style "height" "3rem"
+            , HA.style "padding-left" "1.5rem"
+            , HA.style "padding-right" "1.5rem"
+            , HA.style "background-color" networkStyle.backgroundColor
+            , HA.style "color" networkStyle.textColor
+            , HA.style "border" ("1px solid " ++ networkStyle.borderColor)
+            , HA.style "cursor" "pointer"
+            , HA.style "user-select" "none"
+            ]
+            [ div
+                [ HA.style "margin-right" "8px"
+                , HA.style "flex-shrink" "0"
+                , HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                , HA.style "justify-content" "center"
+                , HA.style "width" "20px"
+                , HA.style "height" "20px"
+                , HA.style "border-radius" "50%"
+                , HA.style "background-color" "white"
+                , HA.style "border"
+                    (if isSelected then
+                        "2px solid " ++ networkStyle.borderColor
+
+                     else
+                        "2px solid #d1d5db"
+                    )
+                ]
+                [ div
+                    [ HA.style "width" "12px"
+                    , HA.style "height" "12px"
+                    , HA.style "border-radius" "50%"
+                    , HA.style "background-color" networkStyle.dotColor
+                    ]
+                    []
+                ]
+            , div
+                [ HA.style "font-weight" "500" ]
+                [ text label ]
+            ]
         ]
 
 

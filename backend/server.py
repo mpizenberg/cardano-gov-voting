@@ -296,6 +296,8 @@ async def pin_to_ipfs_common(
                 headers=headers,
                 json=payload,
             )
+
+            # For Nmkr, pinning happens automatically
             return Response(
                 content=response.content,
                 status_code=response.status_code,
@@ -305,15 +307,49 @@ async def pin_to_ipfs_common(
         else:
             # Basic format - uses /add endpoint with file upload
             with open(temp_file_path, "rb") as f:
-                response = await app.async_client.post(  # type: ignore
+                add_response = await app.async_client.post(  # type: ignore
                     url=f"{server_url}/add",
                     headers=headers,
                     files={"file": f},
                 )
+
+                # Check if the add request was successful
+                if add_response.status_code != 200:
+                    return Response(
+                        content=add_response.content,
+                        status_code=add_response.status_code,
+                        media_type=add_response.headers.get("content-type"),
+                    )
+
+                # Parse the response to get the hash
+                add_result = json.loads(add_response.content)
+                file_hash = add_result.get("Hash")
+
+                if not file_hash:
+                    logger.error("Hash not found in IPFS /add response")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Failed to get hash from IPFS add response",
+                    )
+
+                # Now pin the file using the hash
+                pin_response = await app.async_client.post(  # type: ignore
+                    url=f"{server_url}/pin/add?arg={file_hash}", headers=headers
+                )
+
+                # Return the pin response if it errored
+                if pin_response.status_code != 200:
+                    return Response(
+                        content=pin_response.content,
+                        status_code=pin_response.status_code,
+                        media_type=pin_response.headers.get("content-type"),
+                    )
+
+                # Return the original add response to maintain backward compatibility
                 return Response(
-                    content=response.content,
-                    status_code=response.status_code,
-                    media_type=response.headers.get("content-type"),
+                    content=add_response.content,
+                    status_code=add_response.status_code,
+                    media_type=add_response.headers.get("content-type"),
                 )
 
     except json.JSONDecodeError as e:

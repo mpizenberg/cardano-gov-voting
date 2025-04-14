@@ -1127,6 +1127,46 @@ innerUpdate ctx msg model =
 
                 Ok { voter, actionId, rationaleAnchor, localStateUtxos, walletAddress, costModels } ->
                     let
+                        -- Use any address (enterprise / full) with the same payment cred
+                        -- as the one from the default wallet address to pay the fee
+                        walletOutputs =
+                            Dict.Any.values localStateUtxos
+
+                        potentialFeeSources =
+                            case Address.extractPubKeyHash walletAddress of
+                                Just paymentCred ->
+                                    walletOutputs
+                                        |> List.map (\output -> output.address)
+                                        |> List.filter (\addr -> Address.extractPubKeyHash addr == Just paymentCred)
+
+                                Nothing ->
+                                    []
+
+                        -- Helper function to gather free Ada for a given address
+                        -- Convert Natural amounts to Int (1 = 1 ada) for easy comparison
+                        freeAdaForAddress address =
+                            let
+                                freeAda output =
+                                    if output.address == address then
+                                        Utxo.freeAda output
+
+                                    else
+                                        Natural.zero
+                            in
+                            walletOutputs
+                                |> List.foldl (\output sum -> Natural.add sum <| freeAda output) Natural.zero
+                                -- divide by 1000000 to get ada amount from lovelace amount
+                                |> (\n -> n |> Natural.divBy (Natural.fromSafeInt 1000000))
+                                |> Maybe.withDefault Natural.zero
+                                |> Natural.toInt
+
+                        -- Pick the one with most free Ada as the payment source
+                        feeSource =
+                            List.sortBy freeAdaForAddress potentialFeeSources
+                                |> List.reverse
+                                |> List.head
+                                |> Maybe.withDefault walletAddress
+
                         tryTx =
                             [ TxIntent.Vote voter [ { actionId = actionId, vote = vote, rationale = Just rationaleAnchor } ]
                             ]
@@ -1137,7 +1177,7 @@ innerUpdate ctx msg model =
                                     , evalScriptsCosts = Uplc.evalScriptsCosts Uplc.defaultVmConfig
                                     , costModels = costModels
                                     }
-                                    (AutoFee { paymentSource = walletAddress })
+                                    (AutoFee { paymentSource = feeSource })
                                     []
                     in
                     case tryTx of

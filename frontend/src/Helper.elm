@@ -6,6 +6,7 @@ module Helper exposing
     , viewButton, viewWalletButton
     , applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle
     , viewActionTypeIcon
+    , viewNetworkButton
     )
 
 {-| Helper module for miscellaneous functions that didn’t fit elsewhere,
@@ -45,9 +46,10 @@ and are potentially useful in multiple places.
 
 -}
 
+import Cardano.Address exposing (NetworkId(..))
 import Html exposing (Html, button, text)
 import Html.Attributes as HA
-import Html.Events exposing (onClick)
+import Html.Events exposing (onClick, onMouseLeave, onMouseOver)
 import Natural exposing (Natural)
 import Numeral
 
@@ -289,6 +291,116 @@ viewWalletButton label msg content =
     button
         (onClick msg :: buttonCommonStyle)
         (text label :: content)
+
+
+viewNetworkButton : String -> Bool -> (NetworkId -> msg) -> Html msg
+viewNetworkButton label isMainnet onChangeMsg =
+    let
+        networkId =
+            if isMainnet then
+                Mainnet
+
+            else
+                Testnet
+
+        otherNetworkId =
+            if isMainnet then
+                Testnet
+
+            else
+                Mainnet
+
+        otherLabel =
+            if isMainnet then
+                "Preview"
+
+            else
+                "Mainnet"
+    in
+    Html.div
+        [ HA.style "position" "relative"
+        , HA.style "display" "inline-block"
+        , HA.style "margin-left" "0.75rem"
+        , HA.attribute "class" "network-button-container"
+        ]
+        [ button
+            ([ HA.style "display" "flex"
+             , HA.style "align-items" "center"
+             , HA.style "gap" "0.5rem"
+             , HA.style "background-color" "#272727"
+             , HA.style "color" "#f7fafc"
+             , HA.style "border-radius" "9999px"
+             , HA.style "font-size" "0.875rem"
+             , HA.style "font-weight" "500"
+             , HA.style "padding" "0.5rem 1rem"
+             , HA.style "height" "2.5rem"
+             , HA.style "transition" "all 0.2s"
+             , HA.attribute "data-dropdown-toggle" "network-dropdown"
+             ]
+                ++ buttonCommonStyle
+            )
+            [ Html.div
+                [ HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                ]
+                [ Html.div
+                    [ HA.style "width" "0.75rem"
+                    , HA.style "height" "0.75rem"
+                    , HA.style "border-radius" "9999px"
+                    , HA.style "background-color"
+                        (if isMainnet then
+                            "#10b981"
+
+                         else
+                            "#3b82f6"
+                        )
+                    , HA.style "margin-right" "0.5rem"
+                    ]
+                    []
+                , text label
+                ]
+            ]
+        , Html.div
+            [ HA.id "network-dropdown"
+            , HA.style "position" "absolute"
+            , HA.style "top" "100%"
+            , HA.style "right" "0"
+            , HA.style "margin-top" "0.25rem"
+            , HA.style "width" "160px"
+            , HA.style "background-color" "#ffffff"
+            , HA.style "border" "1px solid #e2e8f0"
+            , HA.style "border-radius" "0.5rem"
+            , HA.style "box-shadow" "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+            , HA.style "z-index" "50"
+            , HA.style "display" "none"
+            ]
+            [ Html.div
+                ([ HA.style "padding" "0.5rem 1rem"
+                 , HA.style "cursor" "pointer"
+                 , HA.style "display" "flex"
+                 , HA.style "align-items" "center"
+                 , HA.style "gap" "0.5rem"
+                 , onClick (onChangeMsg otherNetworkId)
+                 ]
+                    ++ applyDropdownItemStyle (onChangeMsg otherNetworkId)
+                )
+                [ Html.div
+                    [ HA.style "width" "0.75rem"
+                    , HA.style "height" "0.75rem"
+                    , HA.style "border-radius" "9999px"
+                    , HA.style "background-color"
+                        (if not isMainnet then
+                            "#10b981"
+
+                         else
+                            "#3b82f6"
+                        )
+                    ]
+                    []
+                , text otherLabel
+                ]
+            ]
+        ]
 
 
 buttonCommonStyle : List (Html.Attribute msg)

@@ -2516,25 +2516,59 @@ view ctx (Model model) =
             [ HA.style "max-width" "840px"
             , HA.style "margin" "0 auto"
             , HA.style "padding" "0 1.5rem"
+            , HA.style "position" "relative"
             ]
-            [ viewNetworkSelectionSection ctx
-            , viewDivider
-            , viewVoterIdentificationStep ctx model.voterStep
-            , viewDivider
-            , viewProposalSelectionStep ctx model
-            , viewDivider
-            , viewStorageConfigStep ctx model.storageConfigStep
-            , viewDivider
-            , viewRationaleStep ctx model.pickProposalStep model.storageConfigStep model.rationaleCreationStep
-            , viewDivider
-            , viewRationaleSignatureStep ctx model.pickProposalStep model.rationaleCreationStep model.rationaleSignatureStep
-            , viewDivider
-            , viewPermanentStorageStep ctx model.rationaleSignatureStep model.storageConfigStep model.permanentStorageStep
-            , viewDivider
-            , viewBuildTxStep ctx model
-            , viewDivider
-            , viewSignTxStep ctx model.voterStep model.buildTxStep
+            [ -- Vertical timeline line with gradient (adjust position to go through center of circles)
+              div
+                [ HA.style "position" "absolute"
+                , HA.style "left" "2.5rem" -- This should be the exact center of the circle
+                , HA.style "top" "0"
+                , HA.style "bottom" "0"
+                , HA.style "width" "4px" -- Slightly thicker
+                , HA.style "background" "linear-gradient(180deg, #3b82f6, #10b981, #6366f1)" -- Blue to green to purple gradient
+                , HA.style "z-index" "1" -- Lower z-index so circles appear on top
+                ]
+                []
+            , viewStepWithCircle 1 (viewVoterIdentificationStep ctx model.voterStep)
+            , viewStepWithCircle 2 (viewProposalSelectionStep ctx model)
+            , viewStepWithCircle 3 (viewStorageConfigStep ctx model.storageConfigStep)
+            , viewStepWithCircle 4 (viewRationaleStep ctx model.pickProposalStep model.storageConfigStep model.rationaleCreationStep)
+            , viewStepWithCircle 5 (viewRationaleSignatureStep ctx model.pickProposalStep model.rationaleCreationStep model.rationaleSignatureStep)
+            , viewStepWithCircle 6 (viewPermanentStorageStep ctx model.rationaleSignatureStep model.storageConfigStep model.permanentStorageStep)
+            , viewStepWithCircle 7 (viewBuildTxStep ctx model)
+            , viewStepWithCircle 8 (viewSignTxStep ctx model.voterStep model.buildTxStep)
             ]
+        ]
+
+
+viewStepWithCircle : Int -> Html msg -> Html msg
+viewStepWithCircle stepNumber content =
+    div
+        [ HA.style "position" "relative"
+        , HA.style "padding-left" "5rem"
+        , HA.style "padding-top" "2rem"
+        , HA.style "padding-bottom" "2rem"
+        ]
+        [ -- Circle with step number (adjusted for line to go through center)
+          div
+            [ HA.style "position" "absolute"
+            , HA.style "left" "0.01rem"
+            , HA.style "top" "3.5rem"
+            , HA.style "width" "2.5rem"
+            , HA.style "height" "2.5rem"
+            , HA.style "border-radius" "50%"
+            , HA.style "background-color" "#272727"
+            , HA.style "color" "white"
+            , HA.style "display" "flex"
+            , HA.style "align-items" "center"
+            , HA.style "justify-content" "center"
+            , HA.style "font-weight" "bold"
+            , HA.style "font-size" "1.125rem"
+            , HA.style "z-index" "3" -- Higher z-index to appear on top of the line
+            , HA.style "box-shadow" "0 0 0 4px white" -- Add white outline to hide the line inside the circle
+            ]
+            [ text (String.fromInt stepNumber) ]
+        , content
         ]
 
 
@@ -2605,119 +2639,6 @@ viewDivider =
 
 
 --
--- Network Selection
---
-
-
-viewNetworkSelectionSection : ViewContext msg -> Html msg
-viewNetworkSelectionSection ctx =
-    div []
-        [ sectionTitle "Select Network"
-        , div
-            [ HA.style "display" "flex"
-            , HA.style "align-items" "center"
-            , HA.style "gap" "16px"
-            , HA.style "margin-bottom" "16px"
-            ]
-            [ viewNetworkOption ctx "Mainnet" Mainnet
-            , viewNetworkOption ctx "Preview (Testnet)" Testnet
-            ]
-        ]
-
-
-viewNetworkOption : ViewContext msg -> String -> NetworkId -> Html msg
-viewNetworkOption ctx label networkId =
-    let
-        isSelected =
-            networkId == ctx.networkId
-
-        networkStyle =
-            case networkId of
-                Mainnet ->
-                    if isSelected then
-                        { backgroundColor = "#d1fae5"
-                        , textColor = "#065f46"
-                        , borderColor = "#6ee7b7"
-                        , dotColor = "#10B981"
-                        }
-
-                    else
-                        { backgroundColor = "white"
-                        , textColor = "#6b7280"
-                        , borderColor = "#d1d5db"
-                        , dotColor = "transparent"
-                        }
-
-                Testnet ->
-                    if isSelected then
-                        { backgroundColor = "#f3e8ff"
-                        , textColor = "#5b21b6"
-                        , borderColor = "#d8b4fe"
-                        , dotColor = "#8B5CF6"
-                        }
-
-                    else
-                        { backgroundColor = "white"
-                        , textColor = "#6b7280"
-                        , borderColor = "#d1d5db"
-                        , dotColor = "transparent"
-                        }
-    in
-    ctx.changeNetworkLink networkId
-        [ div
-            [ HA.style "display" "inline-flex"
-            , HA.style "align-items" "center"
-            , HA.style "justify-content" "center"
-            , HA.style "white-space" "nowrap"
-            , HA.style "border-radius" "9999px"
-            , HA.style "font-size" "0.875rem"
-            , HA.style "font-weight" "500"
-            , HA.style "transition" "all 0.2s"
-            , HA.style "outline" "none"
-            , HA.style "height" "3rem"
-            , HA.style "padding-left" "1.5rem"
-            , HA.style "padding-right" "1.5rem"
-            , HA.style "background-color" networkStyle.backgroundColor
-            , HA.style "color" networkStyle.textColor
-            , HA.style "border" ("1px solid " ++ networkStyle.borderColor)
-            , HA.style "cursor" "pointer"
-            , HA.style "user-select" "none"
-            ]
-            [ div
-                [ HA.style "margin-right" "8px"
-                , HA.style "flex-shrink" "0"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , HA.style "justify-content" "center"
-                , HA.style "width" "20px"
-                , HA.style "height" "20px"
-                , HA.style "border-radius" "50%"
-                , HA.style "background-color" "white"
-                , HA.style "border"
-                    (if isSelected then
-                        "2px solid " ++ networkStyle.borderColor
-
-                     else
-                        "2px solid #d1d5db"
-                    )
-                ]
-                [ div
-                    [ HA.style "width" "12px"
-                    , HA.style "height" "12px"
-                    , HA.style "border-radius" "50%"
-                    , HA.style "background-color" networkStyle.dotColor
-                    ]
-                    []
-                ]
-            , div
-                [ HA.style "font-weight" "500" ]
-                [ text label ]
-            ]
-        ]
-
-
-
---
 -- Voter Identification Step
 --
 
@@ -2733,10 +2654,34 @@ viewVoterIdentificationStep ctx step =
         Preparing form ->
             Html.map ctx.wrapMsg <|
                 div []
-                    [ sectionTitle "Voter governance ID (drep/pool/cc_hot)"
-                    , Html.p [] [ Helper.firstTextField "Paste drep/pool/cc_hot ID" (Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId) VoterGovIdChange ]
+                    [ sectionTitle "Voter identification"
+                    , Html.p [ HA.class "mb-4" ]
+                        [ text "Select a predefined voter role or enter your own governance ID" ]
+                    , div [ HA.style "display" "grid", HA.style "grid-template-columns" "repeat(auto-fill, minmax(220px, 1fr))", HA.style "gap" "1.5rem", HA.style "margin-bottom" "1.5rem" ]
+                        [ viewVoterCard "DRep"
+                            "Vote as a Delegated Representative"
+                            "drep1ydpfkyjxzeqvalf6fgvj7lznrk8kcmfnvy9hyl6gr6ez6wgsjaelx"
+                            (VoterGovIdChange "drep1ydpfkyjxzeqvalf6fgvj7lznrk8kcmfnvy9hyl6gr6ez6wgsjaelx")
+                            (form.govId == Just (Gov.idFromBech32 "drep1ydpfkyjxzeqvalf6fgvj7lznrk8kcmfnvy9hyl6gr6ez6wgsjaelx" |> Maybe.withDefault (DrepId (VKeyHash (Bytes.fromHex "" |> Maybe.withDefault Bytes.empty)))))
+                        , viewVoterCard "CC Member"
+                            "Vote as a Constitutional Committee Member"
+                            "cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9"
+                            (VoterGovIdChange "cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9")
+                            (form.govId == Just (Gov.idFromBech32 "cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9" |> Maybe.withDefault (CcHotCredId (VKeyHash (Bytes.fromHex "" |> Maybe.withDefault Bytes.empty)))))
+                        , viewVoterCard "SPO"
+                            "Vote as a Stake Pool Operator"
+                            "pool1nqheyct9a0mxn80cwp9pd5guncfu3rzwqtmru0l94accz7gjcgl"
+                            (VoterGovIdChange "pool1nqheyct9a0mxn80cwp9pd5guncfu3rzwqtmru0l94accz7gjcgl")
+                            (form.govId == Just (Gov.idFromBech32 "pool1nqheyct9a0mxn80cwp9pd5guncfu3rzwqtmru0l94accz7gjcgl" |> Maybe.withDefault (PoolId (Bytes.fromHex "" |> Maybe.withDefault Bytes.empty))))
+                        ]
+                    , div [ HA.style "margin-bottom" "1.5rem" ]
+                        [ viewCustomVoterCard form ]
                     , Html.Lazy.lazy viewValidGovIdForm form
-                    , Html.p [ HA.class "my-4" ] [ Helper.viewButton "Confirm Voter" ValidateVoterFormButtonClicked ]
+                    , if form.govId /= Nothing then
+                        Html.p [ HA.class "my-4" ] [ Helper.viewButton "Confirm Voter" ValidateVoterFormButtonClicked ]
+
+                      else
+                        text ""
                     , viewError form.error
                     ]
 
@@ -2748,6 +2693,190 @@ viewVoterIdentificationStep ctx step =
 
         Done form voter ->
             Html.map ctx.wrapMsg <| viewIdentifiedVoter form voter
+
+
+viewVoterCard : String -> String -> String -> Msg -> Bool -> Html Msg
+viewVoterCard title description govId selectMsg isSelected =
+    div
+        [ HA.style "border"
+            (if isSelected then
+                "2px solid #272727"
+
+             else
+                "1px solid #E2E8F0"
+            )
+        , HA.style "border-radius" "0.75rem"
+        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+        , HA.style "background-color" "#FFFFFF"
+        , HA.style "display" "flex"
+        , HA.style "flex-direction" "column"
+        , HA.style "height" "100%"
+        , HA.style "transition" "all 0.3s ease"
+        , HA.style "transform-origin" "center"
+        , HA.style "position" "relative"
+        , HA.style "overflow" "hidden"
+        , HA.style "cursor" "pointer"
+        , onClick selectMsg
+        ]
+        [ div
+            [ HA.style "background-color"
+                (if isSelected then
+                    "#F1F5F9"
+
+                 else
+                    "#F7FAFC"
+                )
+            , HA.style "padding" "1rem 1.25rem"
+            , HA.style "border-bottom" "1px solid #EDF2F7"
+            , HA.style "display" "flex"
+            , HA.style "justify-content" "space-between"
+            , HA.style "align-items" "center"
+            ]
+            [ Html.h3
+                [ HA.style "font-weight" "600"
+                , HA.style "font-size" "1rem"
+                , HA.style "color" "#1A202C"
+                , HA.style "line-height" "1.4"
+                ]
+                [ text title ]
+            ]
+        , div
+            [ HA.style "padding" "1.25rem"
+            , HA.style "flex-grow" "1"
+            , HA.style "display" "flex"
+            , HA.style "flex-direction" "column"
+            ]
+            [ Html.p
+                [ HA.style "font-size" "0.875rem"
+                , HA.style "color" "#4A5568"
+                , HA.style "line-height" "1.6"
+                , HA.style "margin-bottom" "1rem"
+                ]
+                [ text description ]
+            , div
+                [ HA.style "font-size" "0.75rem"
+                , HA.style "color" "#718096"
+                , HA.style "margin-top" "auto"
+                ]
+                [ div [ HA.style "overflow" "hidden", HA.style "text-overflow" "ellipsis", HA.style "white-space" "nowrap", HA.style "font-family" "monospace" ]
+                    [ text (String.left 8 govId ++ "..." ++ String.right 8 govId) ]
+                ]
+            ]
+        , if isSelected then
+            div
+                [ HA.style "position" "absolute"
+                , HA.style "top" "0.5rem"
+                , HA.style "right" "0.5rem"
+                , HA.style "width" "1.5rem"
+                , HA.style "height" "1.5rem"
+                , HA.style "border-radius" "9999px"
+                , HA.style "background-color" "#272727"
+                , HA.style "color" "white"
+                , HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                , HA.style "justify-content" "center"
+                ]
+                [ text "✓" ]
+
+          else
+            text ""
+        ]
+
+
+viewCustomVoterCard : VoterPreparationForm -> Html Msg
+viewCustomVoterCard form =
+    let
+        isCustomSelected =
+            case form.govId of
+                Nothing ->
+                    False
+
+                Just govId ->
+                    let
+                        defaultIds =
+                            [ "drep1ydpfkyjxzeqvalf6fgvj7lznrk8kcmfnvy9hyl6gr6ez6wgsjaelx"
+                            , "cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9"
+                            , "pool1nqheyct9a0mxn80cwp9pd5guncfu3rzwqtmru0l94accz7gjcgl"
+                            ]
+                    in
+                    not (List.member (Gov.idToBech32 govId) defaultIds)
+
+        currentValue =
+            case form.govId of
+                Just govId ->
+                    if isCustomSelected then
+                        Gov.idToBech32 govId
+
+                    else
+                        ""
+
+                Nothing ->
+                    ""
+    in
+    div
+        [ HA.style "border"
+            (if isCustomSelected then
+                "2px solid #272727"
+
+             else
+                "1px solid #E2E8F0"
+            )
+        , HA.style "border-radius" "0.75rem"
+        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+        , HA.style "background-color" "#FFFFFF"
+        , HA.style "display" "flex"
+        , HA.style "flex-direction" "column"
+        , HA.style "height" "100%"
+        , HA.style "transition" "all 0.3s ease"
+        ]
+        [ div
+            [ HA.style "background-color"
+                (if isCustomSelected then
+                    "#F1F5F9"
+
+                 else
+                    "#F7FAFC"
+                )
+            , HA.style "padding" "1rem 1.25rem"
+            , HA.style "border-bottom" "1px solid #EDF2F7"
+            ]
+            [ Html.h3
+                [ HA.style "font-weight" "600"
+                , HA.style "font-size" "1rem"
+                , HA.style "color" "#1A202C"
+                , HA.style "line-height" "1.4"
+                ]
+                [ text "Custom" ]
+            ]
+        , div
+            [ HA.style "padding" "1.25rem"
+            , HA.style "flex-grow" "1"
+            ]
+            [ Html.p
+                [ HA.style "font-size" "0.875rem"
+                , HA.style "color" "#4A5568"
+                , HA.style "line-height" "1.6"
+                , HA.style "margin-bottom" "1rem"
+                ]
+                [ text "Enter your own governance ID" ]
+            , Html.div [ HA.style "position" "relative", HA.style "width" "100%" ]
+                [ Html.input
+                    [ HA.type_ "text"
+                    , HA.value currentValue
+                    , HA.placeholder "Paste drep/pool/cc_hot ID"
+                    , Html.Events.onInput VoterGovIdChange
+                    , HA.style "width" "100%"
+                    , HA.style "padding" "0.5rem"
+                    , HA.style "border" "1px solid #CBD5E0"
+                    , HA.style "border-radius" "0.375rem"
+                    , HA.style "font-family" "monospace"
+                    , HA.style "font-size" "0.75rem"
+                    , HA.style "box-sizing" "border-box"
+                    ]
+                    []
+                ]
+            ]
+        ]
 
 
 viewValidGovIdForm : VoterPreparationForm -> Html Msg
@@ -2959,49 +3088,143 @@ viewIdentifiedVoter form voter =
     in
     div []
         [ sectionTitle "Voter Information"
-        , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
-            [ Html.div [ HA.class "mb-2" ]
-                [ Html.span [ HA.class "font-medium" ] [ text voterTypeText ]
+        , div
+            [ HA.style "border" "1px solid #E2E8F0"
+            , HA.style "border-radius" "0.75rem"
+            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+            , HA.style "background-color" "#FFFFFF"
+            , HA.style "overflow" "hidden"
+            ]
+            [ div
+                [ HA.style "background-color" "#F7FAFC"
+                , HA.style "padding" "1rem 1.25rem"
+                , HA.style "border-bottom" "1px solid #EDF2F7"
                 ]
-            , Html.div []
+                [ Html.h3
+                    [ HA.style "font-weight" "600"
+                    , HA.style "font-size" "1.125rem"
+                    , HA.style "color" "#1A202C"
+                    , HA.style "line-height" "1.4"
+                    ]
+                    [ text voterTypeText ]
+                ]
+            , div
+                [ HA.style "padding" "1.25rem"
+                ]
                 [ case voterCred of
                     Witness.WithKey cred ->
-                        Html.div [ HA.class "flex flex-col space-y-1" ]
-                            [ Html.div []
-                                [ Html.span [ HA.class "font-medium mr-2" ] [ text "Using key with hash:" ]
-                                , Html.span [ HA.class "font-mono" ] [ text (Bytes.toHex cred) ]
+                        div [ HA.style "display" "flex", HA.style "flex-direction" "column", HA.style "gap" "0.75rem" ]
+                            [ div []
+                                [ Html.span
+                                    [ HA.style "font-weight" "500"
+                                    , HA.style "color" "#4A5568"
+                                    , HA.style "margin-right" "0.5rem"
+                                    ]
+                                    [ text "Using key with hash:" ]
+                                , Html.span
+                                    [ HA.style "font-family" "monospace"
+                                    , HA.style "font-size" "0.875rem"
+                                    , HA.style "background-color" "#F1F5F9"
+                                    , HA.style "padding" "0.25rem 0.5rem"
+                                    , HA.style "border-radius" "0.25rem"
+                                    ]
+                                    [ text (Bytes.toHex cred) ]
                                 ]
                             ]
 
                     Witness.WithScript hash (Witness.Native { expectedSigners }) ->
-                        Html.div [ HA.class "flex flex-col space-y-2" ]
-                            [ Html.div []
-                                [ Html.span [ HA.class "font-medium mr-2" ] [ text "Using native script with hash:" ]
-                                , Html.span [ HA.class "font-mono" ] [ text (Bytes.toHex hash) ]
+                        div [ HA.style "display" "flex", HA.style "flex-direction" "column", HA.style "gap" "0.75rem" ]
+                            [ div []
+                                [ Html.span
+                                    [ HA.style "font-weight" "500"
+                                    , HA.style "color" "#4A5568"
+                                    , HA.style "margin-right" "0.5rem"
+                                    ]
+                                    [ text "Using native script with hash:" ]
+                                , Html.span
+                                    [ HA.style "font-family" "monospace"
+                                    , HA.style "font-size" "0.875rem"
+                                    , HA.style "background-color" "#F1F5F9"
+                                    , HA.style "padding" "0.25rem 0.5rem"
+                                    , HA.style "border-radius" "0.25rem"
+                                    ]
+                                    [ text (Bytes.toHex hash) ]
                                 ]
                             , if List.isEmpty expectedSigners then
-                                Html.div [ HA.class "mt-1" ] [ text "No expected signers." ]
+                                div
+                                    [ HA.style "color" "#718096"
+                                    , HA.style "font-style" "italic"
+                                    , HA.style "margin-top" "0.5rem"
+                                    ]
+                                    [ text "No expected signers." ]
 
                               else
-                                Html.div []
-                                    [ Html.p [ HA.class "font-medium mt-1 mb-1" ] [ text "Expected signers:" ]
-                                    , Html.ul [ HA.class "list-disc pl-5 space-y-1" ]
-                                        (List.map
-                                            (\s ->
-                                                Html.li [ HA.class "text-sm" ]
-                                                    [ Html.span [ HA.class "font-mono" ] [ text (Bytes.toHex s) ] ]
+                                div []
+                                    [ Html.p
+                                        [ HA.style "font-weight" "500"
+                                        , HA.style "color" "#4A5568"
+                                        , HA.style "margin-top" "0.75rem"
+                                        , HA.style "margin-bottom" "0.5rem"
+                                        ]
+                                        [ text "Expected signers:" ]
+                                    , div
+                                        [ HA.style "background-color" "#F9FAFB"
+                                        , HA.style "border" "1px solid #EDF2F7"
+                                        , HA.style "border-radius" "0.375rem"
+                                        , HA.style "padding" "0.75rem"
+                                        ]
+                                        [ Html.ul
+                                            [ HA.style "list-style-type" "disc"
+                                            , HA.style "padding-left" "1.25rem"
+                                            , HA.style "display" "flex"
+                                            , HA.style "flex-direction" "column"
+                                            , HA.style "gap" "0.5rem"
+                                            ]
+                                            (List.map
+                                                (\s ->
+                                                    Html.li []
+                                                        [ Html.span
+                                                            [ HA.style "font-family" "monospace"
+                                                            , HA.style "font-size" "0.875rem"
+                                                            ]
+                                                            [ text (Bytes.toHex s) ]
+                                                        ]
+                                                )
+                                                expectedSigners
                                             )
-                                            expectedSigners
-                                        )
+                                        ]
                                     ]
                             ]
 
                     Witness.WithScript _ (Witness.Plutus _) ->
-                        Html.div []
-                            [ Html.span [ HA.class "" ] [ text "Using Plutus script (details not available)" ] ]
+                        div []
+                            [ Html.span
+                                [ HA.style "color" "#4A5568"
+                                , HA.style "font-style" "italic"
+                                ]
+                                [ text "Using Plutus script (details not available)" ]
+                            ]
                 ]
             ]
-        , Html.p [] [ Helper.viewButton "Change Voter" ChangeVoterButtonClicked ]
+        , Html.p
+            [ HA.style "margin-top" "1rem" ]
+            [ button
+                [ HA.style "background-color" "#272727"
+                , HA.style "color" "white"
+                , HA.style "font-weight" "500"
+                , HA.style "font-size" "0.875rem"
+                , HA.style "padding" "0.5rem 1.5rem"
+                , HA.style "border" "none"
+                , HA.style "border-radius" "9999px"
+                , HA.style "cursor" "pointer"
+                , HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                , HA.style "justify-content" "center"
+                , HA.style "height" "3rem"
+                , onClick ChangeVoterButtonClicked
+                ]
+                [ text "Change Voter" ]
+            ]
         ]
 
 
@@ -3062,7 +3285,7 @@ viewProposalSelectionStep ctx model =
 
 viewProposalSelectionForm : ViewContext msg -> InnerModel -> Html msg
 viewProposalSelectionForm ctx model =
-    div [ HA.style "padding-top" "50px", HA.style "padding-bottom" "8px" ]
+    div [ HA.style "padding-top" "24px", HA.style "padding-bottom" "8px" ]
         [ viewProposalHeader
         , case ctx.proposals of
             RemoteData.NotAsked ->
@@ -3361,28 +3584,113 @@ viewSelectedProposal ctx { id, actionType, metadata, metadataUrl } =
     div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
         [ div [ HA.class "flex items-center mb-4" ]
             [ sectionTitle "Pick a Proposal" ]
-        , Helper.formContainer
-            [ Html.p [ HA.class "mb-4" ]
-                [ Html.strong [ HA.class "font-medium" ] [ text "Selected proposal:" ]
+        , div
+            [ HA.style "border" "1px solid #E2E8F0"
+            , HA.style "border-radius" "0.75rem"
+            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+            , HA.style "background-color" "#FFFFFF"
+            , HA.style "overflow" "hidden"
+            ]
+            [ div
+                [ HA.style "background-color" "#F7FAFC"
+                , HA.style "padding" "1rem 1.25rem"
+                , HA.style "border-bottom" "1px solid #EDF2F7"
                 ]
-            , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
-                [ div [ HA.class "mb-2" ]
-                    [ Html.span [ HA.class "font-bold mr-2" ] [ text "Proposal ID:" ]
-                    , cardanoScanActionLink ctx.networkId id
+                [ Html.h3
+                    [ HA.style "font-weight" "600"
+                    , HA.style "font-size" "1.125rem"
+                    , HA.style "color" "#1A202C"
+                    , HA.style "line-height" "1.4"
                     ]
-                , div [ HA.class "mb-2" ]
-                    [ Html.span [ HA.class "font-bold mr-2" ] [ text "Type:" ]
-                    , Html.span [] [ text actionType ]
+                    [ text "Selected Proposal" ]
+                ]
+            , div
+                [ HA.style "padding" "1.25rem"
+                ]
+                [ div [ HA.style "display" "grid", HA.style "gap" "0.75rem" ]
+                    [ div [ HA.style "display" "flex", HA.style "align-items" "flex-start" ]
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "margin-right" "0.5rem"
+                            , HA.style "min-width" "6rem"
+                            ]
+                            [ text "Proposal ID:" ]
+                        , cardanoScanActionLink ctx.networkId id
+                        ]
+                    , div [ HA.style "display" "flex", HA.style "align-items" "flex-start" ]
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "margin-right" "0.5rem"
+                            , HA.style "min-width" "6rem"
+                            ]
+                            [ text "Type:" ]
+                        , div
+                            [ HA.style "display" "inline-flex"
+                            , HA.style "align-items" "center"
+                            , HA.style "font-size" "0.875rem"
+                            , HA.style "background-color" "#F1F5F9"
+                            , HA.style "padding" "0.25rem 0.5rem"
+                            , HA.style "border-radius" "0.375rem"
+                            ]
+                            [ text actionType
+                            , Helper.viewActionTypeIcon actionType
+                            ]
+                        ]
+                    , div [ HA.style "display" "flex", HA.style "align-items" "flex-start" ]
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "margin-right" "0.5rem"
+                            , HA.style "min-width" "6rem"
+                            ]
+                            [ text "Title:" ]
+                        , Html.span
+                            [ HA.style "font-weight" "500" ]
+                            [ text title ]
+                        ]
+                    , case content of
+                        Just abstractContent ->
+                            div [ HA.style "display" "flex", HA.style "align-items" "flex-start", HA.style "margin-top" "0.5rem" ]
+                                [ Html.span
+                                    [ HA.style "font-weight" "500"
+                                    , HA.style "color" "#4A5568"
+                                    , HA.style "margin-right" "0.5rem"
+                                    , HA.style "min-width" "6rem"
+                                    ]
+                                    [ text "Abstract:" ]
+                                , div
+                                    [ HA.style "line-height" "1.6"
+                                    , HA.style "color" "#4A5568"
+                                    ]
+                                    [ abstractContent ]
+                                ]
+
+                        Nothing ->
+                            text ""
                     ]
-                , div [ HA.class "mb-2" ]
-                    [ Html.span [ HA.class "font-bold mr-2" ] [ text "Title:" ]
-                    , Html.span [] [ text title ]
-                    ]
-                , content
-                    |> Maybe.withDefault (text "")
                 ]
             ]
-        , Html.p [ HA.style "margin-top" "4px" ] [ Helper.viewButton "Change Proposal" (ctx.wrapMsg ChangeProposalButtonClicked) ]
+        , Html.p
+            [ HA.style "margin-top" "1rem" ]
+            [ button
+                [ HA.style "background-color" "#272727"
+                , HA.style "color" "white"
+                , HA.style "font-weight" "500"
+                , HA.style "font-size" "0.875rem"
+                , HA.style "padding" "0.5rem 1.5rem"
+                , HA.style "border" "none"
+                , HA.style "border-radius" "9999px"
+                , HA.style "cursor" "pointer"
+                , HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                , HA.style "justify-content" "center"
+                , HA.style "height" "3rem"
+                , onClick (ctx.wrapMsg ChangeProposalButtonClicked)
+                ]
+                [ text "Change Proposal" ]
+            ]
         ]
 
 
@@ -3403,10 +3711,8 @@ getProposalContent metadata metadataUrl =
         RemoteData.Success meta ->
             ( meta.body.title |> Maybe.withDefault "unknown (unexpected metadata format)"
             , Just <|
-                div []
-                    [ Html.strong [] [ text "Abstract: " ]
-                    , text <| Maybe.withDefault "Unknown abstract (unexpected metadata format)" meta.body.abstract
-                    ]
+                text <|
+                    Maybe.withDefault "Unknown abstract (unexpected metadata format)" meta.body.abstract
             )
 
 
@@ -3428,71 +3734,69 @@ viewStorageConfigStep ctx step =
                         , text " so it's recommended to also store the actual JSON file containing the rationale in a permanent storage solution."
                         , text " Here we provide an easy way to store it on IPFS."
                         ]
-                    , Helper.formContainer
-                        [ Html.h4 [ HA.class "text-xl mt-4 mb-2" ] [ text "IPFS Method" ]
-                        , Helper.radioInput
-                            { group = "ipfs-method"
-                            , label = ctx.ipfsPreconfig.label
-                            , checked =
-                                case form.storageMethod of
-                                    PreconfigIPFS _ ->
-                                        True
-
-                                    _ ->
-                                        False
-                            , onClick = StorageMethodSelected <| PreconfigIPFS ctx.ipfsPreconfig
-                            }
-                        , Helper.radioInput
-                            { group = "ipfs-method"
-                            , label = "Blockfrost IPFS Provider"
-                            , checked = form.storageMethod == BlockfrostIPFS
-                            , onClick = StorageMethodSelected BlockfrostIPFS
-                            }
-                        , Helper.radioInput
-                            { group = "ipfs-method"
-                            , label = "NMKR IPFS Provider"
-                            , checked = form.storageMethod == NmkrIPFS
-                            , onClick = StorageMethodSelected NmkrIPFS
-                            }
-                        , Helper.radioInput
-                            { group = "ipfs-method"
-                            , label = "Custom IPFS Provider"
-                            , checked = form.storageMethod == CustomIPFS
-                            , onClick = StorageMethodSelected CustomIPFS
-                            }
-                        , case form.storageMethod of
-                            BlockfrostIPFS ->
-                                div []
-                                    [ Helper.labeledField "Blockfrost project ID:"
-                                        (Helper.textFieldInline form.blockfrostProjectId BlockfrostProjectIdChange)
-                                    ]
-
-                            NmkrIPFS ->
-                                div [ HA.class "flex-1 flex gap-12" ]
-                                    [ Helper.labeledField "NMKR user ID:"
-                                        (Helper.textFieldInline form.nmkrUserId NmkrUserIdChange)
-                                    , Helper.labeledField "NMKR API token:"
-                                        (Helper.textFieldInline form.nmkrApiToken NmkrApiTokenChange)
-                                    ]
-
-                            CustomIPFS ->
-                                div []
-                                    [ Helper.labeledField "IPFS RPC server:"
-                                        (Helper.textFieldInline form.ipfsServer IpfsServerChange)
-                                    , Html.ul [ HA.class "my-4" ] (List.indexedMap viewHeader form.headers)
-                                    , Html.p [ HA.class "text-sm text-gray-600 mt-2" ]
-                                        [ div [ HA.class "mt-4" ]
-                                            [ Helper.viewButton "Add HTTP header" AddHeaderButtonClicked ]
-                                        ]
-                                    ]
-
-                            PreconfigIPFS _ ->
-                                text ""
+                    , div
+                        [ HA.style "border" "1px solid #E2E8F0"
+                        , HA.style "border-radius" "0.75rem"
+                        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                        , HA.style "background-color" "#FFFFFF"
+                        , HA.style "overflow" "hidden"
                         ]
-                    , Html.p [] [ Helper.viewButton "Validate storage config" ValidateStorageConfigButtonClicked ]
+                        [ div
+                            [ HA.style "background-color" "#F7FAFC"
+                            , HA.style "padding" "1rem 1.25rem"
+                            , HA.style "border-bottom" "1px solid #EDF2F7"
+                            , HA.style "display" "flex"
+                            , HA.style "justify-content" "space-between"
+                            ]
+                            [ div []
+                                [ Html.h3
+                                    [ HA.style "font-weight" "600"
+                                    , HA.style "font-size" "1.125rem"
+                                    , HA.style "color" "#1A202C"
+                                    , HA.style "line-height" "1.4"
+                                    ]
+                                    [ text "IPFS Method" ]
+                                , Html.p
+                                    [ HA.style "font-size" "0.875rem"
+                                    , HA.style "color" "#4A5568"
+                                    , HA.style "line-height" "1.6"
+                                    , HA.style "margin-top" "0.25rem"
+                                    ]
+                                    [ text "Select your preferred method for storing files on IPFS" ]
+                                ]
+                            ]
+                        , div
+                            [ HA.style "padding" "1.25rem" ]
+                            [ div
+                                [ HA.style "display" "grid"
+                                , HA.style "grid-template-columns" "repeat(auto-fill, minmax(240px, 1fr))"
+                                , HA.style "gap" "1rem"
+                                , HA.style "margin-bottom" "1.5rem"
+                                ]
+                                [ viewStorageMethodOption ctx.ipfsPreconfig.label (form.storageMethod == PreconfigIPFS ctx.ipfsPreconfig) (StorageMethodSelected <| PreconfigIPFS ctx.ipfsPreconfig)
+                                , viewStorageMethodOption "Blockfrost IPFS" (form.storageMethod == BlockfrostIPFS) (StorageMethodSelected BlockfrostIPFS)
+                                , viewStorageMethodOption "NMKR IPFS" (form.storageMethod == NmkrIPFS) (StorageMethodSelected NmkrIPFS)
+                                , viewStorageMethodOption "Custom IPFS" (form.storageMethod == CustomIPFS) (StorageMethodSelected CustomIPFS)
+                                ]
+                            , case form.storageMethod of
+                                BlockfrostIPFS ->
+                                    viewBlockfrostForm form
+
+                                NmkrIPFS ->
+                                    viewNmkrForm form
+
+                                CustomIPFS ->
+                                    viewCustomIpfsForm form
+
+                                PreconfigIPFS _ ->
+                                    text ""
+                            ]
+                        ]
+                    , Html.p [ HA.class "mt-6" ] [ Helper.viewButton "Validate storage config" ValidateStorageConfigButtonClicked ]
                     , viewError form.error
                     ]
 
+        -- Other cases remain the same
         Validating _ _ ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Storage Configuration" ]
@@ -3502,59 +3806,427 @@ viewStorageConfigStep ctx step =
         Done _ storageConfig ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Storage Configuration" ]
-                , Helper.formContainer
-                    [ Html.p [ HA.class "mb-4" ]
-                        [ Html.strong [ HA.class "font-medium" ] [ text "Selected storage method:" ] ]
-                    , div [ HA.class "p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
-                        [ case storageConfig of
-                            UsePreconfigIpfs { label, description } ->
-                                div [ HA.class "flex flex-col space-y-2" ]
-                                    [ div [ HA.class "flex items-center" ]
-                                        [ Html.span [ HA.class "font-medium" ] [ text label ]
-                                        ]
-                                    , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
-                                        [ text description ]
-                                    ]
-
-                            UseBlockfrostIpfs { label, description } ->
-                                div [ HA.class "flex flex-col space-y-2" ]
-                                    [ div [ HA.class "flex items-center" ]
-                                        [ Html.span [ HA.class "font-medium" ] [ text label ]
-                                        ]
-                                    , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
-                                        [ text description ]
-                                    ]
-
-                            UseNmkrIpfs { label, description } ->
-                                div [ HA.class "flex flex-col space-y-2" ]
-                                    [ div [ HA.class "flex items-center" ]
-                                        [ Html.span [ HA.class "font-medium" ] [ text label ]
-                                        ]
-                                    , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
-                                        [ text description ]
-                                    ]
-
-                            UseCustomIpfs { label, description, ipfsServer } ->
-                                div [ HA.class "flex flex-col space-y-2" ]
-                                    [ div [ HA.class "flex items-center" ]
-                                        [ Html.span [ HA.class "font-medium" ] [ text label ]
-                                        ]
-                                    , Html.p [ HA.class "text-gray-600 text-sm ml-8" ]
-                                        [ text description ]
-                                    , Html.p [ HA.class "ml-8" ]
-                                        [ Html.span [ HA.class "font-bold mr-2" ] [ text "Server:" ]
-                                        , Html.a
-                                            [ HA.href ipfsServer
-                                            , HA.target "_blank"
-                                            , HA.rel "noopener noreferrer"
-                                            , HA.class "font-mono break-all text-blue-600 hover:text-blue-800 underline"
-                                            ]
-                                            [ text ipfsServer ]
-                                        ]
-                                    ]
-                        ]
+                , div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
                     ]
-                , Html.p [] [ Helper.viewButton "Change storage configuration" (ctx.wrapMsg ValidateStorageConfigButtonClicked) ]
+                    [ div
+                        [ HA.style "background-color" "#F7FAFC"
+                        , HA.style "padding" "1rem 1.25rem"
+                        , HA.style "border-bottom" "1px solid #EDF2F7"
+                        ]
+                        [ Html.h3
+                            [ HA.style "font-weight" "600"
+                            , HA.style "font-size" "1.125rem"
+                            , HA.style "color" "#1A202C"
+                            , HA.style "line-height" "1.4"
+                            ]
+                            [ text "Selected Storage Method" ]
+                        ]
+                    , div
+                        [ HA.style "padding" "1.25rem" ]
+                        [ viewStorageConfigInfo storageConfig ]
+                    ]
+                , Html.p [ HA.style "margin-top" "1rem" ]
+                    [ Html.map ctx.wrapMsg <|
+                        button
+                            [ HA.style "background-color" "#272727"
+                            , HA.style "color" "white"
+                            , HA.style "font-weight" "500"
+                            , HA.style "font-size" "0.875rem"
+                            , HA.style "padding" "0.5rem 1.5rem"
+                            , HA.style "border" "none"
+                            , HA.style "border-radius" "9999px"
+                            , HA.style "cursor" "pointer"
+                            , HA.style "display" "flex"
+                            , HA.style "align-items" "center"
+                            , HA.style "justify-content" "center"
+                            , HA.style "height" "3rem"
+                            , onClick ValidateStorageConfigButtonClicked
+                            ]
+                            [ text "Change storage configuration" ]
+                    ]
+                ]
+
+
+
+-- Helper functions for storage method options
+
+
+viewStorageMethodOption : String -> Bool -> Msg -> Html Msg
+viewStorageMethodOption label isSelected selectMsg =
+    div
+        [ HA.style "border"
+            (if isSelected then
+                "2px solid #272727"
+
+             else
+                "1px solid #E2E8F0"
+            )
+        , HA.style "border-radius" "0.5rem"
+        , HA.style "padding" "0.75rem"
+        , HA.style "cursor" "pointer"
+        , HA.style "background-color"
+            (if isSelected then
+                "#F1F5F9"
+
+             else
+                "#FFFFFF"
+            )
+        , HA.style "position" "relative"
+        , onClick selectMsg
+        ]
+        [ div
+            [ HA.style "font-weight" "500"
+            , HA.style "font-size" "0.9375rem"
+            ]
+            [ text label ]
+        , if isSelected then
+            div
+                [ HA.style "position" "absolute"
+                , HA.style "top" "0.5rem"
+                , HA.style "right" "0.5rem"
+                , HA.style "width" "1rem"
+                , HA.style "height" "1rem"
+                , HA.style "border-radius" "9999px"
+                , HA.style "background-color" "#272727"
+                , HA.style "color" "white"
+                , HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                , HA.style "justify-content" "center"
+                , HA.style "font-size" "0.75rem"
+                ]
+                [ text "✓" ]
+
+          else
+            text ""
+        ]
+
+
+
+-- Forms for different storage methods
+
+
+viewBlockfrostForm : StorageForm -> Html Msg
+viewBlockfrostForm form =
+    div
+        [ HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.5rem"
+        , HA.style "padding" "1rem"
+        , HA.style "margin-top" "1rem"
+        ]
+        [ div []
+            [ Html.label
+                [ HA.style "display" "block"
+                , HA.style "font-weight" "500"
+                , HA.style "font-size" "0.875rem"
+                , HA.style "margin-bottom" "0.5rem"
+                ]
+                [ text "Blockfrost project ID" ]
+            , Html.input
+                [ HA.type_ "text"
+                , HA.value form.blockfrostProjectId
+                , Html.Events.onInput BlockfrostProjectIdChange
+                , HA.style "width" "100%"
+                , HA.style "padding" "0.5rem"
+                , HA.style "border" "1px solid #E2E8F0"
+                , HA.style "border-radius" "0.375rem"
+                ]
+                []
+            ]
+        ]
+
+
+viewNmkrForm : StorageForm -> Html Msg
+viewNmkrForm form =
+    div
+        [ HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.5rem"
+        , HA.style "padding" "1rem"
+        , HA.style "margin-top" "1rem"
+        ]
+        [ div
+            [ HA.style "display" "grid"
+            , HA.style "grid-template-columns" "1fr 1fr"
+            , HA.style "gap" "1rem"
+            ]
+            [ div []
+                [ Html.label
+                    [ HA.style "display" "block"
+                    , HA.style "font-weight" "500"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "margin-bottom" "0.5rem"
+                    ]
+                    [ text "NMKR user ID" ]
+                , Html.input
+                    [ HA.type_ "text"
+                    , HA.value form.nmkrUserId
+                    , Html.Events.onInput NmkrUserIdChange
+                    , HA.style "width" "100%"
+                    , HA.style "padding" "0.5rem"
+                    , HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.375rem"
+                    ]
+                    []
+                ]
+            , div []
+                [ Html.label
+                    [ HA.style "display" "block"
+                    , HA.style "font-weight" "500"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "margin-bottom" "0.5rem"
+                    ]
+                    [ text "NMKR API token" ]
+                , Html.input
+                    [ HA.type_ "text"
+                    , HA.value form.nmkrApiToken
+                    , Html.Events.onInput NmkrApiTokenChange
+                    , HA.style "width" "100%"
+                    , HA.style "padding" "0.5rem"
+                    , HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.375rem"
+                    ]
+                    []
+                ]
+            ]
+        ]
+
+
+viewCustomIpfsForm : StorageForm -> Html Msg
+viewCustomIpfsForm form =
+    div []
+        [ div
+            [ HA.style "border" "1px solid #E2E8F0"
+            , HA.style "border-radius" "0.5rem"
+            , HA.style "padding" "1rem"
+            , HA.style "margin-top" "1rem"
+            ]
+            [ Html.label
+                [ HA.style "display" "block"
+                , HA.style "font-weight" "500"
+                , HA.style "font-size" "0.875rem"
+                , HA.style "margin-bottom" "0.5rem"
+                ]
+                [ text "IPFS RPC server" ]
+            , Html.input
+                [ HA.type_ "text"
+                , HA.value form.ipfsServer
+                , Html.Events.onInput IpfsServerChange
+                , HA.style "width" "100%"
+                , HA.style "padding" "0.5rem"
+                , HA.style "border" "1px solid #E2E8F0"
+                , HA.style "border-radius" "0.375rem"
+                ]
+                []
+            ]
+
+        -- Headers section with title and add button
+        , div
+            [ HA.style "margin-top" "1.5rem"
+            , HA.style "display" "flex"
+            , HA.style "justify-content" "space-between"
+            , HA.style "align-items" "center"
+            ]
+            [ Html.h4
+                [ HA.style "font-weight" "600"
+                , HA.style "font-size" "1rem"
+                ]
+                [ text "HTTP Headers" ]
+            , button
+                [ HA.style "background-color" "#272727"
+                , HA.style "color" "white"
+                , HA.style "font-size" "0.875rem"
+                , HA.style "padding" "0.375rem 0.75rem"
+                , HA.style "border" "none"
+                , HA.style "border-radius" "0.375rem"
+                , HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                , onClick AddHeaderButtonClicked
+                ]
+                [ Html.span [ HA.style "margin-right" "0.25rem" ] [ text "+" ]
+                , text "Add header"
+                ]
+            ]
+
+        -- Headers list
+        , if List.isEmpty form.headers then
+            Html.p
+                [ HA.style "text-align" "center"
+                , HA.style "color" "#6B7280"
+                , HA.style "font-style" "italic"
+                , HA.style "padding" "1rem 0"
+                ]
+                [ text "No headers added yet." ]
+
+          else
+            div [ HA.style "margin-top" "1rem" ] (List.indexedMap viewHeaderItem form.headers)
+        ]
+
+
+viewHeaderItem : Int -> ( String, String ) -> Html Msg
+viewHeaderItem n ( field, value ) =
+    div
+        [ HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.5rem"
+        , HA.style "padding" "1rem"
+        , HA.style "margin-bottom" "0.75rem"
+        , HA.style "background-color" "#F9FAFB"
+        ]
+        [ div
+            [ HA.style "display" "flex"
+            , HA.style "gap" "1rem"
+            , HA.style "align-items" "flex-end"
+            ]
+            [ div [ HA.style "flex" "1" ]
+                [ Html.label
+                    [ HA.style "display" "block"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "font-weight" "500"
+                    , HA.style "margin-bottom" "0.25rem"
+                    ]
+                    [ text "Header Name" ]
+                , Html.input
+                    [ HA.type_ "text"
+                    , HA.value field
+                    , Html.Events.onInput (StorageHeaderFieldChange n)
+                    , HA.style "width" "100%"
+                    , HA.style "padding" "0.5rem"
+                    , HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.375rem"
+                    ]
+                    []
+                ]
+            , div [ HA.style "flex" "1" ]
+                [ Html.label
+                    [ HA.style "display" "block"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "font-weight" "500"
+                    , HA.style "margin-bottom" "0.25rem"
+                    ]
+                    [ text "Header Value" ]
+                , Html.input
+                    [ HA.type_ "text"
+                    , HA.value value
+                    , Html.Events.onInput (StorageHeaderValueChange n)
+                    , HA.style "width" "100%"
+                    , HA.style "padding" "0.5rem"
+                    , HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.375rem"
+                    ]
+                    []
+                ]
+            , button
+                [ HA.style "background-color" "#EF4444"
+                , HA.style "color" "white"
+                , HA.style "width" "2.5rem"
+                , HA.style "height" "2.5rem"
+                , HA.style "border" "none"
+                , HA.style "border-radius" "0.375rem"
+                , onClick (DeleteHeaderButtonClicked n)
+                ]
+                [ text "🗑" ]
+            ]
+        ]
+
+
+viewStorageConfigInfo : StorageConfig -> Html msg
+viewStorageConfigInfo config =
+    case config of
+        UsePreconfigIpfs { label, description } ->
+            div []
+                [ Html.h4
+                    [ HA.style "font-weight" "600"
+                    , HA.style "margin-bottom" "0.5rem"
+                    ]
+                    [ text label ]
+                , Html.p
+                    [ HA.style "color" "#4A5568"
+                    , HA.style "font-size" "0.875rem"
+                    ]
+                    [ text description ]
+                ]
+
+        UseBlockfrostIpfs { label, description, projectId } ->
+            div []
+                [ Html.h4
+                    [ HA.style "font-weight" "600"
+                    , HA.style "margin-bottom" "0.5rem"
+                    ]
+                    [ text label ]
+                , Html.p
+                    [ HA.style "color" "#4A5568"
+                    , HA.style "font-size" "0.875rem"
+                    ]
+                    [ text description ]
+                , Html.div
+                    [ HA.style "margin-top" "0.75rem"
+                    , HA.style "padding" "0.75rem"
+                    , HA.style "background-color" "#F9FAFB"
+                    , HA.style "border-radius" "0.375rem"
+                    , HA.style "border" "1px solid #EDF2F7"
+                    ]
+                    [ Html.p
+                        [ HA.style "font-weight" "500"
+                        , HA.style "margin-bottom" "0.25rem"
+                        ]
+                        [ text "Project ID: " ]
+                    , Html.p
+                        [ HA.style "font-family" "monospace"
+                        , HA.style "word-break" "break-all"
+                        ]
+                        [ text (String.left 10 projectId ++ "..." ++ String.right 6 projectId) ]
+                    ]
+                ]
+
+        UseNmkrIpfs { label, description } ->
+            div []
+                [ Html.h4
+                    [ HA.style "font-weight" "600"
+                    , HA.style "margin-bottom" "0.5rem"
+                    ]
+                    [ text label ]
+                , Html.p
+                    [ HA.style "color" "#4A5568"
+                    , HA.style "font-size" "0.875rem"
+                    ]
+                    [ text description ]
+                ]
+
+        UseCustomIpfs { label, description, ipfsServer } ->
+            div []
+                [ Html.h4
+                    [ HA.style "font-weight" "600"
+                    , HA.style "margin-bottom" "0.5rem"
+                    ]
+                    [ text label ]
+                , Html.p
+                    [ HA.style "color" "#4A5568"
+                    , HA.style "font-size" "0.875rem"
+                    ]
+                    [ text description ]
+                , Html.div
+                    [ HA.style "margin-top" "0.75rem"
+                    , HA.style "padding" "0.75rem"
+                    , HA.style "background-color" "#F9FAFB"
+                    , HA.style "border-radius" "0.375rem"
+                    , HA.style "border" "1px solid #EDF2F7"
+                    ]
+                    [ Html.p
+                        [ HA.style "font-weight" "500"
+                        , HA.style "margin-bottom" "0.25rem"
+                        ]
+                        [ text "IPFS Server: " ]
+                    , Html.a
+                        [ HA.href ipfsServer
+                        , HA.target "_blank"
+                        , HA.style "font-family" "monospace"
+                        , HA.style "word-break" "break-all"
+                        , HA.style "color" "#3182CE"
+                        ]
+                        [ text ipfsServer ]
+                    ]
                 ]
 
 
@@ -3626,15 +4298,323 @@ viewRationaleForm : RationaleForm -> Html Msg
 viewRationaleForm form =
     div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
         [ sectionTitle "Vote Rationale"
-        , Helper.formContainer [ viewSummaryForm form.summary ]
-        , Helper.formContainer [ viewStatementForm form.pdfAutogen form.rationaleStatement ]
-        , Helper.formContainer [ viewPrecedentDiscussionForm form.precedentDiscussion ]
-        , Helper.formContainer [ viewCounterArgumentForm form.counterArgumentDiscussion ]
-        , Helper.formContainer [ viewConclusionForm form.conclusion ]
-        , Helper.formContainer [ viewInternalVoteForm form.internalVote ]
-        , viewReferencesForm form.references
-        , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Confirm rationale" ValidateRationaleButtonClicked ]
+        , div [ HA.style "display" "grid", HA.style "gap" "1.5rem", HA.style "position" "relative" ]
+            [ -- Add a vertical line that connects all boxes
+              div
+                [ HA.style "position" "absolute"
+                , HA.style "left" "50%"
+                , HA.style "top" "0"
+                , HA.style "bottom" "0"
+                , HA.style "width" "2px"
+                , HA.style "background-color" "#E2E8F0"
+                , HA.style "transform" "translateX(-50%)"
+                , HA.style "z-index" "0"
+                ]
+                []
+            , viewRationaleCard "Summary"
+                "Clearly state your stance, summarize your rationale with your main argument. Limited to 300 characters."
+                (viewSummaryInput form.summary)
+                False
+                0
+            , viewRationaleCard "Rationale Statement"
+                "Fully describe your rationale, with your arguments in full details. Use markdown with heading level 2 (##) or higher."
+                (viewStatementInput form.pdfAutogen form.rationaleStatement)
+                True
+                1
+            , viewRationaleCard "Precedent Discussion"
+                "Optional: Discuss what you feel is relevant precedent."
+                (viewMarkdownInput form.precedentDiscussion PrecedentDiscussionChange)
+                False
+                2
+            , viewRationaleCard "Counter Argument Discussion"
+                "Optional: Discuss significant counter arguments to your position."
+                (viewMarkdownInput form.counterArgumentDiscussion CounterArgumentChange)
+                False
+                3
+            , viewRationaleCard "Conclusion"
+                "Optional: Final thoughts on your position."
+                (viewMarkdownInput form.conclusion ConclusionChange)
+                False
+                4
+            , viewRationaleCard "Internal Vote"
+                "If you vote as a group, you can report the group internal votes."
+                (viewInternalVoteInput form.internalVote)
+                False
+                5
+            , viewReferencesCard form.references 6
+            ]
+        , Html.p [ HA.class "mt-6" ] [ Helper.viewButton "Confirm rationale" ValidateRationaleButtonClicked ]
         , viewError form.error
+        ]
+
+
+viewRationaleCard : String -> String -> Html Msg -> Bool -> Int -> Html Msg
+viewRationaleCard title description content isPrimary index =
+    div
+        [ HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.75rem"
+        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+        , HA.style "background-color" "#FFFFFF"
+        , HA.style "overflow" "hidden"
+        , HA.style "position" "relative"
+        , HA.style "z-index" "1"
+        ]
+        [ -- Add circular connection dot to the vertical line
+          div
+            [ HA.style "position" "absolute"
+            , HA.style "left" "50%"
+            , HA.style "top"
+                (if index == 0 then
+                    "0"
+
+                 else
+                    "-12px"
+                )
+            , HA.style "width" "12px"
+            , HA.style "height" "12px"
+            , HA.style "border-radius" "50%"
+            , HA.style "background-color"
+                (if isPrimary then
+                    "#272727"
+
+                 else
+                    "#94A3B8"
+                )
+            , HA.style "transform" "translateX(-50%)"
+            , HA.style "z-index" "2"
+            ]
+            []
+        , div
+            [ HA.style "background-color"
+                (if isPrimary then
+                    "#F1F5F9"
+
+                 else
+                    "#F7FAFC"
+                )
+            , HA.style "padding" "1rem 1.25rem"
+            , HA.style "border-bottom" "1px solid #EDF2F7"
+            ]
+            [ Html.h3
+                [ HA.style "font-weight" "600"
+                , HA.style "font-size" "1.125rem"
+                , HA.style "color" "#1A202C"
+                , HA.style "line-height" "1.4"
+                ]
+                [ text title ]
+            , Html.p
+                [ HA.style "font-size" "0.875rem"
+                , HA.style "color" "#4A5568"
+                , HA.style "line-height" "1.6"
+                , HA.style "margin-top" "0.25rem"
+                ]
+                [ text description ]
+            ]
+        , div
+            [ HA.style "padding" "1.25rem"
+            ]
+            [ content ]
+        ]
+
+
+viewSummaryInput : String -> Html Msg
+viewSummaryInput summary =
+    div []
+        [ Html.textarea
+            [ HA.value summary
+            , Html.Events.onInput RationaleSummaryChange
+            , HA.style "width" "100%"
+            , HA.style "padding" "0.75rem"
+            , HA.style "border" "1px solid #E2E8F0"
+            , HA.style "border-radius" "0.375rem"
+            , HA.style "min-height" "80px"
+            , HA.style "resize" "vertical"
+            , HA.style "font-family" "inherit"
+            , HA.style "font-size" "0.875rem"
+            ]
+            []
+        , Html.p
+            [ HA.style "color"
+                (if String.length summary > 275 then
+                    if String.length summary > 300 then
+                        "#EF4444"
+
+                    else
+                        "#F59E0B"
+
+                 else
+                    "#4B5563"
+                )
+            , HA.style "font-size" "0.75rem"
+            , HA.style "margin-top" "0.5rem"
+            , HA.style "text-align" "right"
+            ]
+            [ text (String.fromInt (String.length summary) ++ "/300 characters") ]
+        ]
+
+
+viewStatementInput : Bool -> String -> Html Msg
+viewStatementInput hasAutoGen form =
+    div []
+        [ viewPdfAutogenCheckbox hasAutoGen
+        , Html.textarea
+            [ HA.value form
+            , Html.Events.onInput RationaleStatementChange
+            , HA.style "width" "100%"
+            , HA.style "padding" "0.75rem"
+            , HA.style "border" "1px solid #E2E8F0"
+            , HA.style "border-radius" "0.375rem"
+            , HA.style "min-height" "200px"
+            , HA.style "resize" "vertical"
+            , HA.style "font-family" "monospace"
+            , HA.style "font-size" "0.875rem"
+            , HA.style "line-height" "1.5"
+            ]
+            []
+        ]
+
+
+viewMarkdownInput : String -> (String -> Msg) -> Html Msg
+viewMarkdownInput content msgOnInput =
+    Html.textarea
+        [ HA.value content
+        , Html.Events.onInput msgOnInput
+        , HA.style "width" "100%"
+        , HA.style "padding" "0.75rem"
+        , HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.375rem"
+        , HA.style "min-height" "180px"
+        , HA.style "resize" "vertical"
+        , HA.style "font-family" "monospace"
+        , HA.style "font-size" "0.875rem"
+        , HA.style "line-height" "1.5"
+        ]
+        []
+
+
+viewInternalVoteInput : InternalVote -> Html Msg
+viewInternalVoteInput { constitutional, unconstitutional, abstain, didNotVote, against } =
+    div
+        [ HA.style "display" "grid"
+        , HA.style "grid-template-columns" "repeat(auto-fit, minmax(140px, 1fr))"
+        , HA.style "gap" "1rem"
+        ]
+        [ viewVoteNumberInput "Constitutional" constitutional InternalConstitutionalVoteChange
+        , viewVoteNumberInput "Unconstitutional" unconstitutional InternalUnconstitutionalVoteChange
+        , viewVoteNumberInput "Abstain" abstain InternalAbstainVoteChange
+        , viewVoteNumberInput "Did not vote" didNotVote InternalDidNotVoteChange
+        , viewVoteNumberInput "Against voting" against InternalAgainstVoteChange
+        ]
+
+
+viewVoteNumberInput : String -> Int -> (String -> Msg) -> Html Msg
+viewVoteNumberInput label value onInputMsg =
+    div []
+        [ Html.label
+            [ HA.style "display" "block"
+            , HA.style "font-size" "0.875rem"
+            , HA.style "font-weight" "500"
+            , HA.style "color" "#4B5563"
+            , HA.style "margin-bottom" "0.25rem"
+            ]
+            [ text label ]
+        , Html.input
+            [ HA.type_ "number"
+            , HA.value (String.fromInt value)
+            , HA.min "0"
+            , Html.Events.onInput onInputMsg
+            , HA.style "width" "100%"
+            , HA.style "padding" "0.5rem"
+            , HA.style "border" "1px solid #E2E8F0"
+            , HA.style "border-radius" "0.375rem"
+            , HA.style "font-size" "0.875rem"
+            ]
+            []
+        ]
+
+
+viewReferencesCard : List Reference -> Int -> Html Msg
+viewReferencesCard references index =
+    div
+        [ HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.75rem"
+        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+        , HA.style "background-color" "#FFFFFF"
+        , HA.style "overflow" "hidden"
+        , HA.style "position" "relative"
+        , HA.style "z-index" "1"
+        ]
+        [ -- Add circular connection dot to the vertical line
+          div
+            [ HA.style "position" "absolute"
+            , HA.style "left" "50%"
+            , HA.style "top" "-12px"
+            , HA.style "width" "12px"
+            , HA.style "height" "12px"
+            , HA.style "border-radius" "50%"
+            , HA.style "background-color" "#94A3B8"
+            , HA.style "transform" "translateX(-50%)"
+            , HA.style "z-index" "2"
+            ]
+            []
+
+        -- Rest of the card content remains the same
+        , div
+            [ HA.style "background-color" "#F7FAFC"
+            , HA.style "padding" "1rem 1.25rem"
+            , HA.style "border-bottom" "1px solid #EDF2F7"
+            , HA.style "display" "flex"
+            , HA.style "justify-content" "space-between"
+            , HA.style "align-items" "center"
+            ]
+            [ div []
+                [ Html.h3
+                    [ HA.style "font-weight" "600"
+                    , HA.style "font-size" "1.125rem"
+                    , HA.style "color" "#1A202C"
+                    , HA.style "line-height" "1.4"
+                    ]
+                    [ text "References" ]
+                , Html.p
+                    [ HA.style "font-size" "0.875rem"
+                    , HA.style "color" "#4A5568"
+                    , HA.style "line-height" "1.6"
+                    , HA.style "margin-top" "0.25rem"
+                    ]
+                    [ text "Add links and references to support your rationale." ]
+                ]
+            , button
+                [ HA.style "background-color" "#272727"
+                , HA.style "color" "white"
+                , HA.style "font-weight" "500"
+                , HA.style "font-size" "0.875rem"
+                , HA.style "padding" "0.5rem 1rem"
+                , HA.style "border" "none"
+                , HA.style "border-radius" "0.375rem"
+                , HA.style "cursor" "pointer"
+                , HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                , onClick AddRefButtonClicked
+                ]
+                [ Html.span [ HA.style "margin-right" "0.375rem" ] [ text "+" ]
+                , text "Add Reference"
+                ]
+            ]
+        , div
+            [ HA.style "padding" "1.25rem"
+            ]
+            [ if List.isEmpty references then
+                Html.p
+                    [ HA.style "text-align" "center"
+                    , HA.style "color" "#6B7280"
+                    , HA.style "font-style" "italic"
+                    , HA.style "padding" "1rem 0"
+                    ]
+                    [ text "No references added yet." ]
+
+              else
+                div [ HA.class "space-y-4" ] (List.indexedMap viewOneRefForm references)
+            ]
         ]
 
 
@@ -3756,28 +4736,109 @@ viewReferencesForm references =
 
 viewOneRefForm : Int -> Reference -> Html Msg
 viewOneRefForm n reference =
-    Helper.formContainer
-        [ div [ HA.class "flex flex-wrap gap-4" ]
-            [ div [ HA.class "" ]
-                [ Helper.labeledField "Type"
-                    (Helper.viewSelect
-                        [ HA.value (refTypeToString reference.type_)
-                        , Html.Events.onInput (ReferenceTypeChange n)
-                        , HA.class "w-full"
-                        ]
-                        (List.map viewRefOption allRefTypes)
-                    )
+    div
+        [ HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.5rem"
+        , HA.style "padding" "1rem"
+        , HA.style "background-color" "#F9FAFB"
+        ]
+        [ div [ HA.style "display" "flex", HA.style "justify-content" "space-between", HA.style "align-items" "center", HA.style "margin-bottom" "0.75rem" ]
+            [ Html.h4
+                [ HA.style "font-weight" "500"
+                , HA.style "font-size" "0.9375rem"
+                , HA.style "color" "#374151"
                 ]
-            , div [ HA.class "" ]
-                [ Helper.labeledField "Label"
-                    (Helper.textFieldInline reference.label (ReferenceLabelChange n))
+                [ text ("Reference " ++ String.fromInt (n + 1)) ]
+            , button
+                [ HA.style "background-color" "black"
+                , HA.style "color" "white"
+                , HA.style "width" "2rem"
+                , HA.style "height" "2rem"
+                , HA.style "border" "none"
+                , HA.style "border-radius" "0.375rem"
+                , HA.style "cursor" "pointer"
+                , HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                , HA.style "justify-content" "center"
+                , onClick (DeleteRefButtonClicked n)
                 ]
-            , div [ HA.class "" ]
-                [ Helper.labeledField "URI"
-                    (Helper.textFieldInline reference.uri (ReferenceUriChange n))
+                [ Html.div
+                    [ HA.style "font-size" "1.25rem"
+                    , HA.style "line-height" "1"
+                    ]
+                    [ text "🗑" ]
+
+                -- Trash can icon
                 ]
-            , div [ HA.class "" ]
-                [ Helper.viewButton "Delete" (DeleteRefButtonClicked n) ]
+            ]
+        , div
+            [ HA.style "display" "grid"
+            , HA.style "grid-template-columns" "repeat(auto-fit, minmax(200px, 1fr))"
+            , HA.style "gap" "1rem"
+            ]
+            [ div []
+                [ Html.label
+                    [ HA.style "display" "block"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "font-weight" "500"
+                    , HA.style "color" "#4B5563"
+                    , HA.style "margin-bottom" "0.25rem"
+                    ]
+                    [ text "Type" ]
+                , Helper.viewSelect
+                    [ HA.value (refTypeToString reference.type_)
+                    , Html.Events.onInput (ReferenceTypeChange n)
+                    , HA.style "width" "100%"
+                    , HA.style "padding" "0.5rem"
+                    , HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.375rem"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "background-color" "white"
+                    ]
+                    (List.map viewRefOption allRefTypes)
+                ]
+            , div []
+                [ Html.label
+                    [ HA.style "display" "block"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "font-weight" "500"
+                    , HA.style "color" "#4B5563"
+                    , HA.style "margin-bottom" "0.25rem"
+                    ]
+                    [ text "Label" ]
+                , Html.input
+                    [ HA.type_ "text"
+                    , HA.value reference.label
+                    , Html.Events.onInput (ReferenceLabelChange n)
+                    , HA.style "width" "100%"
+                    , HA.style "padding" "0.5rem"
+                    , HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.375rem"
+                    , HA.style "font-size" "0.875rem"
+                    ]
+                    []
+                ]
+            , div []
+                [ Html.label
+                    [ HA.style "display" "block"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "font-weight" "500"
+                    , HA.style "color" "#4B5563"
+                    , HA.style "margin-bottom" "0.25rem"
+                    ]
+                    [ text "URI" ]
+                , Html.input
+                    [ HA.type_ "text"
+                    , HA.value reference.uri
+                    , Html.Events.onInput (ReferenceUriChange n)
+                    , HA.style "width" "100%"
+                    , HA.style "padding" "0.5rem"
+                    , HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.375rem"
+                    , HA.style "font-size" "0.875rem"
+                    ]
+                    []
+                ]
             ]
         ]
 
@@ -3793,32 +4854,309 @@ viewCompletedRationale : Rationale -> Html Msg
 viewCompletedRationale rationale =
     div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
         [ sectionTitle "Vote Rationale"
-        , div [ HA.class "space-y-6" ]
-            [ maybeViewSection viewSummary (Just rationale.summary)
-            , maybeViewSection (viewMd "Rationale Statement") (Just rationale.rationaleStatement)
-            , maybeViewSection (viewMd "Precedent Discussion") rationale.precedentDiscussion
-            , maybeViewSection (viewMd "Counter Argument") rationale.counterArgumentDiscussion
-            , maybeViewSection viewConclusion rationale.conclusion
-            , let
-                internalVote =
-                    if rationale.internalVote == noInternalVote then
-                        Nothing
-
-                    else
-                        Just rationale.internalVote
-              in
-              maybeViewSection viewInternalVote internalVote
-            , let
-                references =
-                    if List.isEmpty rationale.references then
-                        Nothing
-
-                    else
-                        Just rationale.references
-              in
-              maybeViewSection viewReferences references
+        , div
+            [ HA.style "border" "1px solid #E2E8F0"
+            , HA.style "border-radius" "0.75rem"
+            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+            , HA.style "background-color" "#FFFFFF"
+            , HA.style "overflow" "hidden"
             ]
-        , Html.p [ HA.class "mt-6" ] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
+            [ div
+                [ HA.style "background-color" "#F7FAFC"
+                , HA.style "padding" "1rem 1.25rem"
+                , HA.style "border-bottom" "1px solid #EDF2F7"
+                ]
+                [ Html.h3
+                    [ HA.style "font-weight" "600"
+                    , HA.style "font-size" "1.125rem"
+                    , HA.style "color" "#1A202C"
+                    , HA.style "line-height" "1.4"
+                    ]
+                    [ text "Rationale Summary" ]
+                ]
+            , div
+                [ HA.style "padding" "1.25rem"
+                ]
+                [ div [ HA.style "display" "grid", HA.style "gap" "1.5rem" ]
+                    [ -- Summary section
+                      div []
+                        [ Html.p
+                            [ HA.style "font-size" "0.9375rem"
+                            , HA.style "line-height" "1.6"
+                            , HA.style "color" "#4A5568"
+                            ]
+                            [ text rationale.summary ]
+                        ]
+
+                    -- Rationale Statement section
+                    , div [ HA.style "border-top" "1px solid #EDF2F7", HA.style "padding-top" "1.5rem" ]
+                        [ Html.h4
+                            [ HA.style "font-size" "1rem"
+                            , HA.style "font-weight" "600"
+                            , HA.style "margin-bottom" "1rem"
+                            , HA.style "color" "#1A202C"
+                            ]
+                            [ text "Rationale Statement" ]
+                        , div
+                            [ HA.style "border" "1px solid #E2E8F0"
+                            , HA.style "border-radius" "0.5rem"
+                            , HA.style "padding" "1.25rem"
+                            , HA.style "background-color" "#F9FAFB"
+                            ]
+                            [ renderMarkdownContent rationale.rationaleStatement ]
+                        ]
+
+                    -- Optional sections
+                    , viewOptionalSection "Precedent Discussion" rationale.precedentDiscussion
+                    , viewOptionalSection "Counter Argument Discussion" rationale.counterArgumentDiscussion
+                    , viewOptionalSection "Conclusion" rationale.conclusion
+
+                    -- Internal vote if present
+                    , if rationale.internalVote /= noInternalVote then
+                        div [ HA.style "border-top" "1px solid #EDF2F7", HA.style "padding-top" "1.5rem" ]
+                            [ Html.h4
+                                [ HA.style "font-size" "1rem"
+                                , HA.style "font-weight" "600"
+                                , HA.style "margin-bottom" "1rem"
+                                , HA.style "color" "#1A202C"
+                                ]
+                                [ text "Internal Vote" ]
+                            , viewFormattedInternalVote rationale.internalVote
+                            ]
+
+                      else
+                        text ""
+
+                    -- References if present
+                    , if not (List.isEmpty rationale.references) then
+                        div [ HA.style "border-top" "1px solid #EDF2F7", HA.style "padding-top" "1.5rem" ]
+                            [ Html.h4
+                                [ HA.style "font-size" "1rem"
+                                , HA.style "font-weight" "600"
+                                , HA.style "margin-bottom" "1rem"
+                                , HA.style "color" "#1A202C"
+                                ]
+                                [ text "References" ]
+                            , viewFormattedReferences rationale.references
+                            ]
+
+                      else
+                        text ""
+                    ]
+                ]
+            ]
+        , Html.p [ HA.style "margin-top" "1rem" ]
+            [ button
+                [ HA.style "background-color" "#272727"
+                , HA.style "color" "white"
+                , HA.style "font-weight" "500"
+                , HA.style "font-size" "0.875rem"
+                , HA.style "padding" "0.5rem 1.5rem"
+                , HA.style "border" "none"
+                , HA.style "border-radius" "9999px"
+                , HA.style "cursor" "pointer"
+                , HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                , HA.style "justify-content" "center"
+                , HA.style "height" "3rem"
+                , onClick EditRationaleButtonClicked
+                ]
+                [ text "Edit rationale" ]
+            ]
+        ]
+
+
+
+-- Helper function for rendering optional sections
+
+
+viewOptionalSection : String -> Maybe String -> Html Msg
+viewOptionalSection title maybeContent =
+    case maybeContent of
+        Just content ->
+            div [ HA.style "border-top" "1px solid #EDF2F7", HA.style "padding-top" "1.5rem" ]
+                [ Html.h4
+                    [ HA.style "font-size" "1rem"
+                    , HA.style "font-weight" "600"
+                    , HA.style "margin-bottom" "1rem"
+                    , HA.style "color" "#1A202C"
+                    ]
+                    [ text title ]
+                , div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.5rem"
+                    , HA.style "padding" "1.25rem"
+                    , HA.style "background-color" "#F9FAFB"
+                    ]
+                    [ renderMarkdownContent content ]
+                ]
+
+        Nothing ->
+            text ""
+
+
+
+-- Helper function for rendering markdown content with improved styling
+
+
+renderMarkdownContent : String -> Html msg
+renderMarkdownContent content =
+    case Md.parse content of
+        Err deadEnds ->
+            let
+                deadEndsString =
+                    List.map Md.deadEndToString deadEnds
+                        |> String.join "\n"
+            in
+            Html.div []
+                [ Html.p [ HA.style "color" "#EF4444" ] [ text "Error parsing markdown:" ]
+                , Html.pre
+                    [ HA.style "overflow-x" "auto"
+                    , HA.style "font-size" "0.75rem"
+                    , HA.style "padding" "0.5rem"
+                    , HA.style "background" "#F1F5F9"
+                    , HA.style "border-radius" "0.25rem"
+                    ]
+                    [ text deadEndsString ]
+                ]
+
+        Ok blocks ->
+            case Md.render markdownRenderer blocks of
+                Err errors ->
+                    Html.p [ HA.style "color" "#EF4444" ] [ text errors ]
+
+                Ok rendered ->
+                    Html.div
+                        [ HA.style "line-height" "1.6"
+                        , HA.style "color" "#374151"
+                        , HA.class "markdown-content"
+                        ]
+                        rendered
+
+
+
+-- Styled internal vote display
+
+
+viewFormattedInternalVote : InternalVote -> Html msg
+viewFormattedInternalVote { constitutional, unconstitutional, abstain, didNotVote, against } =
+    div
+        [ HA.style "display" "grid"
+        , HA.style "grid-template-columns" "repeat(auto-fill, minmax(180px, 1fr))"
+        , HA.style "gap" "1rem"
+        , HA.style "padding" "1rem"
+        , HA.style "background-color" "#F9FAFB"
+        , HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.5rem"
+        ]
+        [ viewVoteItem "Constitutional" constitutional
+        , viewVoteItem "Unconstitutional" unconstitutional
+        , viewVoteItem "Abstain" abstain
+        , viewVoteItem "Did not vote" didNotVote
+        , viewVoteItem "Against voting" against
+        ]
+
+
+
+-- Helper for vote items
+
+
+viewVoteItem : String -> Int -> Html msg
+viewVoteItem label count =
+    div []
+        [ Html.span
+            [ HA.style "font-weight" "500"
+            , HA.style "color" "#4A5568"
+            , HA.style "display" "block"
+            ]
+            [ text label ]
+        , Html.span
+            [ HA.style "font-size" "1.25rem"
+            , HA.style "font-weight" "600"
+            , HA.style "color" "#1A202C"
+            ]
+            [ text (String.fromInt count) ]
+        ]
+
+
+
+-- Styled references display
+
+
+viewFormattedReferences : List Reference -> Html msg
+viewFormattedReferences references =
+    div
+        [ HA.style "display" "flex"
+        , HA.style "flex-direction" "column"
+        , HA.style "gap" "0.75rem"
+        ]
+        (List.map viewFormattedReference references)
+
+
+
+-- Single reference with improved styling
+
+
+viewFormattedReference : Reference -> Html msg
+viewFormattedReference ref =
+    div
+        [ HA.style "padding" "0.75rem"
+        , HA.style "background-color" "#F9FAFB"
+        , HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.5rem"
+        ]
+        [ div
+            [ HA.style "display" "flex"
+            , HA.style "align-items" "baseline"
+            , HA.style "gap" "0.5rem"
+            , HA.style "margin-bottom" "0.25rem"
+            ]
+            [ Html.span
+                [ HA.style "font-weight" "600"
+                , HA.style "color" "#1A202C"
+                ]
+                [ text ref.label ]
+            , Html.span
+                [ HA.style "font-size" "0.75rem"
+                , HA.style "color" "#718096"
+                , HA.style "padding" "0.125rem 0.375rem"
+                , HA.style "background-color" "#EDF2F7"
+                , HA.style "border-radius" "9999px"
+                ]
+                [ text (refTypeToString ref.type_) ]
+            ]
+        , if String.startsWith "ipfs://" ref.uri then
+            let
+                cid =
+                    String.dropLeft 7 ref.uri
+
+                gatewayUrl =
+                    "https://ipfs.io/ipfs/" ++ cid
+            in
+            Html.a
+                [ HA.href gatewayUrl
+                , HA.target "_blank"
+                , HA.rel "noopener noreferrer"
+                , HA.style "color" "#3182CE"
+                , HA.style "text-decoration" "none"
+                , HA.style "display" "inline-flex"
+                , HA.style "align-items" "center"
+                , HA.style "font-size" "0.875rem"
+                ]
+                [ text ref.uri
+                , Html.span
+                    [ HA.style "margin-left" "0.25rem"
+                    ]
+                    [ text "↗" ]
+                ]
+
+          else
+            Html.span
+                [ HA.style "word-break" "break-all"
+                , HA.style "font-size" "0.875rem"
+                , HA.style "color" "#4A5568"
+                ]
+                [ text ref.uri ]
         ]
 
 
@@ -4048,23 +5386,78 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
         ( _, Preparing _, _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ sectionTitle "Rationale Signature"
-                , Html.p [] [ text "Please validate the rationale creation step first." ]
+                , div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
+                    , HA.style "padding" "1.25rem"
+                    ]
+                    [ Html.p
+                        [ HA.style "color" "#4A5568"
+                        ]
+                        [ text "Please validate the rationale creation step first." ]
+                    ]
                 ]
 
         ( _, Validating _ _, _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ sectionTitle "Rationale Signature"
-                , Html.p [] [ text "Please validate the rationale creation step first." ]
+                , div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
+                    , HA.style "padding" "1.25rem"
+                    ]
+                    [ Html.p
+                        [ HA.style "color" "#4A5568"
+                        ]
+                        [ text "Please validate the rationale creation step first." ]
+                    ]
                 ]
 
         ( Done _ { id }, Done _ _, Preparing form ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ sectionTitle "Rationale Signature"
                 , Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts id form
-                , Html.p []
-                    [ Helper.viewButton "Skip rationale signing" (ctx.wrapMsg SkipRationaleSignaturesButtonClicked)
-                    , text " or "
-                    , Helper.viewButton "Validate rationale signing" (ctx.wrapMsg ValidateRationaleSignaturesButtonClicked)
+                , div
+                    [ HA.style "display" "flex"
+                    , HA.style "gap" "1rem"
+                    , HA.style "margin-top" "1.5rem"
+                    ]
+                    [ button
+                        [ HA.style "background-color" "#F9FAFB"
+                        , HA.style "color" "#272727"
+                        , HA.style "font-weight" "500"
+                        , HA.style "font-size" "0.875rem"
+                        , HA.style "padding" "0.5rem 1.5rem"
+                        , HA.style "border" "none"
+                        , HA.style "border-radius" "9999px"
+                        , HA.style "cursor" "pointer"
+                        , HA.style "display" "flex"
+                        , HA.style "align-items" "center"
+                        , HA.style "justify-content" "center"
+                        , HA.style "height" "3rem"
+                        , onClick (ctx.wrapMsg SkipRationaleSignaturesButtonClicked)
+                        ]
+                        [ text "Skip rationale signing" ]
+                    , button
+                        [ HA.style "background-color" "#272727"
+                        , HA.style "color" "white"
+                        , HA.style "font-weight" "500"
+                        , HA.style "font-size" "0.875rem"
+                        , HA.style "padding" "0.5rem 1.5rem"
+                        , HA.style "border" "none"
+                        , HA.style "border-radius" "9999px"
+                        , HA.style "cursor" "pointer"
+                        , HA.style "display" "flex"
+                        , HA.style "align-items" "center"
+                        , HA.style "justify-content" "center"
+                        , HA.style "height" "3rem"
+                        , onClick (ctx.wrapMsg ValidateRationaleSignaturesButtonClicked)
+                        ]
+                        [ text "Validate rationale signing" ]
                     ]
                 , viewError form.error
                 ]
@@ -4072,45 +5465,258 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
         ( _, Done _ _, Preparing _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ sectionTitle "Rationale Signature"
-                , Html.p [] [ text "Please pick a proposal first." ]
+                , div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
+                    , HA.style "padding" "1.25rem"
+                    ]
+                    [ Html.p
+                        [ HA.style "color" "#4A5568"
+                        ]
+                        [ text "Please pick a proposal first." ]
+                    ]
                 ]
 
         ( _, Done _ _, Validating _ _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ sectionTitle "Rationale Signature"
-                , Html.p [] [ text "Validating rationale author signatures ..." ]
+                , div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
+                    , HA.style "padding" "2rem"
+                    , HA.style "text-align" "center"
+                    ]
+                    [ div
+                        [ HA.style "display" "flex"
+                        , HA.style "flex-direction" "column"
+                        , HA.style "align-items" "center"
+                        , HA.style "gap" "1rem"
+                        ]
+                        [ div
+                            [ HA.style "width" "3rem"
+                            , HA.style "height" "3rem"
+                            , HA.style "border" "3px solid #E2E8F0"
+                            , HA.style "border-top" "3px solid #3B82F6"
+                            , HA.style "border-radius" "50%"
+                            , HA.style "animation" "spin 1s linear infinite"
+                            ]
+                            []
+                        , Html.p
+                            [ HA.style "color" "#4A5568"
+                            ]
+                            [ text "Validating rationale author signatures..." ]
+                        ]
+                    ]
                 ]
 
         ( _, Done _ _, Done _ ratSig ) ->
-            let
-                downloadButton =
-                    Html.a
-                        [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode ratSig.signedJson
-                        , HA.download "rationale-signed.json"
+            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+                [ sectionTitle "Rationale Signature"
+                , div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
+                    , HA.style "overflow" "hidden"
+                    ]
+                    [ div
+                        [ HA.style "background-color" "#F7FAFC"
+                        , HA.style "padding" "1rem 1.25rem"
+                        , HA.style "border-bottom" "1px solid #EDF2F7"
                         ]
-                        [ Helper.viewButton "Download signed JSON rationale" NoMsg ]
-
-                viewAuthors content =
-                    Html.map ctx.wrapMsg <|
-                        div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                            [ sectionTitle "Rationale Signature"
-                            , div [ HA.style "display" "flex", HA.style "align-items" "center" ]
-                                [ div [ HA.style "margin-right" "12px" ]
-                                    [ downloadButton ]
-                                , div [ HA.style "margin-right" "12px" ]
-                                    [ Helper.viewButton "Generate PDF" (ConvertToPdfButtonClicked ratSig.signedJson) ]
-                                ]
-                            , content
-                            , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Update authors" ChangeAuthorsButtonClicked ]
+                        [ Html.h3
+                            [ HA.style "font-weight" "600"
+                            , HA.style "font-size" "1.125rem"
+                            , HA.style "color" "#1A202C"
+                            , HA.style "line-height" "1.4"
                             ]
-            in
-            if List.isEmpty ratSig.authors then
-                viewAuthors <|
-                    Html.p [ HA.class "mt-4" ] [ text "No registered author." ]
+                            [ text "Rationale Document" ]
+                        ]
+                    , div
+                        [ HA.style "padding" "1.25rem"
+                        ]
+                        [ Html.p
+                            [ HA.style "color" "#4A5568"
+                            , HA.style "margin-bottom" "1rem"
+                            ]
+                            [ text "Your rationale document has been generated and signed. You can download it or generate a PDF version." ]
+                        , div
+                            [ HA.style "display" "flex"
+                            , HA.style "gap" "1rem"
+                            , HA.style "flex-wrap" "wrap"
+                            , HA.style "margin-bottom" "1.5rem"
+                            ]
+                            [ Html.a
+                                [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode ratSig.signedJson
+                                , HA.download "rationale-signed.json"
+                                , HA.style "text-decoration" "none"
+                                ]
+                                [ button
+                                    [ HA.style "background-color" "#272727"
+                                    , HA.style "color" "white"
+                                    , HA.style "font-weight" "500"
+                                    , HA.style "font-size" "0.875rem"
+                                    , HA.style "padding" "0.5rem 1rem"
+                                    , HA.style "border" "none"
+                                    , HA.style "border-radius" "0.375rem"
+                                    , HA.style "cursor" "pointer"
+                                    , HA.style "display" "flex"
+                                    , HA.style "align-items" "center"
+                                    ]
+                                    [ Html.span
+                                        [ HA.style "margin-right" "0.5rem"
+                                        ]
+                                        [ text "📥" ]
+                                    , text "Download signed JSON"
+                                    ]
+                                ]
+                            , button
+                                [ HA.style "background-color" "#F9FAFB"
+                                , HA.style "color" "#272727"
+                                , HA.style "font-weight" "500"
+                                , HA.style "font-size" "0.875rem"
+                                , HA.style "padding" "0.5rem 1rem"
+                                , HA.style "border" "1px solid #E2E8F0"
+                                , HA.style "border-radius" "0.375rem"
+                                , HA.style "cursor" "pointer"
+                                , HA.style "display" "flex"
+                                , HA.style "align-items" "center"
+                                , onClick (ctx.wrapMsg (ConvertToPdfButtonClicked ratSig.signedJson))
+                                ]
+                                [ Html.span
+                                    [ HA.style "margin-right" "0.5rem"
+                                    ]
+                                    [ text "📄" ]
+                                , text "Generate PDF"
+                                ]
+                            ]
+                        , if List.isEmpty ratSig.authors then
+                            Html.p
+                                [ HA.style "color" "#718096"
+                                , HA.style "font-style" "italic"
+                                , HA.style "padding" "1rem 0"
+                                ]
+                                [ text "No registered authors." ]
 
-            else
-                viewAuthors <|
-                    Html.ul [] (List.map viewSigner ratSig.authors)
+                          else
+                            div
+                                [ HA.style "margin-top" "1rem"
+                                , HA.style "border-top" "1px solid #EDF2F7"
+                                , HA.style "padding-top" "1rem"
+                                ]
+                                [ Html.h4
+                                    [ HA.style "font-weight" "600"
+                                    , HA.style "font-size" "1rem"
+                                    , HA.style "margin-bottom" "1rem"
+                                    ]
+                                    [ text "Authors" ]
+                                , Html.map ctx.wrapMsg <|
+                                    div
+                                        [ HA.style "display" "flex"
+                                        , HA.style "flex-direction" "column"
+                                        , HA.style "gap" "0.75rem"
+                                        ]
+                                        (List.map viewSignerCard ratSig.authors)
+                                ]
+                        ]
+                    ]
+                , Html.p
+                    [ HA.style "margin-top" "1rem" ]
+                    [ Html.map ctx.wrapMsg <|
+                        button
+                            [ HA.style "background-color" "#272727"
+                            , HA.style "color" "white"
+                            , HA.style "font-weight" "500"
+                            , HA.style "font-size" "0.875rem"
+                            , HA.style "padding" "0.5rem 1.5rem"
+                            , HA.style "border" "none"
+                            , HA.style "border-radius" "9999px"
+                            , HA.style "cursor" "pointer"
+                            , HA.style "display" "flex"
+                            , HA.style "align-items" "center"
+                            , HA.style "justify-content" "center"
+                            , HA.style "height" "3rem"
+                            , onClick ChangeAuthorsButtonClicked
+                            ]
+                            [ text "Update authors" ]
+                    ]
+                ]
+
+
+viewSignerCard : AuthorWitness -> Html msg
+viewSignerCard { name, witnessAlgorithm, publicKey, signature } =
+    div
+        [ HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.5rem"
+        , HA.style "padding" "1rem"
+        , HA.style "background-color" "#F9FAFB"
+        ]
+        [ Html.h4
+            [ HA.style "font-weight" "600"
+            , HA.style "font-size" "1rem"
+            , HA.style "color" "#1A202C"
+            , HA.style "margin-bottom" "0.75rem"
+            ]
+            [ text name ]
+        , case signature of
+            Nothing ->
+                Html.p
+                    [ HA.style "color" "#718096"
+                    , HA.style "font-style" "italic"
+                    ]
+                    [ text "No signature provided" ]
+
+            Just sig ->
+                div
+                    [ HA.style "display" "grid"
+                    , HA.style "gap" "0.5rem"
+                    , HA.style "font-size" "0.875rem"
+                    ]
+                    [ div []
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "display" "inline-block"
+                            , HA.style "width" "9rem"
+                            ]
+                            [ text "Witness algorithm:" ]
+                        , Html.span
+                            [ HA.style "font-family" "monospace"
+                            ]
+                            [ text witnessAlgorithm ]
+                        ]
+                    , div []
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "display" "inline-block"
+                            , HA.style "width" "9rem"
+                            ]
+                            [ text "Public key:" ]
+                        , Html.span
+                            [ HA.style "font-family" "monospace"
+                            ]
+                            [ text (String.left 10 publicKey ++ "..." ++ String.right 6 publicKey) ]
+                        ]
+                    , div []
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "display" "inline-block"
+                            , HA.style "width" "9rem"
+                            ]
+                            [ text "Signature:" ]
+                        , Html.span
+                            [ HA.style "font-family" "monospace"
+                            ]
+                            [ text (String.left 10 sig ++ "..." ++ String.right 6 sig) ]
+                        ]
+                    ]
+        ]
 
 
 viewRationaleSignatureForm : JsonLdContexts -> Gov.ActionId -> RationaleSignatureForm -> Html Msg
@@ -4120,37 +5726,150 @@ viewRationaleSignatureForm jsonLdContexts actionId ({ authors } as form) =
             (rationaleSignatureFromForm jsonLdContexts actionId { form | authors = [] }).signedJson
     in
     div []
-        [ Helper.formContainer
-            [ Html.p [ HA.class "mb-4" ] [ text "Here is the JSON-LD rationale file generated from your rationale inputs." ]
-            , Html.p [ HA.class "mb-6" ]
-                [ Html.a
+        [ div
+            [ HA.style "border" "1px solid #E2E8F0"
+            , HA.style "border-radius" "0.75rem"
+            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+            , HA.style "background-color" "#FFFFFF"
+            , HA.style "overflow" "hidden"
+            , HA.style "margin-bottom" "1.5rem"
+            ]
+            [ div
+                [ HA.style "background-color" "#F7FAFC"
+                , HA.style "padding" "1rem 1.25rem"
+                , HA.style "border-bottom" "1px solid #EDF2F7"
+                ]
+                [ Html.h3
+                    [ HA.style "font-weight" "600"
+                    , HA.style "font-size" "1.125rem"
+                    , HA.style "color" "#1A202C"
+                    , HA.style "line-height" "1.4"
+                    ]
+                    [ text "JSON-LD Rationale Document" ]
+                ]
+            , div
+                [ HA.style "padding" "1.25rem"
+                ]
+                [ Html.p
+                    [ HA.style "color" "#4A5568"
+                    , HA.style "margin-bottom" "1rem"
+                    ]
+                    [ text "Here is the JSON-LD rationale file generated from your rationale inputs." ]
+                , Html.a
                     [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode jsonRationale
                     , HA.download "rationale.json"
+                    , HA.style "text-decoration" "none"
                     ]
-                    [ Helper.viewButton "Download JSON rationale" NoMsg ]
+                    [ button
+                        [ HA.style "background-color" "#272727"
+                        , HA.style "color" "white"
+                        , HA.style "font-weight" "500"
+                        , HA.style "font-size" "0.875rem"
+                        , HA.style "padding" "0.5rem 1rem"
+                        , HA.style "border" "none"
+                        , HA.style "border-radius" "0.375rem"
+                        , HA.style "cursor" "pointer"
+                        , HA.style "display" "flex"
+                        , HA.style "align-items" "center"
+                        ]
+                        [ Html.span
+                            [ HA.style "margin-right" "0.5rem"
+                            ]
+                            [ text "📥" ]
+                        , text "Download JSON rationale"
+                        ]
+                    ]
                 ]
             ]
-        , Html.h5 [ HA.class "text-xl font-medium" ] [ text "Authors" ]
-        , Helper.formContainer
-            [ Html.p [ HA.class "mb-4" ]
-                [ text "Each author needs to sign the above metadata. "
-                , text "For now, the only supported method is to download this json file, and sign it with cardano-signer. "
-                , text "Later I plan to add the ability to sign directly with the web wallet (like Eternl)."
-                ]
-            , Html.pre [ HA.class "p-4 rounded-md border overflow-auto text-sm mb-6", HA.style "border-color" "#C6C6C6" ]
-                [ text "cardano-signer.js sign --cip100 \\\n"
-                , text "   --data-file rationale.json \\\n"
-                , text "   --secret-key dummy.skey \\\n"
-                , text "   --author-name \"The great Name\" \\\n"
-                , text "   --out-file rationale-signed.json"
-                ]
-            , Html.p [ HA.class "mb-4" ]
-                [ text "Add individual authors that contributed to this rationale. "
-                , text "Provide each author signature or skip all signatures."
-                ]
-            , Html.p [ HA.class "mb-4" ] [ Helper.viewButton "Add an author" AddAuthorButtonClicked ]
+        , div
+            [ HA.style "border" "1px solid #E2E8F0"
+            , HA.style "border-radius" "0.75rem"
+            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+            , HA.style "background-color" "#FFFFFF"
+            , HA.style "overflow" "hidden"
             ]
-        , div [] (List.indexedMap viewOneAuthorForm authors)
+            [ div
+                [ HA.style "background-color" "#F7FAFC"
+                , HA.style "padding" "1rem 1.25rem"
+                , HA.style "border-bottom" "1px solid #EDF2F7"
+                , HA.style "display" "flex"
+                , HA.style "justify-content" "space-between"
+                , HA.style "align-items" "center"
+                ]
+                [ div []
+                    [ Html.h3
+                        [ HA.style "font-weight" "600"
+                        , HA.style "font-size" "1.125rem"
+                        , HA.style "color" "#1A202C"
+                        , HA.style "line-height" "1.4"
+                        ]
+                        [ text "Authors" ]
+                    , Html.p
+                        [ HA.style "font-size" "0.875rem"
+                        , HA.style "color" "#4A5568"
+                        ]
+                        [ text "Add individual authors that contributed to this rationale" ]
+                    ]
+                , button
+                    [ HA.style "background-color" "#272727"
+                    , HA.style "color" "white"
+                    , HA.style "font-weight" "500"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "padding" "0.5rem 1rem"
+                    , HA.style "border" "none"
+                    , HA.style "border-radius" "0.375rem"
+                    , HA.style "cursor" "pointer"
+                    , HA.style "display" "flex"
+                    , HA.style "align-items" "center"
+                    , onClick AddAuthorButtonClicked
+                    ]
+                    [ Html.span [ HA.style "margin-right" "0.375rem" ] [ text "+" ]
+                    , text "Add Author"
+                    ]
+                ]
+            , div
+                [ HA.style "padding" "1.25rem"
+                ]
+                [ Html.p
+                    [ HA.style "margin-bottom" "1.5rem"
+                    , HA.style "color" "#4A5568"
+                    ]
+                    [ text "Each author needs to sign the rationale document. You can download the JSON file, sign it with cardano-signer, and then upload the signature." ]
+                , div
+                    [ HA.style "background-color" "#F9FAFB"
+                    , HA.style "border" "1px solid #EDF2F7"
+                    , HA.style "border-radius" "0.375rem"
+                    , HA.style "padding" "1rem"
+                    , HA.style "font-family" "monospace"
+                    , HA.style "font-size" "0.75rem"
+                    , HA.style "overflow-x" "auto"
+                    , HA.style "white-space" "pre"
+                    , HA.style "margin-bottom" "1.5rem"
+                    ]
+                    [ text "cardano-signer.js sign --cip100 \\\n"
+                    , text "   --data-file rationale.json \\\n"
+                    , text "   --secret-key dummy.skey \\\n"
+                    , text "   --author-name \"The great Name\" \\\n"
+                    , text "   --out-file rationale-signed.json"
+                    ]
+                , if List.isEmpty authors then
+                    Html.p
+                        [ HA.style "text-align" "center"
+                        , HA.style "color" "#718096"
+                        , HA.style "font-style" "italic"
+                        , HA.style "padding" "1.5rem 0"
+                        ]
+                        [ text "No authors added yet." ]
+
+                  else
+                    div
+                        [ HA.style "display" "flex"
+                        , HA.style "flex-direction" "column"
+                        , HA.style "gap" "1rem"
+                        ]
+                        (List.indexedMap viewOneAuthorForm authors)
+                ]
+            ]
         ]
 
 
@@ -4194,42 +5913,183 @@ encodeAuthorWitness { name, witnessAlgorithm, publicKey, signature } =
 
 viewOneAuthorForm : Int -> AuthorWitness -> Html Msg
 viewOneAuthorForm n author =
-    Helper.formContainer
-        [ div [ HA.class "flex items-center" ]
-            [ div [ HA.class "flex-1 flex flex-col md:flex-row gap-4" ]
-                [ div [ HA.class "w-full md:w-1/3" ]
-                    [ Helper.labeledField "Author name"
-                        (Helper.textFieldInline author.name (AuthorNameChange n))
-                    ]
-                , div [ HA.class "w-full md:w-2/3" ]
-                    [ case author.signature of
-                        Nothing ->
-                            div [ HA.class "flex items-center" ]
-                                [ Helper.labeledField "Signature"
-                                    (div [ HA.class "flex items-center" ]
-                                        [ Helper.viewButton "Load signature" (LoadJsonSignatureButtonClicked n author.name)
-                                        , div [ HA.class "ml-2" ]
-                                            [ Helper.viewButton "Delete" (DeleteAuthorButtonClicked n) ]
-                                        ]
-                                    )
-                                ]
-
-                        Just sig ->
-                            div []
-                                [ Helper.labeledField "Witness algorithm" (text author.witnessAlgorithm)
-                                , Helper.labeledField "Public key" (text (String.left 12 author.publicKey ++ "..."))
-                                , Helper.labeledField "Signature"
-                                    (div [ HA.class "flex items-center" ]
-                                        [ text (String.left 12 sig ++ "...")
-                                        , div [ HA.class "ml-2" ]
-                                            [ Helper.viewButton "Change" (LoadJsonSignatureButtonClicked n author.name) ]
-                                        , div [ HA.class "ml-2" ]
-                                            [ Helper.viewButton "Delete" (DeleteAuthorButtonClicked n) ]
-                                        ]
-                                    )
-                                ]
-                    ]
+    div
+        [ HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.5rem"
+        , HA.style "background-color" "#F9FAFB"
+        , HA.style "padding" "1rem"
+        ]
+        [ div
+            [ HA.style "display" "flex"
+            , HA.style "justify-content" "space-between"
+            , HA.style "align-items" "center"
+            , HA.style "margin-bottom" "0.75rem"
+            ]
+            [ Html.h4
+                [ HA.style "font-weight" "500"
+                , HA.style "font-size" "1rem"
+                , HA.style "color" "#1A202C"
                 ]
+                [ text ("Author " ++ String.fromInt (n + 1)) ]
+            , button
+                [ HA.style "background-color" "black"
+                , HA.style "color" "white"
+                , HA.style "width" "2rem"
+                , HA.style "height" "2rem"
+                , HA.style "border" "none"
+                , HA.style "border-radius" "0.375rem"
+                , HA.style "cursor" "pointer"
+                , HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                , HA.style "justify-content" "center"
+                , onClick (DeleteAuthorButtonClicked n)
+                ]
+                [ Html.div
+                    [ HA.style "font-size" "1.25rem"
+                    , HA.style "line-height" "1"
+                    ]
+                    [ text "🗑" ]
+                ]
+            ]
+        , div
+            [ HA.style "display" "grid"
+            , HA.style "grid-template-columns" "1fr"
+            , HA.style "gap" "1rem"
+            ]
+            [ div []
+                [ Html.label
+                    [ HA.style "display" "block"
+                    , HA.style "font-weight" "500"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "color" "#4B5563"
+                    , HA.style "margin-bottom" "0.5rem"
+                    ]
+                    [ text "Author name" ]
+                , Html.input
+                    [ HA.type_ "text"
+                    , HA.value author.name
+                    , Html.Events.onInput (AuthorNameChange n)
+                    , HA.style "width" "100%"
+                    , HA.style "padding" "0.75rem"
+                    , HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.375rem"
+                    , HA.style "background-color" "white"
+                    ]
+                    []
+                ]
+            , case author.signature of
+                Nothing ->
+                    div []
+                        [ Html.label
+                            [ HA.style "display" "block"
+                            , HA.style "font-weight" "500"
+                            , HA.style "font-size" "0.875rem"
+                            , HA.style "color" "#4B5563"
+                            , HA.style "margin-bottom" "0.5rem"
+                            ]
+                            [ text "Signature" ]
+                        , button
+                            [ HA.style "background-color" "#F9FAFB"
+                            , HA.style "color" "#272727"
+                            , HA.style "font-weight" "500"
+                            , HA.style "font-size" "0.875rem"
+                            , HA.style "padding" "0.75rem"
+                            , HA.style "border" "1px dashed #CBD5E0"
+                            , HA.style "border-radius" "0.375rem"
+                            , HA.style "width" "100%"
+                            , HA.style "cursor" "pointer"
+                            , HA.style "display" "flex"
+                            , HA.style "align-items" "center"
+                            , HA.style "justify-content" "center"
+                            , HA.style "gap" "0.5rem"
+                            , onClick (LoadJsonSignatureButtonClicked n author.name)
+                            ]
+                            [ Html.span [] [ text "📄" ]
+                            , text "Load signature file"
+                            ]
+                        ]
+
+                Just sig ->
+                    div [ HA.style "display" "grid", HA.style "gap" "1rem" ]
+                        [ div []
+                            [ Html.label
+                                [ HA.style "display" "block"
+                                , HA.style "font-weight" "500"
+                                , HA.style "font-size" "0.875rem"
+                                , HA.style "color" "#4B5563"
+                                , HA.style "margin-bottom" "0.5rem"
+                                ]
+                                [ text "Signature algorithm" ]
+                            , Html.div
+                                [ HA.style "padding" "0.75rem"
+                                , HA.style "border" "1px solid #E2E8F0"
+                                , HA.style "border-radius" "0.375rem"
+                                , HA.style "background-color" "#F9FAFB"
+                                , HA.style "font-family" "monospace"
+                                , HA.style "font-size" "0.875rem"
+                                ]
+                                [ text author.witnessAlgorithm ]
+                            ]
+                        , div []
+                            [ Html.label
+                                [ HA.style "display" "block"
+                                , HA.style "font-weight" "500"
+                                , HA.style "font-size" "0.875rem"
+                                , HA.style "color" "#4B5563"
+                                , HA.style "margin-bottom" "0.5rem"
+                                ]
+                                [ text "Public key" ]
+                            , Html.div
+                                [ HA.style "padding" "0.75rem"
+                                , HA.style "border" "1px solid #E2E8F0"
+                                , HA.style "border-radius" "0.375rem"
+                                , HA.style "background-color" "#F9FAFB"
+                                , HA.style "font-family" "monospace"
+                                , HA.style "font-size" "0.875rem"
+                                , HA.style "overflow" "hidden"
+                                , HA.style "text-overflow" "ellipsis"
+                                , HA.style "white-space" "nowrap"
+                                ]
+                                [ text author.publicKey ]
+                            ]
+                        , div []
+                            [ Html.div
+                                [ HA.style "display" "flex"
+                                , HA.style "justify-content" "space-between"
+                                , HA.style "align-items" "center"
+                                , HA.style "margin-bottom" "0.5rem"
+                                ]
+                                [ Html.label
+                                    [ HA.style "font-weight" "500"
+                                    , HA.style "font-size" "0.875rem"
+                                    , HA.style "color" "#4B5563"
+                                    ]
+                                    [ text "Signature" ]
+                                , button
+                                    [ HA.style "font-size" "0.75rem"
+                                    , HA.style "color" "#4B5563"
+                                    , HA.style "background" "none"
+                                    , HA.style "border" "none"
+                                    , HA.style "cursor" "pointer"
+                                    , HA.style "text-decoration" "underline"
+                                    , onClick (LoadJsonSignatureButtonClicked n author.name)
+                                    ]
+                                    [ text "Replace" ]
+                                ]
+                            , Html.div
+                                [ HA.style "padding" "0.75rem"
+                                , HA.style "border" "1px solid #E2E8F0"
+                                , HA.style "border-radius" "0.375rem"
+                                , HA.style "background-color" "#F9FAFB"
+                                , HA.style "font-family" "monospace"
+                                , HA.style "font-size" "0.875rem"
+                                , HA.style "overflow" "hidden"
+                                , HA.style "text-overflow" "ellipsis"
+                                , HA.style "white-space" "nowrap"
+                                ]
+                                [ text sig ]
+                            ]
+                        ]
             ]
         ]
 
@@ -4281,19 +6141,141 @@ viewPermanentStorageStep ctx rationaleSigStep storageConfigStep step =
             [ sectionTitle "Rationale Storage"
             , case ( rationaleSigStep, storageConfigStep, step ) of
                 ( Done _ _, Done _ _, Preparing form ) ->
-                    div []
-                        [ Html.p [] [ Helper.viewButton "Add to IPFS" PinJsonIpfsButtonClicked ]
-                        , viewError form.error
+                    div
+                        [ HA.style "border" "1px solid #E2E8F0"
+                        , HA.style "border-radius" "0.75rem"
+                        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                        , HA.style "background-color" "#FFFFFF"
+                        , HA.style "overflow" "hidden"
+                        ]
+                        [ div
+                            [ HA.style "background-color" "#F7FAFC"
+                            , HA.style "padding" "1rem 1.25rem"
+                            , HA.style "border-bottom" "1px solid #EDF2F7"
+                            ]
+                            [ Html.h3
+                                [ HA.style "font-weight" "600"
+                                , HA.style "font-size" "1.125rem"
+                                , HA.style "color" "#1A202C"
+                                , HA.style "line-height" "1.4"
+                                ]
+                                [ text "Store on IPFS" ]
+                            , Html.p
+                                [ HA.style "font-size" "0.875rem"
+                                , HA.style "color" "#4A5568"
+                                , HA.style "line-height" "1.6"
+                                , HA.style "margin-top" "0.25rem"
+                                ]
+                                [ text "Store your signed rationale document on IPFS to ensure it's accessible when your vote is recorded on chain." ]
+                            ]
+                        , div
+                            [ HA.style "padding" "1.25rem"
+                            ]
+                            [ Html.p
+                                [ HA.style "margin-bottom" "1.5rem"
+                                , HA.style "color" "#4A5568"
+                                ]
+                                [ text "Your document will be stored using the configuration you selected earlier. The CID (content identifier) will be included with your vote transaction." ]
+                            , button
+                                [ HA.style "background-color" "#272727"
+                                , HA.style "color" "white"
+                                , HA.style "font-weight" "500"
+                                , HA.style "font-size" "0.875rem"
+                                , HA.style "padding" "0.75rem 1.5rem"
+                                , HA.style "border" "none"
+                                , HA.style "border-radius" "0.5rem"
+                                , HA.style "cursor" "pointer"
+                                , HA.style "display" "flex"
+                                , HA.style "align-items" "center"
+                                , HA.style "justify-content" "center"
+                                , HA.style "width" "fit-content"
+                                , onClick PinJsonIpfsButtonClicked
+                                ]
+                                [ Html.span
+                                    [ HA.style "margin-right" "0.5rem"
+                                    ]
+                                    [ text "📤" ]
+                                , text "Upload to IPFS"
+                                ]
+                            , viewError form.error
+                            ]
                         ]
 
                 ( Done _ _, Done _ _, Validating _ _ ) ->
-                    Html.p [] [ text "Uploading rationale to IPFS server ..." ]
+                    div
+                        [ HA.style "border" "1px solid #E2E8F0"
+                        , HA.style "border-radius" "0.75rem"
+                        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                        , HA.style "background-color" "#FFFFFF"
+                        , HA.style "padding" "2rem"
+                        , HA.style "text-align" "center"
+                        ]
+                        [ div
+                            [ HA.style "display" "flex"
+                            , HA.style "flex-direction" "column"
+                            , HA.style "align-items" "center"
+                            , HA.style "gap" "1rem"
+                            ]
+                            [ div
+                                [ HA.style "width" "3rem"
+                                , HA.style "height" "3rem"
+                                , HA.style "border" "3px solid #E2E8F0"
+                                , HA.style "border-top" "3px solid #3B82F6"
+                                , HA.style "border-radius" "50%"
+                                , HA.style "animation" "spin 1s linear infinite"
+                                ]
+                                []
+                            , Html.p
+                                [ HA.style "font-size" "1rem"
+                                , HA.style "color" "#4A5568"
+                                ]
+                                [ text "Uploading rationale to IPFS..." ]
+                            , Html.node "style"
+                                []
+                                [ text """
+                                    @keyframes spin {
+                                        0% { transform: rotate(0deg); }
+                                        100% { transform: rotate(360deg); }
+                                    }
+                                """
+                                ]
+                            ]
+                        ]
 
                 ( Done _ r, Done _ _, Done _ storage ) ->
                     viewCompletedStorage r storage
 
                 _ ->
-                    Html.p [] [ text "Please complete the storage config and rationale signature steps first." ]
+                    div
+                        [ HA.style "border" "1px solid #E2E8F0"
+                        , HA.style "border-radius" "0.75rem"
+                        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                        , HA.style "background-color" "#FFFFFF"
+                        , HA.style "overflow" "hidden"
+                        ]
+                        [ div
+                            [ HA.style "background-color" "#F7FAFC"
+                            , HA.style "padding" "1rem 1.25rem"
+                            , HA.style "border-bottom" "1px solid #EDF2F7"
+                            ]
+                            [ Html.h3
+                                [ HA.style "font-weight" "600"
+                                , HA.style "font-size" "1.125rem"
+                                , HA.style "color" "#1A202C"
+                                , HA.style "line-height" "1.4"
+                                ]
+                                [ text "Step Not Available" ]
+                            ]
+                        , div
+                            [ HA.style "padding" "1.25rem"
+                            ]
+                            [ Html.p
+                                [ HA.style "color" "#4A5568"
+                                , HA.style "font-size" "0.9375rem"
+                                ]
+                                [ text "Please complete the storage configuration and rationale signature steps first." ]
+                            ]
+                        ]
             ]
 
 
@@ -4309,46 +6291,163 @@ viewCompletedStorage r storage =
                 |> blake2b256 Nothing
                 |> Bytes.fromU8
     in
-    div []
-        [ Helper.formContainer
-            [ Html.p [ HA.class "mb-4" ]
-                [ Html.strong [ HA.class "font-medium" ] [ text "File uploaded successfully:" ] ]
-            , Html.p [ HA.class "mb-4" ]
-                [ text "Remark: file pinning is ongoing, but beware that it may take a few hours for your file to be fully pinned."
-                , text " And though unlikely, it could be garbage collected before that happens, or in the future."
-                , text " So make sure to keep a local copy of your JSON file in case you might need to re-upload it (its ID should not change)."
+    div
+        [ HA.style "border" "1px solid #E2E8F0"
+        , HA.style "border-radius" "0.75rem"
+        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+        , HA.style "background-color" "#FFFFFF"
+        , HA.style "overflow" "hidden"
+        ]
+        [ div
+            [ HA.style "background-color" "#F7FAFC"
+            , HA.style "padding" "1rem 1.25rem"
+            , HA.style "border-bottom" "1px solid #EDF2F7"
+            , HA.style "display" "flex"
+            , HA.style "justify-content" "space-between"
+            , HA.style "align-items" "center"
+            ]
+            [ div []
+                [ Html.h3
+                    [ HA.style "font-weight" "600"
+                    , HA.style "font-size" "1.125rem"
+                    , HA.style "color" "#1A202C"
+                    , HA.style "line-height" "1.4"
+                    ]
+                    [ text "Upload Successful" ]
+                , Html.p
+                    [ HA.style "font-size" "0.875rem"
+                    , HA.style "color" "#4A5568"
+                    , HA.style "line-height" "1.6"
+                    , HA.style "margin-top" "0.25rem"
+                    ]
+                    [ text "Your rationale has been successfully uploaded to IPFS" ]
                 ]
-            , div [ HA.class " p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
-                [ div [ HA.class "mb-2" ]
-                    [ Html.span [ HA.class "font-medium mr-2" ] [ text "Link:" ]
+            , div
+                [ HA.style "background-color" "#F0FDF4"
+                , HA.style "color" "#16A34A"
+                , HA.style "padding" "0.375rem 0.75rem"
+                , HA.style "border-radius" "9999px"
+                , HA.style "font-size" "0.875rem"
+                , HA.style "font-weight" "500"
+                , HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                , HA.style "gap" "0.375rem"
+                ]
+                [ text "✓"
+                , text "Uploaded"
+                ]
+            ]
+        , div
+            [ HA.style "padding" "1.25rem"
+            ]
+            [ Html.p
+                [ HA.style "color" "#4A5568"
+                , HA.style "margin-bottom" "1.5rem"
+                , HA.style "font-size" "0.9375rem"
+                ]
+                [ text "Your file has been uploaded to IPFS. File pinning is ongoing and may take a few hours to complete. We recommend saving a local copy of your JSON file in case you need to re-upload it in the future." ]
+            , div
+                [ HA.style "background-color" "#F9FAFB"
+                , HA.style "border" "1px solid #E2E8F0"
+                , HA.style "border-radius" "0.5rem"
+                , HA.style "padding" "1.25rem"
+                , HA.style "margin-bottom" "1.5rem"
+                ]
+                [ div
+                    [ HA.style "display" "grid"
+                    , HA.style "grid-template-columns" "auto 1fr"
+                    , HA.style "gap" "0.75rem 1.5rem"
+                    , HA.style "align-items" "start"
+                    ]
+                    [ -- File Name
+                      Html.span
+                        [ HA.style "font-weight" "500"
+                        , HA.style "color" "#4A5568"
+                        ]
+                        [ text "File name:" ]
+                    , Html.span
+                        [ HA.style "font-family" "monospace"
+                        , HA.style "overflow-wrap" "break-word"
+                        ]
+                        [ text storage.jsonFile.name ]
+
+                    -- CID
+                    , Html.span
+                        [ HA.style "font-weight" "500"
+                        , HA.style "color" "#4A5568"
+                        ]
+                        [ text "CID:" ]
+                    , Html.span
+                        [ HA.style "font-family" "monospace"
+                        , HA.style "overflow-wrap" "break-word"
+                        ]
+                        [ text storage.jsonFile.cid ]
+
+                    -- File Hash
+                    , Html.span
+                        [ HA.style "font-weight" "500"
+                        , HA.style "color" "#4A5568"
+                        ]
+                        [ text "File Hash:" ]
+                    , Html.span
+                        [ HA.style "font-family" "monospace"
+                        , HA.style "overflow-wrap" "break-word"
+                        ]
+                        [ text (Bytes.toHex dataHash) ]
+
+                    -- Size
+                    , Html.span
+                        [ HA.style "font-weight" "500"
+                        , HA.style "color" "#4A5568"
+                        ]
+                        [ text "Size:" ]
+                    , Html.span
+                        [ HA.style "font-family" "monospace"
+                        ]
+                        [ text (storage.jsonFile.size ++ " bytes") ]
+
+                    -- IPFS Link
+                    , Html.span
+                        [ HA.style "font-weight" "500"
+                        , HA.style "color" "#4A5568"
+                        ]
+                        [ text "IPFS Link:" ]
                     , Html.a
                         [ HA.href link
-                        , HA.download storage.jsonFile.name
                         , HA.target "_blank"
-                        , HA.class "text-blue-600 hover:text-blue-800 underline font-mono"
+                        , HA.rel "noopener noreferrer"
+                        , HA.style "color" "#3182CE"
+                        , HA.style "text-decoration" "none"
+                        , HA.style "display" "inline-flex"
+                        , HA.style "align-items" "center"
+                        , HA.style "font-family" "monospace"
                         ]
-                        [ text link ]
-                    ]
-                , Html.ul [ HA.class "space-y-2 text-sm" ]
-                    [ Html.li [ HA.class "flex" ]
-                        [ Html.span [ HA.class "font-bold w-24" ] [ text "Name: " ]
-                        , Html.span [ HA.class "font-mono" ] [ text storage.jsonFile.name ]
-                        ]
-                    , Html.li [ HA.class "flex" ]
-                        [ Html.span [ HA.class "font-bold w-24" ] [ text "CID: " ]
-                        , Html.span [ HA.class "font-mono" ] [ text storage.jsonFile.cid ]
-                        ]
-                    , Html.li [ HA.class "flex" ]
-                        [ Html.span [ HA.class "font-bold w-24" ] [ text "Size: " ]
-                        , Html.span [ HA.class "font-mono" ] [ text storage.jsonFile.size, text " Bytes" ]
-                        ]
-                    , Html.li [ HA.class "flex" ]
-                        [ Html.span [ HA.class "font-bold w-24" ] [ text "File Hash: " ]
-                        , Html.span [ HA.class "font-mono break-all" ] [ text (Bytes.toHex dataHash) ]
+                        [ text link
+                        , Html.span
+                            [ HA.style "margin-left" "0.25rem"
+                            ]
+                            [ text "↗" ]
                         ]
                     ]
                 ]
-            , Html.p [] [ Helper.viewButton "Add another storage" AddOtherStorageButtonCLicked ]
+            , button
+                [ HA.style "background-color" "#272727"
+                , HA.style "color" "white"
+                , HA.style "font-weight" "500"
+                , HA.style "font-size" "0.875rem"
+                , HA.style "padding" "0.5rem 1.5rem"
+                , HA.style "border" "none"
+                , HA.style "border-radius" "9999px"
+                , HA.style "cursor" "pointer"
+                , HA.style "display" "flex"
+                , HA.style "align-items" "center"
+                , HA.style "justify-content" "center"
+                , HA.style "height" "3rem"
+                , onClick AddOtherStorageButtonCLicked
+                ]
+                [ Html.span [ HA.style "margin-right" "0.5rem" ] [ text "+" ]
+                , text "Add another storage location"
+                ]
             ]
         ]
 

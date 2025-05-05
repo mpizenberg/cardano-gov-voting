@@ -1,8 +1,7 @@
-module Header exposing
-    ( ViewContext
-    , view
-    )
+module Header exposing (ViewContext, view)
 
+import Cardano.Address exposing (NetworkId(..))
+import Helper
 import Html exposing (Html, button, div, img, li, nav, span, text, ul)
 import Html.Attributes exposing (alt, class, src, style)
 import Html.Events exposing (onClick)
@@ -12,12 +11,10 @@ import WalletConnector
 type alias ViewContext msg =
     { mobileMenuIsOpen : Bool
     , toggleMobileMenu : msg
-
-    -- Wallet connector stuff
+    , networkDropdownIsOpen : Bool -- New field for network dropdown state
+    , toggleNetworkDropdown : msg -- New field for toggling network dropdown
     , walletConnector : WalletConnector.State
     , walletConnectorMsgs : WalletConnector.Msgs msg
-
-    -- Links stuff
     , logoLink : List (Html.Attribute msg) -> List (Html msg) -> Html msg
     , navigationItems :
         List
@@ -25,15 +22,17 @@ type alias ViewContext msg =
             , label : String
             , isActive : Bool
             }
+    , networkId : NetworkId
+    , onNetworkChange : NetworkId -> msg
     }
 
 
 view : ViewContext msg -> Html msg
-view { mobileMenuIsOpen, toggleMobileMenu, walletConnector, walletConnectorMsgs, logoLink, navigationItems } =
+view { mobileMenuIsOpen, toggleMobileMenu, networkDropdownIsOpen, toggleNetworkDropdown, walletConnector, walletConnectorMsgs, logoLink, navigationItems, networkId, onNetworkChange } =
     nav [ class "relative z-10 w-full bg-transparent" ]
-        [ div [ class "container mx-auto py-6 overflow-visible", style "padding-right" "6px" ]
+        [ div [ class "container mx-auto py-6 overflow-visible" ]
             [ div [ class "flex items-center justify-between" ]
-                -- Logo section
+                -- Logo section (unchanged)
                 [ div [ style "flex-shrink" "0" ]
                     [ logoLink
                         [ style "display" "flex"
@@ -56,17 +55,21 @@ view { mobileMenuIsOpen, toggleMobileMenu, walletConnector, walletConnectorMsgs,
                         ]
                     ]
 
-                -- Desktop menu
+                -- Desktop menu (unchanged)
                 , div [ class "hidden md:flex space-x-8" ]
                     (List.map viewDesktopMenuItem navigationItems)
 
-                -- Wallet section (on the right)
-                , div [ class "hidden md:flex" ]
-                    [ div [ class "flex-shrink-0 min-w-[150px]" ]
-                        [ WalletConnector.view walletConnectorMsgs walletConnector ]
+                -- Wallet and network selector
+                , div [ class "hidden md:flex items-center" ]
+                    [ WalletConnector.view walletConnectorMsgs walletConnector
+                    , viewNetworkSelector
+                        networkId
+                        networkDropdownIsOpen
+                        toggleNetworkDropdown
+                        onNetworkChange
                     ]
 
-                -- Mobile menu button
+                -- Mobile menu button (unchanged)
                 , div [ class "md:hidden" ]
                     [ button
                         [ class "text-gray-600 hover:text-gray-900 focus:outline-none"
@@ -115,7 +118,7 @@ view { mobileMenuIsOpen, toggleMobileMenu, walletConnector, walletConnectorMsgs,
                     ]
                 ]
 
-            -- Mobile menu (responsive)
+            -- Mobile menu (unchanged)
             , div
                 [ class
                     ("md:hidden transition-all duration-300 ease-in-out "
@@ -131,8 +134,10 @@ view { mobileMenuIsOpen, toggleMobileMenu, walletConnector, walletConnectorMsgs,
                     [ ul [ class "flex flex-col space-y-4 mt-4" ]
                         (List.map viewMobileMenuItem navigationItems)
                     , div [ class "mt-4 px-4 z-20 relative" ]
-                        [ div [ class "w-full" ]
-                            [ WalletConnector.viewMobile walletConnectorMsgs walletConnector ]
+                        [ div [ class "w-full space-y-2" ]
+                            [ WalletConnector.viewMobile walletConnectorMsgs walletConnector
+                            , viewMobileNetworkSelector networkId toggleNetworkDropdown onNetworkChange
+                            ]
                         ]
                     ]
                 ]
@@ -181,4 +186,152 @@ viewMobileMenuItem item =
                 )
             ]
             [ text item.label ]
+        ]
+
+
+viewNetworkSelector : NetworkId -> Bool -> msg -> (NetworkId -> msg) -> Html msg
+viewNetworkSelector currentNetwork dropdownOpen toggleDropdown onNetworkChange =
+    let
+        isMainnet =
+            currentNetwork == Mainnet
+
+        networkLabel =
+            if isMainnet then
+                "Mainnet"
+
+            else
+                "Preview"
+
+        otherNetwork =
+            if isMainnet then
+                Testnet
+
+            else
+                Mainnet
+
+        otherNetworkLabel =
+            if isMainnet then
+                "Preview"
+
+            else
+                "Mainnet"
+
+        networkColor =
+            if isMainnet then
+                "#10b981"
+
+            else
+                "#3b82f6"
+
+        -- Green for Mainnet, Blue for Preview
+    in
+    div [ style "position" "relative", style "margin-left" "0.75rem" ]
+        [ Helper.viewWalletButton networkLabel
+            toggleDropdown
+            [ -- Network indicator dot
+              div
+                [ style "width" "0.75rem"
+                , style "height" "0.75rem"
+                , style "border-radius" "9999px"
+                , style "background-color" networkColor
+                , style "margin-left" "0.2rem"
+                ]
+                []
+            , span
+                [ style "transition-transform" "0.2s"
+                , style "margin-left" "4px"
+                , style "transform"
+                    (if dropdownOpen then
+                        "rotate(180deg)"
+
+                     else
+                        "rotate(0)"
+                    )
+                ]
+                [ text "▼" ]
+            ]
+        , if dropdownOpen then
+            div Helper.applyDropdownContainerStyle
+                [ ul []
+                    [ li (Helper.applyDropdownItemStyle (onNetworkChange otherNetwork))
+                        [ -- Network indicator dot for other network
+                          div
+                            [ style "width" "0.75rem"
+                            , style "height" "0.75rem"
+                            , style "border-radius" "9999px"
+                            , style "background-color"
+                                (if not isMainnet then
+                                    "#10b981"
+
+                                 else
+                                    "#3b82f6"
+                                )
+                            , style "margin-right" "0.5rem"
+                            ]
+                            []
+                        , text otherNetworkLabel
+                        ]
+                    ]
+                ]
+
+          else
+            text ""
+        ]
+
+
+viewMobileNetworkSelector : NetworkId -> msg -> (NetworkId -> msg) -> Html msg
+viewMobileNetworkSelector currentNetwork toggleNetwork onNetworkChange =
+    let
+        isMainnet =
+            currentNetwork == Mainnet
+
+        otherNetwork =
+            if isMainnet then
+                Testnet
+
+            else
+                Mainnet
+
+        networkColor =
+            if isMainnet then
+                "#10b981"
+
+            else
+                "#3b82f6"
+    in
+    div
+        [ style "display" "inline-flex"
+        , style "align-items" "center"
+        , style "padding" "0.75rem 2.25rem"
+        , style "margin-top" "0.5rem"
+        , style "border-radius" "9999px"
+        , style "background-color" "#272727"
+        , style "color" "white"
+        , style "cursor" "pointer"
+        , style "font-size" "0.875rem"
+        , style "font-weight" "500"
+        , style "box-shadow" "0 1px 3px rgba(0,0,0,0.1)"
+        , style "transition" "background-color 0.2s"
+        , onClick (onNetworkChange otherNetwork)
+        ]
+        [ div
+            [ style "width" "0.75rem"
+            , style "height" "0.75rem"
+            , style "border-radius" "9999px"
+            , style "background-color" networkColor
+            , style "margin-right" "0.5rem"
+            ]
+            []
+        , text
+            (if isMainnet then
+                "Mainnet"
+
+             else
+                "Preview"
+            )
+        , div
+            [ style "margin-left" "0.5rem"
+            , style "font-size" "0.75rem"
+            ]
+            [ text "↺" ]
         ]

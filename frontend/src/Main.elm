@@ -159,6 +159,7 @@ type alias Model =
     { page : Page
     , mobileMenuIsOpen : Bool
     , walletDropdownIsOpen : Bool
+    , networkDropdownIsOpen : Bool
     , walletsDiscovered : List WalletDescriptor
     , wallet : Maybe Cip30.Wallet
     , walletChangeAddress : Maybe Address
@@ -233,6 +234,7 @@ initialModel { jsonLdContexts, db, networkId, ipfsPreconfig } =
     { page = LandingPage
     , mobileMenuIsOpen = False
     , walletDropdownIsOpen = False
+    , networkDropdownIsOpen = False
     , walletsDiscovered = []
     , wallet = Nothing
     , walletUtxos = Nothing
@@ -269,8 +271,10 @@ type Msg
       -- Header
     | ToggleMobileMenu
     | ToggleWalletDropdown
+    | ToggleNetworkDropdown
     | ConnectWalletClicked { id : String }
     | DisconnectWalletClicked
+    | NetworkChanged NetworkId
       -- Preparation page
     | PreparationPageMsg Page.Preparation.Msg
     | GotPdfAsFile Value
@@ -439,6 +443,40 @@ networkIdFromString str =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
+        ( ToggleNetworkDropdown, _ ) ->
+            ( { model
+                | networkDropdownIsOpen = not model.networkDropdownIsOpen
+                , walletDropdownIsOpen = False -- Close wallet dropdown when toggling network
+              }
+            , Cmd.none
+            )
+
+        ( NetworkChanged newNet, _ ) ->
+            -- update the URL if you're on the prep page, or just store it
+            let
+                route =
+                    case model.page of
+                        PreparationPage _ ->
+                            RoutePreparation { networkId = newNet }
+
+                        SigningPage _ ->
+                            RouteSigning { networkId = newNet, tx = Nothing, expectedSigners = [] }
+
+                        _ ->
+                            RouteLanding
+
+                -- Create a fresh model with our new network
+                updatedModel =
+                    { model
+                        | networkId = newNet
+                        , networkDropdownIsOpen = False
+                        , -- Close dropdown after selection
+                          proposals = RemoteData.Loading -- Mark proposals as loading to trigger refresh
+                    }
+            in
+            -- Use handleUrlChange which will properly reload the page with the new network
+            handleUrlChange route updatedModel
+
         ( NoMsg, _ ) ->
             ( model, Cmd.none )
 
@@ -647,7 +685,12 @@ update msg model =
             ( { model | mobileMenuIsOpen = not model.mobileMenuIsOpen }, Cmd.none )
 
         ( ToggleWalletDropdown, _ ) ->
-            ( { model | walletDropdownIsOpen = not model.walletDropdownIsOpen }, Cmd.none )
+            ( { model
+                | walletDropdownIsOpen = not model.walletDropdownIsOpen
+                , networkDropdownIsOpen = False -- Close network dropdown when toggling wallet
+              }
+            , Cmd.none
+            )
 
         ( ConnectWalletClicked { id }, _ ) ->
             ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = [] })) )
@@ -1044,17 +1087,16 @@ viewHeader model =
             }
     in
     Header.view
-        -- mobile menu stuff
         { mobileMenuIsOpen = model.mobileMenuIsOpen
         , toggleMobileMenu = ToggleMobileMenu
-
-        -- wallet connector stuff
+        , networkDropdownIsOpen = model.networkDropdownIsOpen
+        , toggleNetworkDropdown = ToggleNetworkDropdown
         , walletConnector = walletConnectorState
         , walletConnectorMsgs = walletConnectorMsgs
-
-        -- links stuff
         , logoLink = link RouteLanding
         , navigationItems = navigationItems
+        , networkId = model.networkId
+        , onNetworkChange = NetworkChanged
         }
 
 
@@ -1118,6 +1160,82 @@ viewContent model =
                 { wrapMsg = PdfPageMsg
                 }
                 pageModel
+
+
+viewNetworkSelector : NetworkId -> Bool -> msg -> (NetworkId -> msg) -> Html msg
+viewNetworkSelector currentNetwork dropdownOpen toggleDropdown onNetworkChange =
+    let
+        isMainnet =
+            currentNetwork == Mainnet
+
+        networkLabel =
+            if isMainnet then
+                "Mainnet"
+
+            else
+                "Preview"
+
+        otherNetwork =
+            if isMainnet then
+                Testnet
+
+            else
+                Mainnet
+
+        otherNetworkLabel =
+            if isMainnet then
+                "Preview"
+
+            else
+                "Mainnet"
+
+        networkColor =
+            if isMainnet then
+                "#10b981"
+
+            else
+                "#3b82f6"
+
+        -- Green for Mainnet, Blue for Preview
+    in
+    div [ HA.style "position" "relative", HA.style "margin-left" "0.75rem" ]
+        [ Helper.viewWalletButton networkLabel
+            toggleDropdown
+            [ -- Network indicator dot
+              div
+                [ HA.style "width" "0.75rem"
+                , HA.style "height" "0.75rem"
+                , HA.style "border-radius" "9999px"
+                , HA.style "background-color" networkColor
+                , HA.style "margin-right" "0.5rem"
+                ]
+                []
+            ]
+        , if dropdownOpen then
+            div Helper.applyDropdownContainerStyle
+                [ div (Helper.applyDropdownItemStyle (onNetworkChange otherNetwork))
+                    [ -- Network indicator dot for other network
+                      div
+                        [ HA.style "width" "0.75rem"
+                        , HA.style "height" "0.75rem"
+                        , HA.style "border-radius" "9999px"
+                        , HA.style "background-color"
+                            (if not isMainnet then
+                                "#10b981"
+
+                             else
+                                "#3b82f6"
+                            )
+                        , HA.style "margin-right" "0.5rem"
+                        ]
+                        []
+                    , text otherNetworkLabel
+                    ]
+                ]
+
+          else
+            text ""
+        ]
 
 
 viewLandingPage : NetworkId -> Html Msg

@@ -27,6 +27,7 @@ The steps are sequential but allow going back to modify previous steps.
 
 import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), PoolInfo)
 import Blake2b exposing (blake2b256)
+import Browser.Dom as Dom
 import Bytes as ElmBytes
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash, NetworkId(..))
@@ -493,6 +494,7 @@ type Msg
       -- Build Tx Step
     | BuildTxButtonClicked Vote
     | ChangeVoteButtonClicked
+    | ScrollToElement String
 
 
 {-| Configuration required by the update function.
@@ -545,6 +547,13 @@ update ctx msg (Model model) =
 innerUpdate : UpdateContext msg -> Msg -> InnerModel -> ( InnerModel, Cmd msg, Maybe MsgToParent )
 innerUpdate ctx msg model =
     case msg of
+        ScrollToElement elementId ->
+            ( model
+            , Task.attempt (\_ -> NoMsg) (Dom.getElement elementId |> Task.andThen (\info -> Dom.setViewport 0 (info.element.y - 100) |> Task.map (\_ -> ())))
+                |> Cmd.map ctx.wrapMsg
+            , Nothing
+            )
+
         ShowMoreProposals currentCount ->
             ( { model | visibleProposalCount = currentCount + 10 }
             , Cmd.none
@@ -2518,33 +2527,34 @@ view ctx (Model model) =
             , HA.style "padding" "0 1.5rem"
             , HA.style "position" "relative"
             ]
-            [ -- Vertical timeline line with gradient (adjust position to go through center of circles)
+            [ -- Vertical timeline line with gradient
               div
                 [ HA.style "position" "absolute"
-                , HA.style "left" "2.5rem" -- This should be the exact center of the circle
+                , HA.style "left" "2.5rem"
                 , HA.style "top" "0"
                 , HA.style "bottom" "0"
-                , HA.style "width" "4px" -- Slightly thicker
-                , HA.style "background" "linear-gradient(180deg, #3b82f6, #10b981, #6366f1)" -- Blue to green to purple gradient
-                , HA.style "z-index" "1" -- Lower z-index so circles appear on top
+                , HA.style "width" "4px"
+                , HA.style "background" "linear-gradient(180deg, #3b82f6, #10b981, #6366f1)"
+                , HA.style "z-index" "1"
                 ]
                 []
-            , viewStepWithCircle 1 (viewVoterIdentificationStep ctx model.voterStep)
-            , viewStepWithCircle 2 (viewProposalSelectionStep ctx model)
-            , viewStepWithCircle 3 (viewStorageConfigStep ctx model.storageConfigStep)
-            , viewStepWithCircle 4 (viewRationaleStep ctx model.pickProposalStep model.storageConfigStep model.rationaleCreationStep)
-            , viewStepWithCircle 5 (viewRationaleSignatureStep ctx model.pickProposalStep model.rationaleCreationStep model.rationaleSignatureStep)
-            , viewStepWithCircle 6 (viewPermanentStorageStep ctx model.rationaleSignatureStep model.storageConfigStep model.permanentStorageStep)
-            , viewStepWithCircle 7 (viewBuildTxStep ctx model)
-            , viewStepWithCircle 8 (viewSignTxStep ctx model.voterStep model.buildTxStep)
+            , viewStepWithCircle 1 "voter-step" (viewVoterIdentificationStep ctx model.voterStep)
+            , viewStepWithCircle 2 "proposal-step" (viewProposalSelectionStep ctx model)
+            , viewStepWithCircle 3 "storage-config-step" (viewStorageConfigStep ctx model.storageConfigStep)
+            , viewStepWithCircle 4 "rationale-step" (viewRationaleStep ctx model.pickProposalStep model.storageConfigStep model.rationaleCreationStep)
+            , viewStepWithCircle 5 "rationale-signature-step" (viewRationaleSignatureStep ctx model.pickProposalStep model.rationaleCreationStep model.rationaleSignatureStep)
+            , viewStepWithCircle 6 "storage-step" (viewPermanentStorageStep ctx model.rationaleSignatureStep model.storageConfigStep model.permanentStorageStep)
+            , Html.map ctx.wrapMsg <| viewStepWithCircle 7 "build-tx-step" (viewBuildTxStep ctx model)
+            , viewStepWithCircle 8 "sign-tx-step" (viewSignTxStep ctx model.voterStep model.buildTxStep)
             ]
         ]
 
 
-viewStepWithCircle : Int -> Html msg -> Html msg
-viewStepWithCircle stepNumber content =
+viewStepWithCircle : Int -> String -> Html msg -> Html msg
+viewStepWithCircle stepNumber stepId content =
     div
-        [ HA.style "position" "relative"
+        [ HA.id stepId
+        , HA.style "position" "relative"
         , HA.style "padding-left" "5rem"
         , HA.style "padding-top" "2rem"
         , HA.style "padding-bottom" "2rem"
@@ -4278,19 +4288,106 @@ viewRationaleStep ctx pickProposalStep storageConfigStep step =
             ( _, Done _ _, _ ) ->
                 div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                     [ sectionTitle "Vote Rationale"
-                    , Html.p [] [ text "Please pick a proposal first." ]
+                    , div
+                        [ HA.style "border" "1px solid #E2E8F0"
+                        , HA.style "border-radius" "0.75rem"
+                        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                        , HA.style "background-color" "#FFFFFF"
+                        , HA.style "overflow" "hidden"
+                        ]
+                        [ div
+                            [ HA.style "background-color" "#F7FAFC"
+                            , HA.style "padding" "1rem 1.25rem"
+                            , HA.style "border-bottom" "1px solid #EDF2F7"
+                            ]
+                            [ Html.h3
+                                [ HA.style "font-weight" "600"
+                                , HA.style "font-size" "1.125rem"
+                                , HA.style "color" "#1A202C"
+                                , HA.style "line-height" "1.4"
+                                ]
+                                [ text "Step Not Available" ]
+                            ]
+                        , div
+                            [ HA.style "padding" "1.25rem"
+                            ]
+                            [ Html.p
+                                [ HA.style "color" "#4A5568"
+                                , HA.style "font-size" "0.9375rem"
+                                ]
+                                [ text "Please pick a proposal first." ]
+                            ]
+                        ]
                     ]
 
             ( Done _ _, _, _ ) ->
                 div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                     [ sectionTitle "Vote Rationale"
-                    , Html.p [] [ text "Please validate the IPFS config step first." ]
+                    , div
+                        [ HA.style "border" "1px solid #E2E8F0"
+                        , HA.style "border-radius" "0.75rem"
+                        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                        , HA.style "background-color" "#FFFFFF"
+                        , HA.style "overflow" "hidden"
+                        ]
+                        [ div
+                            [ HA.style "background-color" "#F7FAFC"
+                            , HA.style "padding" "1rem 1.25rem"
+                            , HA.style "border-bottom" "1px solid #EDF2F7"
+                            ]
+                            [ Html.h3
+                                [ HA.style "font-weight" "600"
+                                , HA.style "font-size" "1.125rem"
+                                , HA.style "color" "#1A202C"
+                                , HA.style "line-height" "1.4"
+                                ]
+                                [ text "Step Not Available" ]
+                            ]
+                        , div
+                            [ HA.style "padding" "1.25rem"
+                            ]
+                            [ Html.p
+                                [ HA.style "color" "#4A5568"
+                                , HA.style "font-size" "0.9375rem"
+                                ]
+                                [ text "Please validate the IPFS config step first." ]
+                            ]
+                        ]
                     ]
 
             _ ->
                 div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                     [ sectionTitle "Vote Rationale"
-                    , Html.p [] [ text "Please pick a proposal and  validate the IPFS config step first." ]
+                    , div
+                        [ HA.style "border" "1px solid #E2E8F0"
+                        , HA.style "border-radius" "0.75rem"
+                        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                        , HA.style "background-color" "#FFFFFF"
+                        , HA.style "overflow" "hidden"
+                        ]
+                        [ div
+                            [ HA.style "background-color" "#F7FAFC"
+                            , HA.style "padding" "1rem 1.25rem"
+                            , HA.style "border-bottom" "1px solid #EDF2F7"
+                            ]
+                            [ Html.h3
+                                [ HA.style "font-weight" "600"
+                                , HA.style "font-size" "1.125rem"
+                                , HA.style "color" "#1A202C"
+                                , HA.style "line-height" "1.4"
+                                ]
+                                [ text "Step Not Available" ]
+                            ]
+                        , div
+                            [ HA.style "padding" "1.25rem"
+                            ]
+                            [ Html.p
+                                [ HA.style "color" "#4A5568"
+                                , HA.style "font-size" "0.9375rem"
+                                ]
+                                [ text "Please pick a proposal and validate the IPFS config step first." ]
+                            ]
+                        ]
                     ]
 
 
@@ -5391,12 +5488,30 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
                     , HA.style "border-radius" "0.75rem"
                     , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
                     , HA.style "background-color" "#FFFFFF"
-                    , HA.style "padding" "1.25rem"
+                    , HA.style "overflow" "hidden"
                     ]
-                    [ Html.p
-                        [ HA.style "color" "#4A5568"
+                    [ div
+                        [ HA.style "background-color" "#F7FAFC"
+                        , HA.style "padding" "1rem 1.25rem"
+                        , HA.style "border-bottom" "1px solid #EDF2F7"
                         ]
-                        [ text "Please validate the rationale creation step first." ]
+                        [ Html.h3
+                            [ HA.style "font-weight" "600"
+                            , HA.style "font-size" "1.125rem"
+                            , HA.style "color" "#1A202C"
+                            , HA.style "line-height" "1.4"
+                            ]
+                            [ text "Step Not Available" ]
+                        ]
+                    , div
+                        [ HA.style "padding" "1.25rem"
+                        ]
+                        [ Html.p
+                            [ HA.style "color" "#4A5568"
+                            , HA.style "font-size" "0.9375rem"
+                            ]
+                            [ text "Please complete the rationale creation step first." ]
+                        ]
                     ]
                 ]
 
@@ -5408,59 +5523,35 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
                     , HA.style "border-radius" "0.75rem"
                     , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
                     , HA.style "background-color" "#FFFFFF"
-                    , HA.style "padding" "1.25rem"
+                    , HA.style "overflow" "hidden"
                     ]
-                    [ Html.p
-                        [ HA.style "color" "#4A5568"
+                    [ div
+                        [ HA.style "background-color" "#F7FAFC"
+                        , HA.style "padding" "1rem 1.25rem"
+                        , HA.style "border-bottom" "1px solid #EDF2F7"
                         ]
-                        [ text "Please validate the rationale creation step first." ]
+                        [ Html.h3
+                            [ HA.style "font-weight" "600"
+                            , HA.style "font-size" "1.125rem"
+                            , HA.style "color" "#1A202C"
+                            , HA.style "line-height" "1.4"
+                            ]
+                            [ text "Step Not Available" ]
+                        ]
+                    , div
+                        [ HA.style "padding" "1.25rem"
+                        ]
+                        [ Html.p
+                            [ HA.style "color" "#4A5568"
+                            , HA.style "font-size" "0.9375rem"
+                            ]
+                            [ text "Please wait for the rationale creation to complete." ]
+                        ]
                     ]
                 ]
 
         ( Done _ { id }, Done _ _, Preparing form ) ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ sectionTitle "Rationale Signature"
-                , Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts id form
-                , div
-                    [ HA.style "display" "flex"
-                    , HA.style "gap" "1rem"
-                    , HA.style "margin-top" "1.5rem"
-                    ]
-                    [ button
-                        [ HA.style "background-color" "#F9FAFB"
-                        , HA.style "color" "#272727"
-                        , HA.style "font-weight" "500"
-                        , HA.style "font-size" "0.875rem"
-                        , HA.style "padding" "0.5rem 1.5rem"
-                        , HA.style "border" "none"
-                        , HA.style "border-radius" "9999px"
-                        , HA.style "cursor" "pointer"
-                        , HA.style "display" "flex"
-                        , HA.style "align-items" "center"
-                        , HA.style "justify-content" "center"
-                        , HA.style "height" "3rem"
-                        , onClick (ctx.wrapMsg SkipRationaleSignaturesButtonClicked)
-                        ]
-                        [ text "Skip rationale signing" ]
-                    , button
-                        [ HA.style "background-color" "#272727"
-                        , HA.style "color" "white"
-                        , HA.style "font-weight" "500"
-                        , HA.style "font-size" "0.875rem"
-                        , HA.style "padding" "0.5rem 1.5rem"
-                        , HA.style "border" "none"
-                        , HA.style "border-radius" "9999px"
-                        , HA.style "cursor" "pointer"
-                        , HA.style "display" "flex"
-                        , HA.style "align-items" "center"
-                        , HA.style "justify-content" "center"
-                        , HA.style "height" "3rem"
-                        , onClick (ctx.wrapMsg ValidateRationaleSignaturesButtonClicked)
-                        ]
-                        [ text "Validate rationale signing" ]
-                    ]
-                , viewError form.error
-                ]
+            Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts id form
 
         ( _, Done _ _, Preparing _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
@@ -5470,47 +5561,38 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
                     , HA.style "border-radius" "0.75rem"
                     , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
                     , HA.style "background-color" "#FFFFFF"
-                    , HA.style "padding" "1.25rem"
+                    , HA.style "overflow" "hidden"
                     ]
-                    [ Html.p
-                        [ HA.style "color" "#4A5568"
+                    [ div
+                        [ HA.style "background-color" "#F7FAFC"
+                        , HA.style "padding" "1rem 1.25rem"
+                        , HA.style "border-bottom" "1px solid #EDF2F7"
                         ]
-                        [ text "Please pick a proposal first." ]
+                        [ Html.h3
+                            [ HA.style "font-weight" "600"
+                            , HA.style "font-size" "1.125rem"
+                            , HA.style "color" "#1A202C"
+                            , HA.style "line-height" "1.4"
+                            ]
+                            [ text "Step Not Available" ]
+                        ]
+                    , div
+                        [ HA.style "padding" "1.25rem"
+                        ]
+                        [ Html.p
+                            [ HA.style "color" "#4A5568"
+                            , HA.style "font-size" "0.9375rem"
+                            ]
+                            [ text "Please select a proposal first." ]
+                        ]
                     ]
                 ]
 
         ( _, Done _ _, Validating _ _ ) ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ sectionTitle "Rationale Signature"
-                , div
-                    [ HA.style "border" "1px solid #E2E8F0"
-                    , HA.style "border-radius" "0.75rem"
-                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-                    , HA.style "background-color" "#FFFFFF"
-                    , HA.style "padding" "2rem"
-                    , HA.style "text-align" "center"
-                    ]
-                    [ div
-                        [ HA.style "display" "flex"
-                        , HA.style "flex-direction" "column"
-                        , HA.style "align-items" "center"
-                        , HA.style "gap" "1rem"
-                        ]
-                        [ div
-                            [ HA.style "width" "3rem"
-                            , HA.style "height" "3rem"
-                            , HA.style "border" "3px solid #E2E8F0"
-                            , HA.style "border-top" "3px solid #3B82F6"
-                            , HA.style "border-radius" "50%"
-                            , HA.style "animation" "spin 1s linear infinite"
-                            ]
-                            []
-                        , Html.p
-                            [ HA.style "color" "#4A5568"
-                            ]
-                            [ text "Validating rationale author signatures..." ]
-                        ]
-                    ]
+                , Helper.formContainer
+                    [ Html.p [ HA.class "text-gray-600" ] [ text "Validating signatures..." ] ]
                 ]
 
         ( _, Done _ _, Done _ ratSig ) ->
@@ -5534,115 +5616,56 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
                             , HA.style "color" "#1A202C"
                             , HA.style "line-height" "1.4"
                             ]
-                            [ text "Rationale Document" ]
+                            [ text "Rationale Signatures" ]
                         ]
                     , div
                         [ HA.style "padding" "1.25rem"
                         ]
-                        [ Html.p
-                            [ HA.style "color" "#4A5568"
-                            , HA.style "margin-bottom" "1rem"
-                            ]
-                            [ text "Your rationale document has been generated and signed. You can download it or generate a PDF version." ]
-                        , div
-                            [ HA.style "display" "flex"
-                            , HA.style "gap" "1rem"
-                            , HA.style "flex-wrap" "wrap"
-                            , HA.style "margin-bottom" "1.5rem"
-                            ]
-                            [ Html.a
-                                [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode ratSig.signedJson
-                                , HA.download "rationale-signed.json"
-                                , HA.style "text-decoration" "none"
+                        [ if List.isEmpty ratSig.authors then
+                            Html.p
+                                [ HA.style "color" "#4A5568"
+                                , HA.style "font-size" "0.9375rem"
                                 ]
-                                [ button
+                                [ text "No signatures were added to this rationale." ]
+
+                          else
+                            div []
+                                [ Html.p
+                                    [ HA.style "color" "#4A5568"
+                                    , HA.style "font-size" "0.9375rem"
+                                    , HA.style "margin-bottom" "1rem"
+                                    ]
+                                    [ text "This rationale includes the following signatures:" ]
+                                , Html.ul
+                                    [ HA.style "list-style-type" "none"
+                                    , HA.style "padding" "0"
+                                    , HA.style "display" "flex"
+                                    , HA.style "flex-direction" "column"
+                                    , HA.style "gap" "0.75rem"
+                                    ]
+                                    (List.map viewSignerCard ratSig.authors)
+                                ]
+                        , Html.p
+                            [ HA.style "margin-top" "1rem" ]
+                            [ Html.map ctx.wrapMsg <|
+                                button
                                     [ HA.style "background-color" "#272727"
                                     , HA.style "color" "white"
                                     , HA.style "font-weight" "500"
                                     , HA.style "font-size" "0.875rem"
-                                    , HA.style "padding" "0.5rem 1rem"
+                                    , HA.style "padding" "0.5rem 1.5rem"
                                     , HA.style "border" "none"
-                                    , HA.style "border-radius" "0.375rem"
+                                    , HA.style "border-radius" "9999px"
                                     , HA.style "cursor" "pointer"
                                     , HA.style "display" "flex"
                                     , HA.style "align-items" "center"
+                                    , HA.style "justify-content" "center"
+                                    , HA.style "height" "3rem"
+                                    , onClick ChangeAuthorsButtonClicked
                                     ]
-                                    [ Html.span
-                                        [ HA.style "margin-right" "0.5rem"
-                                        ]
-                                        [ text "📥" ]
-                                    , text "Download signed JSON"
-                                    ]
-                                ]
-                            , button
-                                [ HA.style "background-color" "#F9FAFB"
-                                , HA.style "color" "#272727"
-                                , HA.style "font-weight" "500"
-                                , HA.style "font-size" "0.875rem"
-                                , HA.style "padding" "0.5rem 1rem"
-                                , HA.style "border" "1px solid #E2E8F0"
-                                , HA.style "border-radius" "0.375rem"
-                                , HA.style "cursor" "pointer"
-                                , HA.style "display" "flex"
-                                , HA.style "align-items" "center"
-                                , onClick (ctx.wrapMsg (ConvertToPdfButtonClicked ratSig.signedJson))
-                                ]
-                                [ Html.span
-                                    [ HA.style "margin-right" "0.5rem"
-                                    ]
-                                    [ text "📄" ]
-                                , text "Generate PDF"
-                                ]
+                                    [ text "Change signatures" ]
                             ]
-                        , if List.isEmpty ratSig.authors then
-                            Html.p
-                                [ HA.style "color" "#718096"
-                                , HA.style "font-style" "italic"
-                                , HA.style "padding" "1rem 0"
-                                ]
-                                [ text "No registered authors." ]
-
-                          else
-                            div
-                                [ HA.style "margin-top" "1rem"
-                                , HA.style "border-top" "1px solid #EDF2F7"
-                                , HA.style "padding-top" "1rem"
-                                ]
-                                [ Html.h4
-                                    [ HA.style "font-weight" "600"
-                                    , HA.style "font-size" "1rem"
-                                    , HA.style "margin-bottom" "1rem"
-                                    ]
-                                    [ text "Authors" ]
-                                , Html.map ctx.wrapMsg <|
-                                    div
-                                        [ HA.style "display" "flex"
-                                        , HA.style "flex-direction" "column"
-                                        , HA.style "gap" "0.75rem"
-                                        ]
-                                        (List.map viewSignerCard ratSig.authors)
-                                ]
                         ]
-                    ]
-                , Html.p
-                    [ HA.style "margin-top" "1rem" ]
-                    [ Html.map ctx.wrapMsg <|
-                        button
-                            [ HA.style "background-color" "#272727"
-                            , HA.style "color" "white"
-                            , HA.style "font-weight" "500"
-                            , HA.style "font-size" "0.875rem"
-                            , HA.style "padding" "0.5rem 1.5rem"
-                            , HA.style "border" "none"
-                            , HA.style "border-radius" "9999px"
-                            , HA.style "cursor" "pointer"
-                            , HA.style "display" "flex"
-                            , HA.style "align-items" "center"
-                            , HA.style "justify-content" "center"
-                            , HA.style "height" "3rem"
-                            , onClick ChangeAuthorsButtonClicked
-                            ]
-                            [ text "Update authors" ]
                     ]
                 ]
 
@@ -6458,51 +6481,341 @@ viewCompletedStorage r storage =
 --
 
 
-viewBuildTxStep : ViewContext msg -> InnerModel -> Html msg
+viewBuildTxStep : ViewContext msg -> InnerModel -> Html Msg
 viewBuildTxStep ctx model =
     div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
         [ sectionTitle "Tx Building"
         , case ( allPrepSteps ctx model, model.buildTxStep ) of
             ( Err _, _ ) ->
-                viewMissingStepsMessage ctx model
+                div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
+                    , HA.style "overflow" "hidden"
+                    ]
+                    [ div
+                        [ HA.style "background-color" "#F7FAFC"
+                        , HA.style "padding" "1rem 1.25rem"
+                        , HA.style "border-bottom" "1px solid #EDF2F7"
+                        ]
+                        [ Html.h3
+                            [ HA.style "font-weight" "600"
+                            , HA.style "font-size" "1.125rem"
+                            , HA.style "color" "#1A202C"
+                            , HA.style "line-height" "1.4"
+                            ]
+                            [ text "Step Not Available" ]
+                        ]
+                    , div
+                        [ HA.style "padding" "1.25rem"
+                        ]
+                        [ viewMissingStepsMessage ctx model ]
+                    ]
 
             ( Ok _, Preparing { error } ) ->
-                viewVoteOptionsForm ctx error
+                div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
+                    , HA.style "overflow" "hidden"
+                    ]
+                    [ div
+                        [ HA.style "background-color" "#F7FAFC"
+                        , HA.style "padding" "1rem 1.25rem"
+                        , HA.style "border-bottom" "1px solid #EDF2F7"
+                        ]
+                        [ Html.h3
+                            [ HA.style "font-weight" "600"
+                            , HA.style "font-size" "1.125rem"
+                            , HA.style "color" "#1A202C"
+                            , HA.style "line-height" "1.4"
+                            ]
+                            [ text "Choose Your Vote" ]
+                        ]
+                    , div
+                        [ HA.style "padding" "1.25rem"
+                        ]
+                        [ Html.p
+                            [ HA.style "color" "#4A5568"
+                            , HA.style "font-size" "0.9375rem"
+                            , HA.style "margin-bottom" "1.5rem"
+                            ]
+                            [ text "Select how you want to vote on this proposal:" ]
+                        , div
+                            [ HA.style "display" "flex"
+                            , HA.style "flex-wrap" "wrap"
+                            , HA.style "gap" "1rem"
+                            ]
+                            [ button
+                                [ HA.style "background-color" "#10B981"
+                                , HA.style "color" "white"
+                                , HA.style "font-weight" "500"
+                                , HA.style "font-size" "0.9375rem"
+                                , HA.style "padding" "0.75rem 2rem"
+                                , HA.style "border" "none"
+                                , HA.style "border-radius" "0.5rem"
+                                , HA.style "cursor" "pointer"
+                                , HA.style "display" "inline-flex"
+                                , HA.style "align-items" "center"
+                                , HA.style "justify-content" "center"
+                                , HA.style "min-width" "120px"
+                                , onClick (BuildTxButtonClicked Gov.VoteYes)
+                                ]
+                                [ text "Vote YES" ]
+                            , button
+                                [ HA.style "background-color" "#EF4444"
+                                , HA.style "color" "white"
+                                , HA.style "font-weight" "500"
+                                , HA.style "font-size" "0.9375rem"
+                                , HA.style "padding" "0.75rem 2rem"
+                                , HA.style "border" "none"
+                                , HA.style "border-radius" "0.5rem"
+                                , HA.style "cursor" "pointer"
+                                , HA.style "display" "inline-flex"
+                                , HA.style "align-items" "center"
+                                , HA.style "justify-content" "center"
+                                , HA.style "min-width" "120px"
+                                , onClick (BuildTxButtonClicked Gov.VoteNo)
+                                ]
+                                [ text "Vote NO" ]
+                            , button
+                                [ HA.style "background-color" "#6B7280"
+                                , HA.style "color" "white"
+                                , HA.style "font-weight" "500"
+                                , HA.style "font-size" "0.9375rem"
+                                , HA.style "padding" "0.75rem 2rem"
+                                , HA.style "border" "none"
+                                , HA.style "border-radius" "0.5rem"
+                                , HA.style "cursor" "pointer"
+                                , HA.style "display" "inline-flex"
+                                , HA.style "align-items" "center"
+                                , HA.style "justify-content" "center"
+                                , HA.style "min-width" "120px"
+                                , onClick (BuildTxButtonClicked Gov.VoteAbstain)
+                                ]
+                                [ text "ABSTAIN" ]
+                            ]
+                        , viewError error
+                        ]
+                    ]
 
             ( Ok _, Validating _ _ ) ->
-                Helper.formContainer
-                    [ Html.p [ HA.class "text-gray-600" ] [ text "Validating transaction information..." ] ]
+                div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
+                    , HA.style "padding" "2rem"
+                    , HA.style "text-align" "center"
+                    ]
+                    [ div
+                        [ HA.style "display" "flex"
+                        , HA.style "flex-direction" "column"
+                        , HA.style "align-items" "center"
+                        , HA.style "gap" "1rem"
+                        ]
+                        [ div
+                            [ HA.style "width" "3rem"
+                            , HA.style "height" "3rem"
+                            , HA.style "border" "3px solid #E2E8F0"
+                            , HA.style "border-top" "3px solid #3B82F6"
+                            , HA.style "border-radius" "50%"
+                            , HA.style "animation" "spin 1s linear infinite"
+                            ]
+                            []
+                        , Html.p
+                            [ HA.style "font-size" "1rem"
+                            , HA.style "color" "#4A5568"
+                            ]
+                            [ text "Building transaction..." ]
+                        , Html.node "style"
+                            []
+                            [ text """
+                                @keyframes spin {
+                                    0% { transform: rotate(0deg); }
+                                    100% { transform: rotate(360deg); }
+                                }
+                            """
+                            ]
+                        ]
+                    ]
 
             ( Ok _, Done _ { tx } ) ->
-                viewBuiltTransaction ctx tx
+                div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
+                    , HA.style "overflow" "hidden"
+                    ]
+                    [ div
+                        [ HA.style "background-color" "#F7FAFC"
+                        , HA.style "padding" "1rem 1.25rem"
+                        , HA.style "border-bottom" "1px solid #EDF2F7"
+                        , HA.style "display" "flex"
+                        , HA.style "justify-content" "space-between"
+                        , HA.style "align-items" "center"
+                        ]
+                        [ div []
+                            [ Html.h3
+                                [ HA.style "font-weight" "600"
+                                , HA.style "font-size" "1.125rem"
+                                , HA.style "color" "#1A202C"
+                                , HA.style "line-height" "1.4"
+                                ]
+                                [ text "Transaction Built" ]
+                            , Html.p
+                                [ HA.style "font-size" "0.875rem"
+                                , HA.style "color" "#4A5568"
+                                , HA.style "line-height" "1.6"
+                                , HA.style "margin-top" "0.25rem"
+                                ]
+                                [ text "Your vote transaction has been created successfully" ]
+                            ]
+                        , div
+                            [ HA.style "background-color" "#F0FDF4"
+                            , HA.style "color" "#16A34A"
+                            , HA.style "padding" "0.375rem 0.75rem"
+                            , HA.style "border-radius" "9999px"
+                            , HA.style "font-size" "0.875rem"
+                            , HA.style "font-weight" "500"
+                            , HA.style "display" "flex"
+                            , HA.style "align-items" "center"
+                            , HA.style "gap" "0.375rem"
+                            ]
+                            [ text "✓"
+                            , text "Ready"
+                            ]
+                        ]
+                    , div
+                        [ HA.style "padding" "1.25rem"
+                        ]
+                        [ Html.p
+                            [ HA.style "color" "#4A5568"
+                            , HA.style "font-size" "0.9375rem"
+                            , HA.style "margin-bottom" "1rem"
+                            ]
+                            [ text "Transaction details (₳ displayed as lovelaces):" ]
+                        , div
+                            [ HA.style "background-color" "#F9FAFB"
+                            , HA.style "border" "1px solid #E2E8F0"
+                            , HA.style "border-radius" "0.5rem"
+                            , HA.style "padding" "1rem"
+                            , HA.style "margin-bottom" "1.5rem"
+                            , HA.style "overflow-x" "auto"
+                            ]
+                            [ Html.pre
+                                [ HA.style "font-family" "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                                , HA.style "font-size" "0.875rem"
+                                , HA.style "white-space" "pre-wrap"
+                                , HA.style "word-break" "break-all"
+                                , HA.style "max-height" "300px"
+                                , HA.style "overflow-y" "auto"
+                                , HA.style "margin" "0"
+                                ]
+                                [ text <| prettyTx tx ]
+                            ]
+                        , Html.p
+                            [ HA.style "margin-top" "1rem" ]
+                            [ button
+                                [ HA.style "background-color" "#272727"
+                                , HA.style "color" "white"
+                                , HA.style "font-weight" "500"
+                                , HA.style "font-size" "0.875rem"
+                                , HA.style "padding" "0.5rem 1.5rem"
+                                , HA.style "border" "none"
+                                , HA.style "border-radius" "9999px"
+                                , HA.style "cursor" "pointer"
+                                , HA.style "display" "flex"
+                                , HA.style "align-items" "center"
+                                , HA.style "justify-content" "center"
+                                , HA.style "height" "3rem"
+                                , onClick ChangeVoteButtonClicked
+                                ]
+                                [ text "Change vote" ]
+                            ]
+                        ]
+                    ]
         ]
 
 
-viewMissingStepsMessage : ViewContext msg -> InnerModel -> Html msg
+viewMissingStepsMessage : ViewContext msg -> InnerModel -> Html Msg
 viewMissingStepsMessage ctx model =
-    Helper.formContainer
-        [ Html.p [ HA.class "text-gray-600 mb-4" ] [ text "Please complete the following steps before building the transaction:" ]
-        , div []
-            [ viewMissingStep "Voter identification" (isStepIncomplete model.voterStep)
-            , viewMissingStep "Proposal selection" (isStepIncomplete model.pickProposalStep)
-            , viewMissingStep "Rationale creation" (isStepIncomplete model.rationaleCreationStep)
-            , viewMissingStep "Rationale storage" (isStepIncomplete model.permanentStorageStep)
-            , viewMissingStep "Connect wallet" (ctx.loadedWallet == Nothing)
-            , viewMissingStep "Protocol parameters" (ctx.costModels == Nothing)
+    div []
+        [ Html.p
+            [ HA.style "color" "#4A5568"
+            , HA.style "font-size" "0.9375rem"
+            , HA.style "margin-bottom" "1rem"
+            ]
+            [ text "Please complete the following steps before building the transaction:" ]
+        , div
+            [ HA.style "padding" "0.75rem"
+            , HA.style "background-color" "#F9FAFB"
+            , HA.style "border" "1px solid #E2E8F0"
+            , HA.style "border-radius" "0.5rem"
+            ]
+            [ Html.ul
+                [ HA.style "list-style-type" "none"
+                , HA.style "padding" "0"
+                , HA.style "margin" "0"
+                , HA.style "display" "flex"
+                , HA.style "flex-direction" "column"
+                , HA.style "gap" "0.5rem"
+                ]
+                [ viewMissingStep "Voter identification" (isStepIncomplete model.voterStep) "voter-step"
+                , viewMissingStep "Proposal selection" (isStepIncomplete model.pickProposalStep) "proposal-step"
+                , viewMissingStep "Rationale creation" (isStepIncomplete model.rationaleCreationStep) "rationale-step"
+                , viewMissingStep "Rationale storage" (isStepIncomplete model.permanentStorageStep) "storage-step"
+                , viewMissingStep "Connect wallet" (ctx.loadedWallet == Nothing) "connect-wallet"
+                , viewMissingStep "Protocol parameters" (ctx.costModels == Nothing) "protocol-params"
+                ]
             ]
         ]
 
 
-viewMissingStep : String -> Bool -> Html msg
-viewMissingStep stepName isMissing =
+viewMissingStep : String -> Bool -> String -> Html Msg
+viewMissingStep stepName isMissing anchorId =
     if isMissing then
-        Html.div [ HA.class " mb-2" ]
-            [ Html.strong [] [ text "⚠️ Missing: " ]
-            , text stepName
+        Html.li
+            [ HA.style "display" "flex"
+            , HA.style "align-items" "center"
+            , HA.style "gap" "0.5rem"
+            ]
+            [ Html.span
+                [ HA.style "color" "#F59E0B"
+                , HA.style "font-size" "1rem"
+                ]
+                [ text "⚠️" ]
+            , Html.a
+                [ HA.href ("#" ++ anchorId)
+                , HA.style "color" "#3182CE"
+                , HA.style "text-decoration" "underline"
+                , HA.style "cursor" "pointer"
+                , HA.style "scroll-behavior" "smooth"
+                , onClick (ScrollToElement anchorId)
+                ]
+                [ text stepName ]
             ]
 
     else
-        text ""
+        Html.li
+            [ HA.style "display" "flex"
+            , HA.style "align-items" "center"
+            , HA.style "gap" "0.5rem"
+            ]
+            [ Html.span
+                [ HA.style "color" "#10B981"
+                , HA.style "font-size" "1rem"
+                ]
+                [ text "✓" ]
+            , Html.span
+                [ HA.style "color" "#4A5568"
+                , HA.style "text-decoration" "line-through"
+                ]
+                [ text stepName ]
+            ]
 
 
 isStepIncomplete : Step a b c -> Bool

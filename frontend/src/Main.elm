@@ -980,7 +980,7 @@ view model =
                 HA.style "background" "transparent"
 
             else
-                HA.style "background" "#d9d9d9"
+                HA.style "background" "#E2E8F0"
     in
     div
         [ HA.style "min-height" "100vh"

@@ -2897,49 +2897,194 @@ viewValidGovIdForm form =
 
         -- First the easy case: voting with a key
         Just (CcHotCredId (VKeyHash hash)) ->
-            div []
-                [ Html.p [] [ text <| "Voting as a CC member with a hot key of hash: " ++ Bytes.toHex hash ]
-                , viewCcInfo form.ccInfo
+            div
+                [ HA.style "border" "1px solid #E2E8F0"
+                , HA.style "border-radius" "0.5rem"
+                , HA.style "background-color" "#F9FAFB"
+                , HA.style "padding" "1.25rem"
+                , HA.style "margin-top" "1.5rem"
+                ]
+                [ div [ HA.style "display" "flex", HA.style "flex-direction" "column", HA.style "gap" "0.75rem" ]
+                    [ div [ HA.style "display" "flex", HA.style "align-items" "center" ]
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "margin-right" "0.5rem"
+                            , HA.style "min-width" "12rem"
+                            ]
+                            [ text "Voting as CC member with key:" ]
+                        , Html.span
+                            [ HA.style "font-family" "monospace"
+                            , HA.style "background-color" "#EDF2F7"
+                            , HA.style "padding" "0.25rem 0.5rem"
+                            , HA.style "border-radius" "0.25rem"
+                            ]
+                            [ text (Bytes.toHex hash) ]
+                        ]
+                    , viewCcInfo form.ccInfo
+                    ]
                 ]
 
         Just (DrepId (VKeyHash hash)) ->
-            div []
-                [ Html.p [] [ text <| "Voting as a DRep with a key of hash: " ++ Bytes.toHex hash ]
-                , Html.p []
-                    [ text "Voting power: "
-                    , viewVotingPower .votingPower form.drepInfo
+            div
+                [ HA.style "border" "1px solid #E2E8F0"
+                , HA.style "border-radius" "0.5rem"
+                , HA.style "background-color" "#F9FAFB"
+                , HA.style "padding" "1.25rem"
+                , HA.style "margin-top" "1.5rem"
+                ]
+                [ div [ HA.style "display" "flex", HA.style "flex-direction" "column", HA.style "gap" "0.75rem" ]
+                    [ div [ HA.style "display" "flex", HA.style "align-items" "center" ]
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "margin-right" "0.5rem"
+                            , HA.style "min-width" "12rem"
+                            ]
+                            [ text "Voting as DRep with key:" ]
+                        , Html.span
+                            [ HA.style "font-family" "monospace"
+                            , HA.style "background-color" "#EDF2F7"
+                            , HA.style "padding" "0.25rem 0.5rem"
+                            , HA.style "border-radius" "0.25rem"
+                            ]
+                            [ text (Bytes.toHex hash) ]
+                        ]
+                    , div [ HA.style "display" "flex", HA.style "align-items" "center" ]
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "margin-right" "0.5rem"
+                            , HA.style "min-width" "12rem"
+                            ]
+                            [ text "Voting power:" ]
+                        , viewVotingPower .votingPower form.drepInfo
+                        ]
                     ]
                 ]
 
         Just (PoolId hash) ->
-            div []
-                [ Html.p [] [ text <| "Voting as a SPO with pool ID (hex): " ++ Bytes.toHex hash ]
-                , Html.p []
-                    [ text "Live stake: "
-                    , viewVotingPower .stake form.poolInfo
+            div
+                [ HA.style "border" "1px solid #E2E8F0"
+                , HA.style "border-radius" "0.5rem"
+                , HA.style "background-color" "#F9FAFB"
+                , HA.style "padding" "1.25rem"
+                , HA.style "margin-top" "1.5rem"
+                ]
+                [ div [ HA.style "display" "flex", HA.style "flex-direction" "column", HA.style "gap" "0.75rem" ]
+                    [ div [ HA.style "display" "flex", HA.style "align-items" "center" ]
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "margin-right" "0.5rem"
+                            , HA.style "min-width" "12rem"
+                            ]
+                            [ text "Voting as SPO with pool ID:" ]
+                        , Html.span
+                            [ HA.style "font-family" "monospace"
+                            , HA.style "background-color" "#EDF2F7"
+                            , HA.style "padding" "0.25rem 0.5rem"
+                            , HA.style "border-radius" "0.25rem"
+                            ]
+                            [ text (Bytes.toHex hash) ]
+                        ]
+                    , div [ HA.style "display" "flex", HA.style "align-items" "center" ]
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "margin-right" "0.5rem"
+                            , HA.style "min-width" "12rem"
+                            ]
+                            [ text "Live stake:" ]
+                        , viewVotingPower .stake form.poolInfo
+                        ]
                     ]
                 ]
 
         -- Then the hard case: voting with a script
         Just (CcHotCredId (ScriptHash hash)) ->
-            div []
-                [ Html.p [] [ text <| "Voting as a CC member with a script of hash: " ++ Bytes.toHex hash ]
-                , viewCcInfo form.ccInfo
-                , viewScriptForm form
+            div
+                [ HA.style "border" "1px solid #E2E8F0"
+                , HA.style "border-radius" "0.5rem"
+                , HA.style "background-color" "#F9FAFB"
+                , HA.style "padding" "1.25rem"
+                , HA.style "margin-top" "1.5rem"
+                ]
+                [ div [ HA.style "display" "flex", HA.style "flex-direction" "column", HA.style "gap" "1rem" ]
+                    [ div [ HA.style "display" "flex", HA.style "align-items" "center" ]
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "margin-right" "0.5rem"
+                            , HA.style "min-width" "12rem"
+                            ]
+                            [ text "Voting as CC member with script:" ]
+                        , Html.span
+                            [ HA.style "font-family" "monospace"
+                            , HA.style "background-color" "#EDF2F7"
+                            , HA.style "padding" "0.25rem 0.5rem"
+                            , HA.style "border-radius" "0.25rem"
+                            ]
+                            [ text (Bytes.toHex hash) ]
+                        ]
+                    , viewCcInfo form.ccInfo
+                    , viewScriptForm form
+                    ]
                 ]
 
         Just (DrepId (ScriptHash hash)) ->
-            div []
-                [ Html.p [] [ text <| "Voting as a DRep with a script of hash: " ++ Bytes.toHex hash ]
-                , Html.p []
-                    [ text "Voting power: "
-                    , viewVotingPower .votingPower form.drepInfo
+            div
+                [ HA.style "border" "1px solid #E2E8F0"
+                , HA.style "border-radius" "0.5rem"
+                , HA.style "background-color" "#F9FAFB"
+                , HA.style "padding" "1.25rem"
+                , HA.style "margin-top" "1.5rem"
+                ]
+                [ div [ HA.style "display" "flex", HA.style "flex-direction" "column", HA.style "gap" "1rem" ]
+                    [ div [ HA.style "display" "flex", HA.style "align-items" "center" ]
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "margin-right" "0.5rem"
+                            , HA.style "min-width" "12rem"
+                            ]
+                            [ text "Voting as DRep with script:" ]
+                        , Html.span
+                            [ HA.style "font-family" "monospace"
+                            , HA.style "background-color" "#EDF2F7"
+                            , HA.style "padding" "0.25rem 0.5rem"
+                            , HA.style "border-radius" "0.25rem"
+                            ]
+                            [ text (Bytes.toHex hash) ]
+                        ]
+                    , div [ HA.style "display" "flex", HA.style "align-items" "center" ]
+                        [ Html.span
+                            [ HA.style "font-weight" "500"
+                            , HA.style "color" "#4A5568"
+                            , HA.style "margin-right" "0.5rem"
+                            , HA.style "min-width" "12rem"
+                            ]
+                            [ text "Voting power:" ]
+                        , viewVotingPower .votingPower form.drepInfo
+                        ]
+                    , viewScriptForm form
                     ]
-                , viewScriptForm form
                 ]
 
         Just govId ->
-            Html.p [] [ text <| "Unexpected type of governance Id: " ++ Debug.toString govId ]
+            div
+                [ HA.style "border" "1px solid #E2E8F0"
+                , HA.style "border-radius" "0.5rem"
+                , HA.style "background-color" "#F9FAFB"
+                , HA.style "padding" "1.25rem"
+                , HA.style "margin-top" "1.5rem"
+                ]
+                [ Html.p
+                    [ HA.style "color" "#F59E0B"
+                    , HA.style "font-style" "italic"
+                    ]
+                    [ text <| "Unexpected type of governance Id: " ++ Debug.toString govId ]
+                ]
 
 
 viewVotingPower : (a -> Int) -> WebData a -> Html Msg

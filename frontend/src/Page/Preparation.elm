@@ -2562,7 +2562,7 @@ viewStepWithCircle stepNumber stepId content =
         [ -- Circle with step number (adjusted for line to go through center)
           div
             [ HA.style "position" "absolute"
-            , HA.style "left" "0.01rem"
+            , HA.style "left" "-0.10rem"
             , HA.style "top" "3.5rem"
             , HA.style "width" "2.5rem"
             , HA.style "height" "2.5rem"
@@ -7056,7 +7056,7 @@ viewSignTxStep ctx voterStep buildTxStep =
                         Witness.Native { expectedSigners } ->
                             List.map (\signer -> ( Bytes.toHex signer, "Multisig signer" )) expectedSigners
 
-                        -- "let’s leave it as-is because we don’t handle them anyway for now"
+                        -- "let's leave it as-is because we don't handle them anyway for now"
                         Witness.Plutus _ ->
                             []
 
@@ -7086,69 +7086,123 @@ viewSignTxStep ctx voterStep buildTxStep =
             in
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ sectionTitle "Tx Signing"
-                , Helper.formContainer
-                    [ Html.h5 [ HA.class "text-xl font-medium mb-4" ] [ text "Finalize Your Vote" ]
-                    , Html.p [ HA.class "mb-4" ] [ text "Expecting signatures for the following public key hashes:" ]
-                    , div [ HA.class "p-4 rounded-md border mb-4", HA.style "border-color" "#C6C6C6" ]
-                        [ Html.ul [ HA.class "font-mono text-sm space-y-2" ]
-                            (List.map
-                                (\hash ->
-                                    Html.li [ HA.class "border-b pb-2 last:border-b-0 last:pb-0", HA.style "border-color" "#C6C6C6" ]
-                                        (let
+                , div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
+                    , HA.style "overflow" "hidden"
+                    ]
+                    [ div
+                        [ HA.style "background-color" "#F7FAFC"
+                        , HA.style "padding" "1rem 1.25rem"
+                        , HA.style "border-bottom" "1px solid #EDF2F7"
+                        ]
+                        [ Html.h3
+                            [ HA.style "font-weight" "600"
+                            , HA.style "font-size" "1.125rem"
+                            , HA.style "color" "#1A202C"
+                            , HA.style "line-height" "1.4"
+                            ]
+                            [ text "Finalize Your Vote" ]
+                        ]
+                    , div
+                        [ HA.style "padding" "1.25rem"
+                        ]
+                        [ Html.p
+                            [ HA.style "color" "#4A5568"
+                            , HA.style "font-size" "0.9375rem"
+                            , HA.style "margin-bottom" "1rem"
+                            ]
+                            [ text "The following keys will need to sign the transaction:" ]
+                        , div
+                            [ HA.style "background-color" "#F9FAFB"
+                            , HA.style "border" "1px solid #E2E8F0"
+                            , HA.style "border-radius" "0.5rem"
+                            , HA.style "padding" "1rem"
+                            , HA.style "margin-bottom" "1.5rem"
+                            ]
+                            [ Html.ul
+                                [ HA.style "list-style-type" "none"
+                                , HA.style "padding" "0"
+                                , HA.style "margin" "0"
+                                , HA.style "display" "flex"
+                                , HA.style "flex-direction" "column"
+                                , HA.style "gap" "0.75rem"
+                                ]
+                                (List.map
+                                    (\hash ->
+                                        let
                                             hashHex =
                                                 Bytes.toHex hash
-                                         in
-                                         case Dict.get hashHex keyNames of
-                                            Just keyName ->
-                                                [ text <| keyName ++ ": " ++ Bytes.toHex hash ]
 
-                                            Nothing ->
-                                                [ text <| Bytes.toHex hash ]
-                                        )
+                                            keyName =
+                                                Dict.get hashHex keyNames
+                                                    |> Maybe.withDefault "Unknown key"
+                                        in
+                                        Html.li
+                                            [ HA.style "display" "flex"
+                                            , HA.style "flex-direction" "column"
+                                            , HA.style "padding-bottom" "0.75rem"
+                                            , HA.style "border-bottom" "1px solid #EDF2F7"
+                                            , HA.style "last:border-bottom" "none"
+                                            , HA.style "last:padding-bottom" "0"
+                                            ]
+                                            [ Html.div
+                                                [ HA.style "font-weight" "500"
+                                                , HA.style "color" "#4A5568"
+                                                , HA.style "margin-bottom" "0.25rem"
+                                                ]
+                                                [ text keyName ]
+                                            , Html.div
+                                                [ HA.style "font-family" "monospace"
+                                                , HA.style "font-size" "0.875rem"
+                                                , HA.style "color" "#718096"
+                                                , HA.style "word-break" "break-all"
+                                                ]
+                                                [ text hashHex ]
+                                            ]
+                                    )
+                                    expectedSignatures
                                 )
-                                expectedSignatures
-                            )
-                        ]
-                    , Html.p [ HA.class "text-gray-800 mb-4" ]
-                        [ text "Click the button below to proceed to the signing page where you can finalize and submit your voting transaction." ]
-                    , ctx.signingLink tx
-                        (expectedSignatures
-                            |> List.map
-                                (\keyHash ->
-                                    { keyHash = keyHash
-                                    , keyName =
-                                        Dict.get (Bytes.toHex keyHash) keyNames
-                                            |> Maybe.withDefault "Key hash"
-                                    }
-                                )
-                        )
-                        [ button
-                            [ HA.style "display" "inline-flex"
-                            , HA.style "align-items" "center"
-                            , HA.style "justify-content" "center"
-                            , HA.style "white-space" "nowrap"
-                            , HA.style "border-radius" "9999px"
-                            , HA.style "font-size" "0.875rem"
-                            , HA.style "font-weight" "500"
-                            , HA.style "transition" "all 0.2s"
-                            , HA.style "outline" "none"
-                            , HA.style "ring-offset" "background"
-                            , HA.style "focus-visible:ring" "2px"
-                            , HA.style "focus-visible:ring-color" "ring"
-                            , HA.style "focus-visible:ring-offset" "2px"
-                            , HA.style "background-color" "#272727"
-                            , HA.style "color" "#f7fafc"
-                            , HA.style "hover:bg-color" "#f9fafb"
-                            , HA.style "hover:text-color" "#1a202c"
-                            , HA.style "height" "4rem"
-                            , HA.style "padding-left" "1.5rem"
-                            , HA.style "padding-right" "1.5rem"
-                            , HA.style "padding-top" "1.25rem"
-                            , HA.style "padding-bottom" "1.25rem"
-                            , HA.style "margin-top" "0.5rem"
-                            , HA.style "margin-bottom" "0.5em"
                             ]
-                            [ text "Go to Signing Page" ]
+                        , Html.p
+                            [ HA.style "color" "#4A5568"
+                            , HA.style "font-size" "0.9375rem"
+                            , HA.style "margin-bottom" "1.5rem"
+                            ]
+                            [ text "Click the button below to proceed to the signing page where you can finalize and submit your voting transaction." ]
+                        , ctx.signingLink tx
+                            (expectedSignatures
+                                |> List.map
+                                    (\keyHash ->
+                                        { keyHash = keyHash
+                                        , keyName =
+                                            Dict.get (Bytes.toHex keyHash) keyNames
+                                                |> Maybe.withDefault "Key hash"
+                                        }
+                                    )
+                            )
+                            [ div
+                                [ HA.style "text-align" "center" ]
+                                [ button
+                                    [ HA.style "background-color" "#272727"
+                                    , HA.style "color" "white"
+                                    , HA.style "font-weight" "500"
+                                    , HA.style "font-size" "0.875rem"
+                                    , HA.style "padding" "0.5rem 1.5rem"
+                                    , HA.style "border" "none"
+                                    , HA.style "border-radius" "9999px"
+                                    , HA.style "cursor" "pointer"
+                                    , HA.style "display" "flex"
+                                    , HA.style "align-items" "center"
+                                    , HA.style "justify-content" "center"
+                                    , HA.style "height" "3rem"
+                                    ]
+                                    [ text "Go to Signing Page"
+                                    ]
+                                ]
+                            ]
                         ]
                     ]
                 ]
@@ -7156,9 +7210,35 @@ viewSignTxStep ctx voterStep buildTxStep =
         _ ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ sectionTitle "Tx Signing"
-                , Helper.formContainer
-                    [ Html.p [ HA.class "text-gray-600" ]
-                        [ text "Please complete the Tx building step first." ]
+                , div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
+                    , HA.style "overflow" "hidden"
+                    ]
+                    [ div
+                        [ HA.style "background-color" "#F7FAFC"
+                        , HA.style "padding" "1rem 1.25rem"
+                        , HA.style "border-bottom" "1px solid #EDF2F7"
+                        ]
+                        [ Html.h3
+                            [ HA.style "font-weight" "600"
+                            , HA.style "font-size" "1.125rem"
+                            , HA.style "color" "#1A202C"
+                            , HA.style "line-height" "1.4"
+                            ]
+                            [ text "Step Not Available" ]
+                        ]
+                    , div
+                        [ HA.style "padding" "1.25rem"
+                        ]
+                        [ Html.p
+                            [ HA.style "color" "#4A5568"
+                            , HA.style "font-size" "0.9375rem"
+                            ]
+                            [ text "Please complete the transaction building step first." ]
+                        ]
                     ]
                 ]
 

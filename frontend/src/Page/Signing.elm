@@ -290,23 +290,116 @@ type alias ViewContext msg =
 
 view : ViewContext msg -> Model -> Html msg
 view ctx model =
-    div [ HA.style "max-width" "1024px", HA.style "margin" "0 auto", HA.style "padding" "0rem 2rem" ]
-        [ Html.h2 [ HA.class "text-3xl font-medium my-4" ] [ text "Signing the Transaction" ]
-        , Html.p [ HA.class "mb-4" ]
-            [ text "This page aims to facilitate complex signatures, "
-            , text "such as Native or Plutus scripts multi-sig."
+    div
+        [ HA.style "max-width" "1024px"
+        , HA.style "margin" "0 auto"
+        , HA.style "padding" "0rem 2rem"
+        ]
+        [ Html.h2
+            [ HA.style "font-weight" "600"
+            , HA.style "font-size" "1.875rem"
+            , HA.style "color" "#1A202C"
+            , HA.style "margin" "1.5rem 0"
+            ]
+            [ text "Signing the Transaction" ]
+        , div
+            [ HA.style "background-color" "#F9FAFB"
+            , HA.style "border" "1px solid #E2E8F0"
+            , HA.style "border-radius" "0.5rem"
+            , HA.style "padding" "1.25rem"
+            , HA.style "margin-bottom" "2rem"
+            ]
+            [ Html.p
+                [ HA.style "color" "#4A5568"
+                , HA.style "font-size" "1rem"
+                ]
+                [ text "This page facilitates complex signature processes, such as Native or Plutus scripts multi-sig." ]
             ]
         , case model of
             MissingTx ->
-                Helper.formContainer
-                    [ Html.p [] [ text "No transaction loaded. Please go back to the preparation page and create a transaction first." ] ]
+                div
+                    [ HA.style "border" "1px solid #E2E8F0"
+                    , HA.style "border-radius" "0.75rem"
+                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                    , HA.style "background-color" "#FFFFFF"
+                    , HA.style "padding" "1.5rem"
+                    , HA.style "margin-bottom" "1.5rem"
+                    ]
+                    [ Html.p
+                        [ HA.style "color" "#718096"
+                        , HA.style "font-style" "italic"
+                        ]
+                        [ text "No transaction loaded. Please go back to the preparation page and create a transaction first." ]
+                    ]
 
             LoadedTx { tx, txId, expectedSigners, vkeyWitnesses, txSubmitted, error } ->
                 let
+                    sectionTitle title =
+                        Html.h3
+                            [ HA.style "font-weight" "600"
+                            , HA.style "font-size" "1.25rem"
+                            , HA.style "color" "#2D3748"
+                            , HA.style "margin" "1.5rem 0 1rem 0"
+                            ]
+                            [ text title ]
+
+                    cardContainer content =
+                        div
+                            [ HA.style "border" "1px solid #E2E8F0"
+                            , HA.style "border-radius" "0.75rem"
+                            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                            , HA.style "background-color" "#FFFFFF"
+                            , HA.style "overflow" "hidden"
+                            , HA.style "margin-bottom" "1.5rem"
+                            ]
+                            [ div
+                                [ HA.style "background-color" "#F7FAFC"
+                                , HA.style "padding" "1rem 1.25rem"
+                                , HA.style "border-bottom" "1px solid #EDF2F7"
+                                ]
+                                [ Html.h3
+                                    [ HA.style "font-weight" "600"
+                                    , HA.style "font-size" "1.125rem"
+                                    , HA.style "color" "#1A202C"
+                                    ]
+                                    [ text "Transaction Details" ]
+                                ]
+                            , div
+                                [ HA.style "padding" "1.25rem" ]
+                                content
+                            ]
+
                     gatheredSignaturesSection =
-                        Helper.formContainer
-                            [ Html.div [ HA.class "mb-4" ] (viewExpectedSignatures expectedSigners vkeyWitnesses)
-                            , Html.p [ HA.class "text-gray-600 italic" ] [ text "At least one signature is required to pay the transaction fees." ]
+                        div
+                            [ HA.style "border" "1px solid #E2E8F0"
+                            , HA.style "border-radius" "0.75rem"
+                            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                            , HA.style "background-color" "#FFFFFF"
+                            , HA.style "overflow" "hidden"
+                            , HA.style "margin-bottom" "1.5rem"
+                            ]
+                            [ div
+                                [ HA.style "background-color" "#F7FAFC"
+                                , HA.style "padding" "1rem 1.25rem"
+                                , HA.style "border-bottom" "1px solid #EDF2F7"
+                                ]
+                                [ Html.h3
+                                    [ HA.style "font-weight" "600"
+                                    , HA.style "font-size" "1.125rem"
+                                    , HA.style "color" "#1A202C"
+                                    ]
+                                    [ text "Expected Signatures" ]
+                                ]
+                            , div
+                                [ HA.style "padding" "1.25rem" ]
+                                [ div [ HA.style "margin-bottom" "1rem" ] (viewExpectedSignatures expectedSigners vkeyWitnesses)
+                                , Html.p
+                                    [ HA.style "color" "#718096"
+                                    , HA.style "font-style" "italic"
+                                    , HA.style "font-size" "0.875rem"
+                                    ]
+                                    [ text "At least one signature is required to pay the transaction fees." ]
+                                ]
                             ]
 
                     signSection =
@@ -327,63 +420,291 @@ view ctx model =
                                         , ( "cborHex", JE.string <| Bytes.toHex <| Transaction.serialize someTx )
                                         ]
                         in
-                        Helper.formContainer
-                            [ if ctx.wallet == Nothing then
-                                Html.p [ HA.class "mb-4 text-amber-600" ]
-                                    [ text "If you want to sign with your web wallet, you need to connect it (see the page top)." ]
-
-                              else if Dict.isEmpty vkeyWitnesses then
-                                Html.p [ HA.class "mb-4" ]
-                                    [ Helper.viewButton "Sign with connected wallet" (ctx.wrapMsg SignTxButtonClicked) ]
-
-                              else
-                                let
-                                    signedTx =
-                                        Transaction.updateSignatures (\_ -> Just <| Dict.values vkeyWitnesses) tx
-                                in
-                                Html.p [ HA.class "mb-4 flex items-center gap-3" ]
-                                    [ Helper.viewButton "Sign with connected wallet" (ctx.wrapMsg SignTxButtonClicked)
-                                    , downloadButton "Download partially signed Tx" "signed" "tx-signed.json" signedTx
-                                    ]
-                            , Html.p [ HA.class "mb-4" ]
-                                [ text "If additional signatures are required, please ask the relevant parties"
-                                , text " to partially sign the transaction,"
-                                , text " and use the button below to load their signatures."
-                                , text " You can simply share this page URL with them."
-                                , text " It contains all the details of the transaction which they can sign on their own device."
+                        div
+                            [ HA.style "border" "1px solid #E2E8F0"
+                            , HA.style "border-radius" "0.75rem"
+                            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                            , HA.style "background-color" "#FFFFFF"
+                            , HA.style "overflow" "hidden"
+                            , HA.style "margin-bottom" "1.5rem"
+                            ]
+                            [ div
+                                [ HA.style "background-color" "#F7FAFC"
+                                , HA.style "padding" "1rem 1.25rem"
+                                , HA.style "border-bottom" "1px solid #EDF2F7"
                                 ]
-                            , Html.p [ HA.class "mb-4" ]
-                                [ text "If you want to verify the transaction with an independent tool before signature,"
-                                , text " you can download it, and upload it on "
-                                , Html.a
-                                    [ HA.href "https://council-toolkit.gov.tools/"
-                                    , HA.target "_blank"
-                                    , HA.rel "noopener noreferrer"
-                                    , HA.class "text-blue-600 hover:text-blue-800 underline font-mono"
+                                [ Html.h3
+                                    [ HA.style "font-weight" "600"
+                                    , HA.style "font-size" "1.125rem"
+                                    , HA.style "color" "#1A202C"
                                     ]
-                                    [ text "https://council-toolkit.gov.tools/" ]
-                                , text ". PS: you will also need to connect a wallet for it to display the analysis."
-                                , text " Any wallet will do."
+                                    [ text "Sign Transaction" ]
                                 ]
-                            , Html.p [ HA.class "mb-4 flex items-center" ]
-                                [ downloadButton "Download unsigned Tx" "unsigned" "tx-unsigned.json" tx
-                                , div [ HA.style "margin-left" "1rem" ]
-                                    [ Helper.viewButton "Load signed Tx file" (ctx.wrapMsg LoadSignedTxButtonClicked) ]
+                            , div
+                                [ HA.style "padding" "1.25rem" ]
+                                [ if ctx.wallet == Nothing then
+                                    Html.p
+                                        [ HA.style "color" "#F59E0B"
+                                        , HA.style "margin-bottom" "1rem"
+                                        , HA.style "font-weight" "500"
+                                        ]
+                                        [ text "If you want to sign with your web wallet, you need to connect it (see the page top)." ]
+
+                                  else if Dict.isEmpty vkeyWitnesses then
+                                    Html.p [ HA.style "margin-bottom" "1rem" ]
+                                        [ Helper.viewButton "Sign with connected wallet" (ctx.wrapMsg SignTxButtonClicked) ]
+
+                                  else
+                                    let
+                                        signedTx =
+                                            Transaction.updateSignatures (\_ -> Just <| Dict.values vkeyWitnesses) tx
+                                    in
+                                    Html.div
+                                        [ HA.style "display" "flex"
+                                        , HA.style "align-items" "center"
+                                        , HA.style "gap" "1rem"
+                                        , HA.style "margin-bottom" "1rem"
+                                        ]
+                                        [ Helper.viewButton "Sign with connected wallet" (ctx.wrapMsg SignTxButtonClicked)
+                                        , downloadButton "Download partially signed Tx" "signed" "tx-signed.json" signedTx
+                                        ]
+                                , Html.div [ HA.style "margin-bottom" "1rem" ]
+                                    [ Html.p
+                                        [ HA.style "color" "#4A5568"
+                                        , HA.style "font-size" "0.9375rem"
+                                        , HA.style "line-height" "1.5"
+                                        , HA.style "margin-bottom" "1rem"
+                                        ]
+                                        [ text "If additional signatures are required, ask the relevant parties to partially sign the transaction and use the button below to load their signatures. You can share this page URL with them—it contains all transaction details they need for signing on their device." ]
+                                    ]
+                                , Html.div
+                                    [ HA.style "background-color" "#F9FAFB"
+                                    , HA.style "border" "1px solid #E2E8F0"
+                                    , HA.style "border-radius" "0.5rem"
+                                    , HA.style "padding" "1rem"
+                                    , HA.style "margin-bottom" "1.5rem"
+                                    ]
+                                    [ Html.p
+                                        [ HA.style "color" "#4A5568"
+                                        , HA.style "font-size" "0.9375rem"
+                                        , HA.style "margin-bottom" "0.5rem"
+                                        ]
+                                        [ text "Verify this transaction before signing using "
+                                        , Html.a
+                                            [ HA.href "https://council-toolkit.gov.tools/"
+                                            , HA.target "_blank"
+                                            , HA.rel "noopener noreferrer"
+                                            , HA.style "color" "#3182CE"
+                                            , HA.style "text-decoration" "underline"
+                                            , HA.style "font-family" "monospace"
+                                            ]
+                                            [ text "council-toolkit.gov.tools" ]
+                                        , text ". You'll need to connect any wallet for analysis."
+                                        ]
+                                    ]
+                                , Html.div
+                                    [ HA.style "display" "flex"
+                                    , HA.style "align-items" "center"
+                                    , HA.style "gap" "1rem"
+                                    ]
+                                    [ downloadButton "Download unsigned Tx" "unsigned" "tx-unsigned.json" tx
+                                    , Helper.viewButton "Load signed Tx file" (ctx.wrapMsg LoadSignedTxButtonClicked)
+                                    ]
+                                ]
+                            ]
+
+                    submissionSection hasAllSignatures =
+                        div
+                            [ HA.style "border" "1px solid #E2E8F0"
+                            , HA.style "border-radius" "0.75rem"
+                            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                            , HA.style "background-color" "#FFFFFF"
+                            , HA.style "overflow" "hidden"
+                            , HA.style "margin-bottom" "1.5rem"
+                            ]
+                            [ div
+                                [ HA.style "background-color" "#F7FAFC"
+                                , HA.style "padding" "1rem 1.25rem"
+                                , HA.style "border-bottom" "1px solid #EDF2F7"
+                                ]
+                                [ Html.h3
+                                    [ HA.style "font-weight" "600"
+                                    , HA.style "font-size" "1.125rem"
+                                    , HA.style "color" "#1A202C"
+                                    ]
+                                    [ text "Transaction Submission" ]
+                                ]
+                            , div
+                                [ HA.style "padding" "1.25rem" ]
+                                [ Html.p
+                                    [ HA.style "color" "#4A5568"
+                                    , HA.style "margin-bottom" "1.5rem"
+                                    ]
+                                    [ if hasAllSignatures then
+                                        text "All required signatures have been collected."
+
+                                      else if Dict.isEmpty expectedSigners then
+                                        text "Expected signers are unknown. Submit when you believe the transaction is ready."
+
+                                      else
+                                        text "Not all expected signatures are gathered yet, but you can still submit if ready."
+                                    ]
+                                , if hasAllSignatures then
+                                    Helper.viewButton "Submit Transaction" (ctx.wrapMsg SubmitTxButtonClicked)
+
+                                  else if Dict.isEmpty expectedSigners then
+                                    Helper.viewButton "Submit Transaction" (ctx.wrapMsg SubmitTxButtonClicked)
+
+                                  else
+                                    Helper.viewButton "Submit Transaction Anyway" (ctx.wrapMsg SubmitTxButtonClicked)
+                                ]
+                            ]
+
+                    successSection =
+                        div
+                            [ HA.style "border" "1px solid #D1FAE5"
+                            , HA.style "border-radius" "0.75rem"
+                            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+                            , HA.style "background-color" "#ECFDF5"
+                            , HA.style "overflow" "hidden"
+                            , HA.style "margin-bottom" "1.5rem"
+                            ]
+                            [ div
+                                [ HA.style "padding" "1.5rem" ]
+                                [ div
+                                    [ HA.style "display" "flex"
+                                    , HA.style "align-items" "center"
+                                    , HA.style "gap" "0.75rem"
+                                    , HA.style "margin-bottom" "1rem"
+                                    ]
+                                    [ div
+                                        [ HA.style "background-color" "#15803D"
+                                        , HA.style "width" "2.5rem"
+                                        , HA.style "height" "2.5rem"
+                                        , HA.style "border-radius" "9999px"
+                                        , HA.style "display" "flex"
+                                        , HA.style "align-items" "center"
+                                        , HA.style "justify-content" "center"
+                                        , HA.style "color" "white"
+                                        , HA.style "font-size" "1.25rem"
+                                        , HA.style "font-weight" "bold"
+                                        ]
+                                        [ text "✓" ]
+                                    , Html.p
+                                        [ HA.style "color" "#15803D"
+                                        , HA.style "font-weight" "600"
+                                        , HA.style "font-size" "1.25rem"
+                                        ]
+                                        [ text "Transaction submitted successfully!" ]
+                                    ]
+                                , Html.p
+                                    [ HA.style "margin-bottom" "1.5rem"
+                                    , HA.style "color" "#065F46"
+                                    ]
+                                    [ text "Your vote has been recorded on the Cardano blockchain." ]
+                                , div
+                                    [ HA.style "background-color" "white"
+                                    , HA.style "border" "1px solid #D1FAE5"
+                                    , HA.style "border-radius" "0.5rem"
+                                    , HA.style "padding" "1rem"
+                                    , HA.style "margin-bottom" "1.5rem"
+                                    ]
+                                    [ Html.p
+                                        [ HA.style "font-size" "0.875rem"
+                                        , HA.style "color" "#065F46"
+                                        , HA.style "margin-bottom" "0.5rem"
+                                        ]
+                                        [ text "Transaction ID:" ]
+                                    , Html.p
+                                        [ HA.style "font-family" "monospace"
+                                        , HA.style "font-weight" "500"
+                                        , HA.style "background-color" "#F0FDF4"
+                                        , HA.style "padding" "0.5rem"
+                                        , HA.style "border-radius" "0.25rem"
+                                        , HA.style "word-break" "break-all"
+                                        ]
+                                        [ text <| Bytes.toHex txId ]
+                                    ]
+                                , Html.p
+                                    [ HA.style "color" "#4b5563"
+                                    , HA.style "margin-bottom" "1rem"
+                                    ]
+                                    [ text "Track your transaction:" ]
+                                , div
+                                    [ HA.style "display" "flex"
+                                    , HA.style "gap" "1rem"
+                                    , HA.style "flex-wrap" "wrap"
+                                    ]
+                                    [ let
+                                        cardanoScanBaseUrl =
+                                            case ctx.networkId of
+                                                Mainnet ->
+                                                    "https://cardanoscan.io/transaction/"
+
+                                                Testnet ->
+                                                    "https://preview.cardanoscan.io/transaction/"
+                                      in
+                                      a
+                                        [ HA.href (cardanoScanBaseUrl ++ Bytes.toHex txId)
+                                        , HA.target "_blank"
+                                        , HA.style "display" "inline-flex"
+                                        , HA.style "align-items" "center"
+                                        , HA.style "justify-content" "center"
+                                        , HA.style "white-space" "nowrap"
+                                        , HA.style "border-radius" "9999px"
+                                        , HA.style "font-size" "0.875rem"
+                                        , HA.style "font-weight" "500"
+                                        , HA.style "transition" "all 0.2s"
+                                        , HA.style "outline" "none"
+                                        , HA.style "background-color" "#272727"
+                                        , HA.style "color" "#f7fafc"
+                                        , HA.style "padding" "0.75rem 1.5rem"
+                                        ]
+                                        [ text "View on CardanoScan" ]
+                                    ]
                                 ]
                             ]
                 in
                 div []
-                    [ Helper.formContainer
-                        [ Html.p [ HA.class "mb-2" ]
-                            [ Html.strong [] [ text "Transaction ID: " ]
-                            , Html.span [ HA.class "font-mono", HA.style "word-break" "break-all" ] [ text <| Bytes.toHex txId ]
+                    [ cardContainer
+                        [ Html.div
+                            [ HA.style "display" "flex"
+                            , HA.style "flex-direction" "column"
+                            , HA.style "gap" "0.75rem"
                             ]
-                        , Html.p [ HA.class "mb-2" ] [ text "Transaction details: (₳ amounts are in lovelaces)" ]
-                        , div [ HA.class "relative" ]
+                            [ Html.div
+                                [ HA.style "display" "flex"
+                                , HA.style "flex-direction" "column"
+                                ]
+                                [ Html.span
+                                    [ HA.style "font-weight" "500"
+                                    , HA.style "color" "#4A5568"
+                                    , HA.style "margin-bottom" "0.5rem"
+                                    ]
+                                    [ text "Transaction ID:" ]
+                                , Html.div
+                                    [ HA.style "font-family" "monospace"
+                                    , HA.style "background-color" "#F1F5F9"
+                                    , HA.style "padding" "0.5rem"
+                                    , HA.style "border-radius" "0.25rem"
+                                    , HA.style "font-size" "0.875rem"
+                                    , HA.style "word-break" "break-all"
+                                    ]
+                                    [ text <| Bytes.toHex txId ]
+                                ]
+                            ]
+                        , Html.p
+                            [ HA.style "margin" "1.25rem 0 0.75rem 0"
+                            , HA.style "font-weight" "500"
+                            ]
+                            [ text "Transaction details: (₳ amounts are in lovelaces)" ]
+                        , div
+                            [ HA.style "position" "relative" ]
                             [ Html.pre
                                 [ HA.style "padding" "1rem"
                                 , HA.style "border-radius" "0.375rem"
-                                , HA.style "border" "1px solid #C6C6C6"
+                                , HA.style "border" "1px solid #E2E8F0"
+                                , HA.style "background-color" "#F8FAFC"
                                 , HA.style "overflow-x" "auto"
                                 , HA.style "overflow-y" "auto"
                                 , HA.style "margin-top" "0.5rem"
@@ -399,107 +720,35 @@ view ctx model =
                         ]
                     , if Dict.isEmpty expectedSigners then
                         div []
-                            [ Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Gathered Signatures" ]
+                            [ sectionTitle "Gathered Signatures"
                             , gatheredSignaturesSection
                             , signSection
-                            , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Transaction Submission" ]
-                            , Helper.formContainer
-                                [ Html.p [ HA.class "mb-4" ] [ text "Expected signers are unknown. Submit when you believe the transaction is ready." ]
-                                , Html.p [] [ Helper.viewButton "Submit Transaction" (ctx.wrapMsg SubmitTxButtonClicked) ]
-                                ]
+                            , sectionTitle "Transaction Submission"
+                            , submissionSection True
                             ]
 
-                      else if Dict.isEmpty (Dict.diff expectedSigners vkeyWitnesses) then
+                      else if Dict.isEmpty (Dict.diff expectedSigners (Dict.map (\k _ -> vkeyWitnesses |> Dict.get k) expectedSigners |> Dict.filter (\_ v -> v /= Nothing))) then
                         div []
-                            [ Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Expected Signatures" ]
+                            [ sectionTitle "Expected Signatures"
                             , gatheredSignaturesSection
-                            , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Transaction Submission" ]
-                            , Helper.formContainer
-                                [ Html.p [ HA.class "mb-4" ] [ text "All required signatures have been collected." ]
-                                , Helper.viewButton "Submit Transaction" (ctx.wrapMsg SubmitTxButtonClicked)
-                                ]
+                            , sectionTitle "Transaction Submission"
+                            , submissionSection True
                             ]
 
                       else
                         div []
-                            [ Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Expected Signatures" ]
+                            [ sectionTitle "Expected Signatures"
                             , gatheredSignaturesSection
                             , signSection
-                            , Html.h3 [ HA.class "text-xl font-medium mt-6 mb-2" ] [ text "Transaction Submission" ]
-                            , Helper.formContainer
-                                [ Html.p [ HA.class "mb-4" ] [ text "Not all expected signatures are gathered yet, but you can still submit if ready." ]
-                                , Helper.viewButton "Submit Transaction Anyway" (ctx.wrapMsg SubmitTxButtonClicked)
-                                ]
+                            , sectionTitle "Transaction Submission"
+                            , submissionSection False
                             ]
                     , case txSubmitted of
                         Nothing ->
                             text ""
 
                         Just _ ->
-                            Helper.formContainer
-                                [ div
-                                    [ HA.style "border-radius" "0.375rem"
-                                    ]
-                                    [ Html.p
-                                        [ HA.style "color" "#15803d"
-                                        , HA.style "font-weight" "600"
-                                        , HA.style "font-size" "1.25rem"
-                                        , HA.style "margin-bottom" "0.75rem"
-                                        ]
-                                        [ text "Transaction submitted successfully!" ]
-                                    , Html.p [ HA.style "margin-bottom" "1rem" ]
-                                        [ text "Your vote has been recorded on the Cardano blockchain." ]
-                                    , div
-                                        [ HA.style "border" "1px solid #C6C6C6"
-                                        , HA.style "border-radius" "0.375rem"
-                                        , HA.style "padding" "1rem"
-                                        , HA.style "margin-bottom" "1rem"
-                                        , HA.style "display" "inline-block"
-                                        ]
-                                        [ Html.p
-                                            [ HA.style "font-size" "0.875rem"
-                                            , HA.style "color" "#4b5563"
-                                            , HA.style "margin-bottom" "0.25rem"
-                                            ]
-                                            [ text "Transaction ID:" ]
-                                        , Html.p [ HA.style "font-family" "monospace", HA.style "font-weight" "500" ]
-                                            [ text <| Bytes.toHex txId ]
-                                        ]
-                                    , Html.p
-                                        [ HA.style "color" "#4b5563"
-                                        , HA.style "margin-bottom" "0.75rem"
-                                        ]
-                                        [ text "Track your transaction:" ]
-                                    , div [ HA.style "display" "flex", HA.style "gap" "1rem", HA.style "flex-wrap" "wrap" ]
-                                        [ let
-                                            cardanoScanBaseUrl =
-                                                case ctx.networkId of
-                                                    Mainnet ->
-                                                        "https://cardanoscan.io/transaction/"
-
-                                                    Testnet ->
-                                                        "https://preview.cardanoscan.io/transaction/"
-                                          in
-                                          a
-                                            [ HA.href (cardanoScanBaseUrl ++ Bytes.toHex txId)
-                                            , HA.target "_blank"
-                                            , HA.style "display" "inline-flex"
-                                            , HA.style "align-items" "center"
-                                            , HA.style "justify-content" "center"
-                                            , HA.style "white-space" "nowrap"
-                                            , HA.style "border-radius" "9999px"
-                                            , HA.style "font-size" "0.875rem"
-                                            , HA.style "font-weight" "500"
-                                            , HA.style "transition" "all 0.2s"
-                                            , HA.style "outline" "none"
-                                            , HA.style "background-color" "#272727"
-                                            , HA.style "color" "#f7fafc"
-                                            , HA.style "padding" "0.75rem 1.5rem"
-                                            ]
-                                            [ text "View on CardanoScan" ]
-                                        ]
-                                    ]
-                                ]
+                            successSection
                     , viewError error
                     ]
         ]
@@ -512,21 +761,66 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
         viewExpectedSigner keyHash { keyName } =
             case Dict.get keyHash vkeyWitnesses of
                 Just witness ->
-                    Html.div [ HA.class "bg-green-50 border p-3 rounded-md mb-2 flex items-center", HA.style "border-color" "#C6C6C6" ]
-                        [ Html.div [ HA.class "font-bold", HA.style "margin-left" "6px", HA.style "margin-right" "6px" ] [ text "✓" ]
-                        , Html.div [ HA.class "font-mono text-sm" ]
-                            [ Html.div [] [ text <| keyName ++ ": " ++ shortenedHex 8 keyHash ]
-                            , Html.div [ HA.class "text-gray-600" ]
+                    Html.div
+                        [ HA.style "background-color" "#F0FDF4"
+                        , HA.style "border" "1px solid #D1FAE5"
+                        , HA.style "border-radius" "0.5rem"
+                        , HA.style "padding" "1rem"
+                        , HA.style "margin-bottom" "0.75rem"
+                        , HA.style "display" "flex"
+                        , HA.style "align-items" "flex-start"
+                        ]
+                        [ Html.div
+                            [ HA.style "color" "#16A34A"
+                            , HA.style "font-weight" "bold"
+                            , HA.style "font-size" "1.25rem"
+                            , HA.style "margin-right" "0.75rem"
+                            , HA.style "line-height" "1"
+                            ]
+                            [ text "✓" ]
+                        , Html.div
+                            [ HA.style "font-family" "monospace"
+                            , HA.style "font-size" "0.875rem"
+                            ]
+                            [ Html.div
+                                [ HA.style "font-weight" "500"
+                                , HA.style "margin-bottom" "0.25rem"
+                                , HA.style "color" "#065F46"
+                                ]
+                                [ text <| keyName ++ ": " ++ shortenedHex 8 keyHash ]
+                            , Html.div
+                                [ HA.style "color" "#059669"
+                                , HA.style "margin-bottom" "0.25rem"
+                                ]
                                 [ text <| "VKey: " ++ shortenedHex 8 (Bytes.toHex witness.vkey) ]
-                            , Html.div [ HA.class "text-gray-600" ]
+                            , Html.div
+                                [ HA.style "color" "#059669" ]
                                 [ text <| "Signature: " ++ shortenedHex 8 (Bytes.toHex witness.signature) ]
                             ]
                         ]
 
                 Nothing ->
-                    Html.div [ HA.class "bg-gray-50 border p-3 rounded-md mb-2 flex items-center", HA.style "border-color" "#C6C6C6" ]
-                        [ Html.div [ HA.class "mr-2 text-gray-600" ] [ text "□" ]
-                        , Html.div [ HA.class "font-mono text-sm" ]
+                    Html.div
+                        [ HA.style "background-color" "#F1F5F9"
+                        , HA.style "border" "1px solid #E2E8F0"
+                        , HA.style "border-radius" "0.5rem"
+                        , HA.style "padding" "1rem"
+                        , HA.style "margin-bottom" "0.75rem"
+                        , HA.style "display" "flex"
+                        , HA.style "align-items" "center"
+                        ]
+                        [ Html.div
+                            [ HA.style "color" "#94A3B8"
+                            , HA.style "margin-right" "0.75rem"
+                            , HA.style "font-size" "1.25rem"
+                            , HA.style "line-height" "1"
+                            ]
+                            [ text "□" ]
+                        , Html.div
+                            [ HA.style "font-family" "monospace"
+                            , HA.style "font-size" "0.875rem"
+                            , HA.style "color" "#64748B"
+                            ]
                             [ text <| keyName ++ ": " ++ shortenedHex 8 keyHash ]
                         ]
     in
@@ -541,7 +835,41 @@ viewError error =
             text ""
 
         Just err ->
-            Html.div [ HA.class "mt-4 p-4 bg-red-50 border rounded-md", HA.style "border-color" "#C6C6C6" ]
-                [ Html.p [ HA.class "text-red-600 font-medium mb-2" ] [ text "Error:" ]
-                , Html.pre [ HA.class "text-sm whitespace-pre-wrap" ] [ text err ]
+            Html.div
+                [ HA.style "background-color" "#FEF2F2"
+                , HA.style "border" "1px solid #FEE2E2"
+                , HA.style "border-radius" "0.5rem"
+                , HA.style "padding" "1.25rem"
+                , HA.style "margin-top" "1.5rem"
+                ]
+                [ Html.div
+                    [ HA.style "display" "flex"
+                    , HA.style "align-items" "flex-start"
+                    , HA.style "margin-bottom" "0.75rem"
+                    ]
+                    [ Html.div
+                        [ HA.style "color" "#DC2626"
+                        , HA.style "font-weight" "bold"
+                        , HA.style "margin-right" "0.75rem"
+                        , HA.style "font-size" "1.25rem"
+                        ]
+                        [ text "!" ]
+                    , Html.p
+                        [ HA.style "color" "#DC2626"
+                        , HA.style "font-weight" "600"
+                        ]
+                        [ text "Error" ]
+                    ]
+                , Html.pre
+                    [ HA.style "background-color" "#FFFFFF"
+                    , HA.style "border" "1px solid #FEE2E2"
+                    , HA.style "border-radius" "0.25rem"
+                    , HA.style "padding" "0.75rem"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "white-space" "pre-wrap"
+                    , HA.style "overflow-x" "auto"
+                    , HA.style "font-family" "monospace"
+                    , HA.style "color" "#991B1B"
+                    ]
+                    [ text err ]
                 ]

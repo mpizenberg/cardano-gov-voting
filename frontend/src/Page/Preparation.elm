@@ -2568,7 +2568,7 @@ viewStepWithCircle stepNumber stepId content =
         , HA.style "padding-top" "2rem"
         , HA.style "padding-bottom" "2rem"
         ]
-        [ -- Circle with step number (adjusted for line to go through center)
+        [ -- Circle with step number
           div
             [ HA.style "position" "absolute"
             , HA.style "left" "-0.10rem"
@@ -2583,8 +2583,8 @@ viewStepWithCircle stepNumber stepId content =
             , HA.style "justify-content" "center"
             , HA.style "font-weight" "bold"
             , HA.style "font-size" "1.125rem"
-            , HA.style "z-index" "3" -- Higher z-index to appear on top of the line
-            , HA.style "box-shadow" "0 0 0 4px white" -- Add white outline to hide the line inside the circle
+            , HA.style "z-index" "3"
+            , HA.style "box-shadow" "0 0 0 4px white"
             ]
             [ text (String.fromInt stepNumber) ]
         , content
@@ -2649,11 +2649,6 @@ viewHeaderBackground =
             ]
             []
         ]
-
-
-viewDivider : Html msg
-viewDivider =
-    Html.hr [ HA.style "margin-top" "3rem", HA.style "border-color" "#C7C7C7" ] []
 
 
 
@@ -3185,18 +3180,15 @@ viewScriptForm { scriptInfo, utxoRef, expectedSigners } =
 refScriptSuggestionView : Int -> Html Msg -> Html Msg
 refScriptSuggestionView refScriptFeeSavings utxoRefForm =
     if refScriptFeeSavings >= 5000 then
-        -- Suggest reference script for more than ₳0.005 savings
         div []
             [ Html.p [] [ text <| "By using a reference input for your script, you could save this much in Tx fees: " ++ prettyAdaLovelace (Natural.fromSafeInt refScriptFeeSavings) ]
             , utxoRefForm
             ]
 
     else if refScriptFeeSavings <= -5000 then
-        -- Print warning for more than ₳0.005 additional cost of using a reference script
         Html.p [] [ text <| "Weirdly, using a reference input for your script would cost you more: " ++ prettyAdaLovelace (Natural.fromSafeInt -refScriptFeeSavings) ]
 
     else
-        -- Just ignore if it doesn’t affect the fees in any significant way
         text ""
 
 
@@ -3945,7 +3937,6 @@ viewStorageConfigStep ctx step =
                     , viewError form.error
                     ]
 
-        -- Other cases remain the same
         Validating _ _ ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
                 [ Html.h4 [ HA.class "text-3xl font-medium my-4" ] [ text "Storage Configuration" ]
@@ -4503,8 +4494,7 @@ viewRationaleForm form =
     div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
         [ sectionTitle "Vote Rationale"
         , div [ HA.style "display" "grid", HA.style "gap" "1.5rem", HA.style "position" "relative" ]
-            [ -- Add a vertical line that connects all boxes
-              div
+            [ div
                 [ HA.style "position" "absolute"
                 , HA.style "left" "50%"
                 , HA.style "top" "0"
@@ -4563,8 +4553,7 @@ viewRationaleCard title description content isPrimary index =
         , HA.style "position" "relative"
         , HA.style "z-index" "1"
         ]
-        [ -- Add circular connection dot to the vertical line
-          div
+        [ div
             [ HA.style "position" "absolute"
             , HA.style "left" "50%"
             , HA.style "top"
@@ -4748,8 +4737,7 @@ viewReferencesCard references index =
         , HA.style "position" "relative"
         , HA.style "z-index" "1"
         ]
-        [ -- Add circular connection dot to the vertical line
-          div
+        [ div
             [ HA.style "position" "absolute"
             , HA.style "left" "50%"
             , HA.style "top" "-12px"
@@ -4761,8 +4749,6 @@ viewReferencesCard references index =
             , HA.style "z-index" "2"
             ]
             []
-
-        -- Rest of the card content remains the same
         , div
             [ HA.style "background-color" "#F7FAFC"
             , HA.style "padding" "1rem 1.25rem"
@@ -4881,8 +4867,6 @@ viewOneRefForm n reference =
                     , HA.style "line-height" "1"
                     ]
                     [ text "🗑" ]
-
-                -- Trash can icon
                 ]
             ]
         , div
@@ -4992,8 +4976,7 @@ viewCompletedRationale rationale =
                 [ HA.style "padding" "1.25rem"
                 ]
                 [ div [ HA.style "display" "grid", HA.style "gap" "1.5rem" ]
-                    [ -- Summary section
-                      div []
+                    [ div []
                         [ Html.p
                             [ HA.style "font-size" "0.9375rem"
                             , HA.style "line-height" "1.6"
@@ -5001,8 +4984,6 @@ viewCompletedRationale rationale =
                             ]
                             [ text rationale.summary ]
                         ]
-
-                    -- Rationale Statement section
                     , div [ HA.style "border-top" "1px solid #EDF2F7", HA.style "padding-top" "1.5rem" ]
                         [ Html.h4
                             [ HA.style "font-size" "1rem"
@@ -5019,13 +5000,9 @@ viewCompletedRationale rationale =
                             ]
                             [ renderMarkdownContent rationale.rationaleStatement ]
                         ]
-
-                    -- Optional sections
                     , viewOptionalSection "Precedent Discussion" rationale.precedentDiscussion
                     , viewOptionalSection "Counter Argument Discussion" rationale.counterArgumentDiscussion
                     , viewOptionalSection "Conclusion" rationale.conclusion
-
-                    -- Internal vote if present
                     , if rationale.internalVote /= noInternalVote then
                         div [ HA.style "border-top" "1px solid #EDF2F7", HA.style "padding-top" "1.5rem" ]
                             [ Html.h4
@@ -5040,8 +5017,6 @@ viewCompletedRationale rationale =
 
                       else
                         text ""
-
-                    -- References if present
                     , if not (List.isEmpty rationale.references) then
                         div [ HA.style "border-top" "1px solid #EDF2F7", HA.style "padding-top" "1.5rem" ]
                             [ Html.h4
@@ -6234,8 +6209,7 @@ viewCompletedStorage r storage =
                     , HA.style "gap" "0.75rem 1.5rem"
                     , HA.style "align-items" "start"
                     ]
-                    [ -- File Name
-                      Html.span
+                    [ Html.span
                         [ HA.style "font-weight" "500"
                         , HA.style "color" "#4A5568"
                         ]
@@ -6245,8 +6219,6 @@ viewCompletedStorage r storage =
                         , HA.style "overflow-wrap" "break-word"
                         ]
                         [ text storage.jsonFile.name ]
-
-                    -- CID
                     , Html.span
                         [ HA.style "font-weight" "500"
                         , HA.style "color" "#4A5568"
@@ -6257,8 +6229,6 @@ viewCompletedStorage r storage =
                         , HA.style "overflow-wrap" "break-word"
                         ]
                         [ text storage.jsonFile.cid ]
-
-                    -- File Hash
                     , Html.span
                         [ HA.style "font-weight" "500"
                         , HA.style "color" "#4A5568"
@@ -6269,8 +6239,6 @@ viewCompletedStorage r storage =
                         , HA.style "overflow-wrap" "break-word"
                         ]
                         [ text (Bytes.toHex dataHash) ]
-
-                    -- Size
                     , Html.span
                         [ HA.style "font-weight" "500"
                         , HA.style "color" "#4A5568"
@@ -6280,8 +6248,6 @@ viewCompletedStorage r storage =
                         [ HA.style "font-family" "monospace"
                         ]
                         [ text (storage.jsonFile.size ++ " bytes") ]
-
-                    -- IPFS Link
                     , Html.span
                         [ HA.style "font-weight" "500"
                         , HA.style "color" "#4A5568"
@@ -6672,7 +6638,6 @@ viewSignTxStep ctx voterStep buildTxStep =
     case ( buildTxStep, voterStep ) of
         ( Done _ { tx, expectedSignatures }, Done _ voterWitness ) ->
             let
-                -- Extract the main voter credential information
                 voterId =
                     case voterWitness of
                         Witness.WithCommitteeHotCred (Witness.WithKey hotkey) ->

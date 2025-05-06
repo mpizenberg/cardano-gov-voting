@@ -549,8 +549,16 @@ innerUpdate ctx msg model =
     case msg of
         ScrollToElement elementId ->
             ( model
-            , Task.attempt (\_ -> NoMsg) (Dom.getElement elementId |> Task.andThen (\info -> Dom.setViewport 0 (info.element.y - 100) |> Task.map (\_ -> ())))
-                |> Cmd.map ctx.wrapMsg
+            , Dom.getElement elementId
+                |> Task.attempt
+                    (\result ->
+                        case result of
+                            Ok element ->
+                                ctx.wrapMsg (ScrollToElement elementId)
+
+                            Err _ ->
+                                ctx.wrapMsg NoMsg
+                    )
             , Nothing
             )
 
@@ -670,7 +678,8 @@ innerUpdate ctx msg model =
             case model.voterStep of
                 Done prep _ ->
                     ( { model | voterStep = Preparing prep }
-                      -- TODO: also reset all dependents steps
+                      -- Do not reset the dependent steps - remove these commented lines
+                      -- or replace with a more selective reset that preserves completed data
                       -- |> resetProposal
                       -- |> resetRationaleCreation
                       -- |> resetRationaleSignature
@@ -3363,22 +3372,7 @@ viewIdentifiedVoter form voter =
             ]
         , Html.p
             [ HA.style "margin-top" "1rem" ]
-            [ button
-                [ HA.style "background-color" "#272727"
-                , HA.style "color" "white"
-                , HA.style "font-weight" "500"
-                , HA.style "font-size" "0.875rem"
-                , HA.style "padding" "0.5rem 1.5rem"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "9999px"
-                , HA.style "cursor" "pointer"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , HA.style "justify-content" "center"
-                , HA.style "height" "3rem"
-                , onClick ChangeVoterButtonClicked
-                ]
-                [ text "Change Voter" ]
+            [ Helper.viewButton "Change Voter" ChangeVoterButtonClicked
             ]
         ]
 
@@ -3985,24 +3979,7 @@ viewStorageConfigStep ctx step =
                         [ viewStorageConfigInfo storageConfig ]
                     ]
                 , Html.p [ HA.style "margin-top" "1rem" ]
-                    [ Html.map ctx.wrapMsg <|
-                        button
-                            [ HA.style "background-color" "#272727"
-                            , HA.style "color" "white"
-                            , HA.style "font-weight" "500"
-                            , HA.style "font-size" "0.875rem"
-                            , HA.style "padding" "0.5rem 1.5rem"
-                            , HA.style "border" "none"
-                            , HA.style "border-radius" "9999px"
-                            , HA.style "cursor" "pointer"
-                            , HA.style "display" "flex"
-                            , HA.style "align-items" "center"
-                            , HA.style "justify-content" "center"
-                            , HA.style "height" "3rem"
-                            , onClick ValidateStorageConfigButtonClicked
-                            ]
-                            [ text "Change storage configuration" ]
-                    ]
+                    [ Html.map ctx.wrapMsg <| Helper.viewButton "Change storage configuration" ValidateStorageConfigButtonClicked ]
                 ]
 
 
@@ -4383,21 +4360,6 @@ viewStorageConfigInfo config =
                         [ text ipfsServer ]
                     ]
                 ]
-
-
-viewHeader : Int -> ( String, String ) -> Html Msg
-viewHeader n ( field, value ) =
-    Helper.formContainer
-        [ div [ HA.class "flex items-center" ]
-            [ div [ HA.class "flex-1 flex gap-12" ]
-                [ Helper.labeledField "Request Header Title"
-                    (Helper.textFieldInline field (StorageHeaderFieldChange n))
-                , Helper.labeledField "Request Header Value"
-                    (Helper.textFieldInline value (StorageHeaderValueChange n))
-                , Helper.viewButton "Delete" (DeleteHeaderButtonClicked n)
-                ]
-            ]
-        ]
 
 
 
@@ -4860,33 +4822,6 @@ viewReferencesCard references index =
         ]
 
 
-viewSummaryForm : MarkdownForm -> Html Msg
-viewSummaryForm form =
-    div []
-        [ Html.h4 [ HA.class "text-xl font-medium" ] [ text "Summary" ]
-        , div [ HA.class "mt-2 mb-4" ]
-            [ Html.p [ HA.class "text-sm text-gray-600" ] [ text "Compulsory" ]
-            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "Clearly state your stance, summarize your rationale with your main argument." ]
-            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "Limited to 300 characters, does NOT support markdown." ]
-            ]
-        , Helper.viewTextarea form RationaleSummaryChange
-        ]
-
-
-viewStatementForm : Bool -> MarkdownForm -> Html Msg
-viewStatementForm hasAutoGen form =
-    div []
-        [ Html.h4 [ HA.class "text-xl font-medium" ] [ text "Rationale Statement" ]
-        , div [ HA.class "mt-2 mb-4" ]
-            [ Html.p [ HA.class "text-sm text-gray-600" ] [ text "Compulsory" ]
-            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "Fully describe your rationale, with your arguments in full details." ]
-            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "No size limit. Use markdown with heading level 2 (##) or higher." ]
-            ]
-        , viewPdfAutogenCheckbox hasAutoGen
-        , Helper.viewTextarea form RationaleStatementChange
-        ]
-
-
 viewPdfAutogenCheckbox : Bool -> Html Msg
 viewPdfAutogenCheckbox hasAutoGen =
     div
@@ -4910,69 +4845,6 @@ viewPdfAutogenCheckbox hasAutoGen =
                 [ Html.span [ HA.class "mr-1" ] [ text "Auto-generate PDF and add it to the rationale" ]
                 ]
             ]
-        ]
-
-
-viewPrecedentDiscussionForm : MarkdownForm -> Html Msg
-viewPrecedentDiscussionForm form =
-    div []
-        [ Html.h4 [ HA.class "text-xl font-medium" ] [ text "Precedent Discussion" ]
-        , div [ HA.class "mt-2 mb-4" ]
-            [ Html.p [ HA.class "text-sm text-gray-600" ] [ text "Optional" ]
-            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "Discuss what you feel is relevant precedent." ]
-            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "No size limit and markdown is supported." ]
-            ]
-        , Helper.viewTextarea form PrecedentDiscussionChange
-        ]
-
-
-viewCounterArgumentForm : MarkdownForm -> Html Msg
-viewCounterArgumentForm form =
-    div []
-        [ Html.h4 [ HA.class "text-xl font-medium" ] [ text "Counter Argument Discussion" ]
-        , div [ HA.class "mt-2 mb-4" ]
-            [ Html.p [ HA.class "text-sm text-gray-600" ] [ text "Optional" ]
-            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "Discuss significant counter arguments to your position." ]
-            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "No size limit and markdown is supported." ]
-            ]
-        , Helper.viewTextarea form CounterArgumentChange
-        ]
-
-
-viewConclusionForm : MarkdownForm -> Html Msg
-viewConclusionForm form =
-    div []
-        [ Html.h4 [ HA.class "text-xl font-medium" ] [ text "Conclusion" ]
-        , div [ HA.class "mt-2 mb-4" ]
-            [ Html.p [ HA.class "text-sm text-gray-600" ] [ text "Optional" ]
-            , Html.p [ HA.class "text-sm text-gray-600" ] [ text "No size limit, does NOT support markdown." ]
-            ]
-        , Helper.viewTextarea form ConclusionChange
-        ]
-
-
-viewInternalVoteForm : InternalVote -> Html Msg
-viewInternalVoteForm { constitutional, unconstitutional, abstain, didNotVote, against } =
-    div []
-        [ Html.h4 [ HA.class "text-xl font-medium" ] [ text "Internal Vote" ]
-        , Html.p [ HA.class "text-sm text-gray-600 mt-2 mb-4" ]
-            [ text "If you vote as a group, you can report the group internal votes." ]
-        , div [ HA.class "flex flex-wrap gap-4" ]
-            [ div [ HA.class "mr-4" ] [ Helper.viewNumberInput "Constitutional" constitutional InternalConstitutionalVoteChange ]
-            , div [ HA.class "mr-4" ] [ Helper.viewNumberInput "Unconstitutional" unconstitutional InternalUnconstitutionalVoteChange ]
-            , div [ HA.class "mr-4" ] [ Helper.viewNumberInput "Abstain" abstain InternalAbstainVoteChange ]
-            , div [ HA.class "mr-4" ] [ Helper.viewNumberInput "Did not vote" didNotVote InternalDidNotVoteChange ]
-            , div [ HA.class "mr-4" ] [ Helper.viewNumberInput "Against voting" against InternalAgainstVoteChange ]
-            ]
-        ]
-
-
-viewReferencesForm : List Reference -> Html Msg
-viewReferencesForm references =
-    div [ HA.style "margin-top" "50px" ]
-        [ Html.h4 [ HA.class "text-xl font-medium" ] [ text "References" ]
-        , div [] (List.indexedMap viewOneRefForm references)
-        , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Add a reference" AddRefButtonClicked ]
         ]
 
 
@@ -5406,58 +5278,6 @@ viewFormattedReference ref =
 -- Helper to conditionally render a section if content exists
 
 
-maybeViewSection : (a -> Html msg) -> Maybe a -> Html msg
-maybeViewSection viewFn maybeValue =
-    case maybeValue of
-        Nothing ->
-            text ""
-
-        Just value ->
-            Helper.formContainer
-                [ div [ HA.class "bg-gray-50 p-4 rounded-md border", HA.style "border-color" "#e5e7eb" ]
-                    [ viewFn value ]
-                ]
-
-
-viewSummary : String -> Html msg
-viewSummary summary =
-    div []
-        [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "Summary" ]
-        , Html.p [ HA.class "text-gray-800" ] [ text summary ]
-        ]
-
-
-viewMd : String -> String -> Html msg
-viewMd section str =
-    div []
-        [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text section ]
-        , case Md.parse str of
-            Err deadEnds ->
-                let
-                    deadEndsString =
-                        List.map Md.deadEndToString deadEnds
-                            |> String.join "\n"
-                in
-                Html.p []
-                    [ Html.pre [] [ text "Unexpected error while parsing markdown:" ]
-                    , Html.pre [] [ text deadEndsString ]
-                    ]
-
-            Ok blocks ->
-                case Md.render markdownRenderer blocks of
-                    Err errors ->
-                        Html.p []
-                            [ Html.pre [] [ text "Unexpected error while rendering markdown:" ]
-                            , Html.pre [] [ text errors ]
-                            ]
-
-                    Ok rendered ->
-                        Html.div
-                            [ HA.class "markdown-content" ]
-                            rendered
-        ]
-
-
 markdownRenderer : Md.Renderer (Html msg)
 markdownRenderer =
     { defaultHtmlRenderer
@@ -5530,85 +5350,6 @@ customHeadingRenderer { level, children } =
                 , HA.style "margin-bottom" "0.5rem"
                 ]
                 children
-
-
-viewConclusion : String -> Html msg
-viewConclusion conclusion =
-    div []
-        [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "Conclusion" ]
-        , Html.p [ HA.class "text-gray-800 whitespace-pre-wrap" ] [ text conclusion ]
-        ]
-
-
-viewInternalVote : InternalVote -> Html msg
-viewInternalVote ({ constitutional, unconstitutional, abstain, didNotVote, against } as internalVote) =
-    if internalVote == noInternalVote then
-        text ""
-
-    else
-        div []
-            [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "Internal Vote" ]
-            , Html.ul [ HA.class "space-y-1" ]
-                [ Html.li [] [ Html.strong [ HA.class "font-medium" ] [ text "Constitutional: " ], text (String.fromInt constitutional) ]
-                , Html.li [] [ Html.strong [ HA.class "font-medium" ] [ text "Unconstitutional: " ], text (String.fromInt unconstitutional) ]
-                , Html.li [] [ Html.strong [ HA.class "font-medium" ] [ text "Abstain: " ], text (String.fromInt abstain) ]
-                , Html.li [] [ Html.strong [ HA.class "font-medium" ] [ text "Did not vote: " ], text (String.fromInt didNotVote) ]
-                , Html.li [] [ Html.strong [ HA.class "font-medium" ] [ text "Against voting: " ], text (String.fromInt against) ]
-                ]
-            ]
-
-
-viewReferences : List Reference -> Html msg
-viewReferences references =
-    if List.isEmpty references then
-        text ""
-
-    else
-        div []
-            [ Html.h4 [ HA.class "text-xl font-bold mb-2" ] [ text "References" ]
-            , Html.ul [ HA.class "space-y-2" ] (List.map viewRef references)
-            ]
-
-
-viewRef : Reference -> Html msg
-viewRef ref =
-    let
-        uriDisplay =
-            if String.startsWith "ipfs://" ref.uri then
-                let
-                    cid =
-                        String.dropLeft 7 ref.uri
-
-                    gatewayUrl =
-                        "https://ipfs.io/ipfs/" ++ cid
-                in
-                Html.a
-                    [ HA.href gatewayUrl
-                    , HA.target "_blank"
-                    , HA.rel "noopener noreferrer"
-                    , HA.class "text-blue-600 hover:text-blue-800 underline"
-                    ]
-                    [ text ref.uri ]
-
-            else
-                text ref.uri
-    in
-    Html.li [ HA.class "py-2 border-b last:border-b-0", HA.style "border-color" "#e5e7eb" ]
-        [ Html.div [ HA.class "flex flex-col space-y-1" ]
-            [ Html.div []
-                [ Html.strong [ HA.class "font-medium" ] [ text "Type: " ]
-                , text (refTypeToString ref.type_)
-                ]
-            , Html.div []
-                [ Html.strong [ HA.class "font-medium" ] [ text "Label: " ]
-                , text ref.label
-                ]
-            , Html.div [ HA.class "flex" ]
-                [ Html.strong [ HA.class "font-medium" ] [ text "URI: " ]
-                , Html.div [ HA.class "break-all ml-2" ] [ uriDisplay ]
-                ]
-            ]
-        ]
 
 
 
@@ -5792,23 +5533,7 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
                                 ]
                         , Html.p
                             [ HA.style "margin-top" "1rem" ]
-                            [ Html.map ctx.wrapMsg <|
-                                button
-                                    [ HA.style "background-color" "#272727"
-                                    , HA.style "color" "white"
-                                    , HA.style "font-weight" "500"
-                                    , HA.style "font-size" "0.875rem"
-                                    , HA.style "padding" "0.5rem 1.5rem"
-                                    , HA.style "border" "none"
-                                    , HA.style "border-radius" "9999px"
-                                    , HA.style "cursor" "pointer"
-                                    , HA.style "display" "flex"
-                                    , HA.style "align-items" "center"
-                                    , HA.style "justify-content" "center"
-                                    , HA.style "height" "3rem"
-                                    , onClick ChangeAuthorsButtonClicked
-                                    ]
-                                    [ text "Change signatures" ]
+                            [ Html.map ctx.wrapMsg <| Helper.viewButton "Edit Change signatures" ChangeAuthorsButtonClicked
                             ]
                         ]
                     ]
@@ -6036,6 +5761,37 @@ viewRationaleSignatureForm jsonLdContexts actionId ({ authors } as form) =
                         , HA.style "gap" "1rem"
                         ]
                         (List.indexedMap viewOneAuthorForm authors)
+                , div
+                    [ HA.style "display" "flex"
+                    , HA.style "gap" "1rem"
+                    , HA.style "margin-top" "1.5rem"
+                    , HA.style "justify-content" "space-between"
+                    ]
+                    [ button
+                        [ HA.style "background-color" "#F3F4F6"
+                        , HA.style "color" "#4B5563"
+                        , HA.style "font-weight" "500"
+                        , HA.style "font-size" "0.875rem"
+                        , HA.style "padding" "0.75rem 1.5rem"
+                        , HA.style "border" "1px solid #E5E7EB"
+                        , HA.style "border-radius" "0.5rem"
+                        , HA.style "cursor" "pointer"
+                        , onClick SkipRationaleSignaturesButtonClicked
+                        ]
+                        [ text "Skip Signatures" ]
+                    , button
+                        [ HA.style "background-color" "#272727"
+                        , HA.style "color" "white"
+                        , HA.style "font-weight" "500"
+                        , HA.style "font-size" "0.875rem"
+                        , HA.style "padding" "0.75rem 1.5rem"
+                        , HA.style "border" "none"
+                        , HA.style "border-radius" "0.5rem"
+                        , HA.style "cursor" "pointer"
+                        , onClick ValidateRationaleSignaturesButtonClicked
+                        ]
+                        [ text "Confirm Signatures" ]
+                    ]
                 ]
             ]
         ]
@@ -6262,35 +6018,6 @@ viewOneAuthorForm n author =
         ]
 
 
-viewSigner : AuthorWitness -> Html Msg
-viewSigner { name, witnessAlgorithm, publicKey, signature } =
-    Html.li []
-        [ Html.div []
-            [ Html.strong [ HA.class "font-medium" ] [ text "Name: " ]
-            , text name
-            ]
-        , case signature of
-            Nothing ->
-                Html.div [ HA.class "" ] [ text "No signature provided" ]
-
-            Just sig ->
-                div [ HA.class "text-sm" ]
-                    [ Html.div []
-                        [ Html.strong [ HA.class "font-medium" ] [ text "Witness algorithm: " ]
-                        , text witnessAlgorithm
-                        ]
-                    , Html.div [ HA.class "font-mono" ]
-                        [ Html.strong [ HA.class "font-medium" ] [ text "Public key: " ]
-                        , text (String.left 10 publicKey ++ "..." ++ String.right 6 publicKey)
-                        ]
-                    , Html.div [ HA.class "font-mono" ]
-                        [ Html.strong [ HA.class "font-medium" ] [ text "Signature: " ]
-                        , text (String.left 10 sig ++ "..." ++ String.right 6 sig)
-                        ]
-                    ]
-        ]
-
-
 
 --
 -- Storage Step
@@ -6344,27 +6071,7 @@ viewPermanentStorageStep ctx rationaleSigStep storageConfigStep step =
                                 , HA.style "color" "#4A5568"
                                 ]
                                 [ text "Your document will be stored using the configuration you selected earlier. The CID (content identifier) will be included with your vote transaction." ]
-                            , button
-                                [ HA.style "background-color" "#272727"
-                                , HA.style "color" "white"
-                                , HA.style "font-weight" "500"
-                                , HA.style "font-size" "0.875rem"
-                                , HA.style "padding" "0.75rem 1.5rem"
-                                , HA.style "border" "none"
-                                , HA.style "border-radius" "0.5rem"
-                                , HA.style "cursor" "pointer"
-                                , HA.style "display" "flex"
-                                , HA.style "align-items" "center"
-                                , HA.style "justify-content" "center"
-                                , HA.style "width" "fit-content"
-                                , onClick PinJsonIpfsButtonClicked
-                                ]
-                                [ Html.span
-                                    [ HA.style "margin-right" "0.5rem"
-                                    ]
-                                    [ text "📤" ]
-                                , text "Upload to IPFS"
-                                ]
+                            , Helper.viewButton "📤 Upload to IPFS" PinJsonIpfsButtonClicked
                             , viewError form.error
                             ]
                         ]
@@ -6598,24 +6305,7 @@ viewCompletedStorage r storage =
                         ]
                     ]
                 ]
-            , button
-                [ HA.style "background-color" "#272727"
-                , HA.style "color" "white"
-                , HA.style "font-weight" "500"
-                , HA.style "font-size" "0.875rem"
-                , HA.style "padding" "0.5rem 1.5rem"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "9999px"
-                , HA.style "cursor" "pointer"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , HA.style "justify-content" "center"
-                , HA.style "height" "3rem"
-                , onClick AddOtherStorageButtonCLicked
-                ]
-                [ Html.span [ HA.style "margin-right" "0.5rem" ] [ text "+" ]
-                , text "Add another storage location"
-                ]
+            , Helper.viewButton "Add another storage location" AddOtherStorageButtonCLicked
             ]
         ]
 
@@ -6938,8 +6628,6 @@ viewMissingStep stepName isMissing anchorId =
                 , HA.style "color" "#3182CE"
                 , HA.style "text-decoration" "underline"
                 , HA.style "cursor" "pointer"
-                , HA.style "scroll-behavior" "smooth"
-                , onClick (ScrollToElement anchorId)
                 ]
                 [ text stepName ]
             ]
@@ -6971,52 +6659,6 @@ isStepIncomplete step =
 
         _ ->
             True
-
-
-viewVoteOptionsForm : ViewContext msg -> Maybe String -> Html msg
-viewVoteOptionsForm ctx error =
-    Helper.formContainer
-        [ Html.p [ HA.class "mb-4" ] [ text "Choose your vote:" ]
-        , div [ HA.style "display" "flex", HA.style "align-items" "center" ]
-            [ div [ HA.style "margin-right" "12px" ]
-                [ Helper.viewButton "Vote YES" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteYes)) ]
-            , div [ HA.style "margin-right" "12px" ]
-                [ Helper.viewButton "Vote NO" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteNo)) ]
-            , div []
-                [ Helper.viewButton "Vote ABSTAIN" (ctx.wrapMsg (BuildTxButtonClicked Gov.VoteAbstain)) ]
-            ]
-        , viewError error
-        ]
-
-
-viewBuiltTransaction : ViewContext msg -> Transaction -> Html msg
-viewBuiltTransaction ctx tx =
-    Helper.formContainer
-        [ Html.p [ HA.class "mb-2" ]
-            [ text "Transaction generated successfully"
-            , Html.span [ HA.style "color" "red" ] [ text " (₳ displayed as lovelaces)" ]
-            , Html.span [] [ text ":" ]
-            ]
-        , div [ HA.class "relative" ]
-            [ Html.pre
-                [ HA.style "padding" "1rem"
-                , HA.style "border-radius" "0.375rem"
-                , HA.style "border" "1px solid #C6C6C6"
-                , HA.style "overflow-x" "auto"
-                , HA.style "overflow-y" "auto"
-                , HA.style "margin-top" "0.5rem"
-                , HA.style "font-size" "0.875rem"
-                , HA.style "white-space" "pre-wrap"
-                , HA.style "word-break" "break-all"
-                , HA.style "word-wrap" "break-word"
-                , HA.style "max-height" "300px"
-                , HA.style "font-family" "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                ]
-                [ text <| prettyTx tx ]
-            ]
-        , div [ HA.class "mt-4" ]
-            [ Helper.viewButton "Change vote" (ctx.wrapMsg ChangeVoteButtonClicked) ]
-        ]
 
 
 
@@ -7056,7 +6698,6 @@ viewSignTxStep ctx voterStep buildTxStep =
                         Witness.Native { expectedSigners } ->
                             List.map (\signer -> ( Bytes.toHex signer, "Multisig signer" )) expectedSigners
 
-                        -- "let's leave it as-is because we don't handle them anyway for now"
                         Witness.Plutus _ ->
                             []
 
@@ -7085,43 +6726,17 @@ viewSignTxStep ctx voterStep buildTxStep =
                     Dict.fromList (voterId ++ walletSpendingCredential ++ walletStakeCredential)
             in
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ sectionTitle "Tx Signing"
-                , div
-                    [ HA.style "border" "1px solid #E2E8F0"
-                    , HA.style "border-radius" "0.75rem"
-                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-                    , HA.style "background-color" "#FFFFFF"
-                    , HA.style "overflow" "hidden"
-                    ]
-                    [ div
-                        [ HA.style "background-color" "#F7FAFC"
-                        , HA.style "padding" "1rem 1.25rem"
-                        , HA.style "border-bottom" "1px solid #EDF2F7"
-                        ]
-                        [ Html.h3
-                            [ HA.style "font-weight" "600"
-                            , HA.style "font-size" "1.125rem"
-                            , HA.style "color" "#1A202C"
-                            , HA.style "line-height" "1.4"
-                            ]
-                            [ text "Finalize Your Vote" ]
-                        ]
-                    , div
-                        [ HA.style "padding" "1.25rem"
-                        ]
+                [ Helper.sectionTitle "Tx Signing"
+                , Helper.cardContainer []
+                    [ Helper.cardHeader "Finalize Your Vote" []
+                    , Helper.cardContent []
                         [ Html.p
                             [ HA.style "color" "#4A5568"
                             , HA.style "font-size" "0.9375rem"
                             , HA.style "margin-bottom" "1rem"
                             ]
                             [ text "The following keys will need to sign the transaction:" ]
-                        , div
-                            [ HA.style "background-color" "#F9FAFB"
-                            , HA.style "border" "1px solid #E2E8F0"
-                            , HA.style "border-radius" "0.5rem"
-                            , HA.style "padding" "1rem"
-                            , HA.style "margin-bottom" "1.5rem"
-                            ]
+                        , Helper.infoBox []
                             [ Html.ul
                                 [ HA.style "list-style-type" "none"
                                 , HA.style "padding" "0"
@@ -7209,30 +6824,10 @@ viewSignTxStep ctx voterStep buildTxStep =
 
         _ ->
             div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ sectionTitle "Tx Signing"
-                , div
-                    [ HA.style "border" "1px solid #E2E8F0"
-                    , HA.style "border-radius" "0.75rem"
-                    , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-                    , HA.style "background-color" "#FFFFFF"
-                    , HA.style "overflow" "hidden"
-                    ]
-                    [ div
-                        [ HA.style "background-color" "#F7FAFC"
-                        , HA.style "padding" "1rem 1.25rem"
-                        , HA.style "border-bottom" "1px solid #EDF2F7"
-                        ]
-                        [ Html.h3
-                            [ HA.style "font-weight" "600"
-                            , HA.style "font-size" "1.125rem"
-                            , HA.style "color" "#1A202C"
-                            , HA.style "line-height" "1.4"
-                            ]
-                            [ text "Step Not Available" ]
-                        ]
-                    , div
-                        [ HA.style "padding" "1.25rem"
-                        ]
+                [ Helper.sectionTitle "Tx Signing"
+                , Helper.cardContainer []
+                    [ Helper.cardHeader "Step Not Available" []
+                    , Helper.cardContent []
                         [ Html.p
                             [ HA.style "color" "#4A5568"
                             , HA.style "font-size" "0.9375rem"
@@ -7250,13 +6845,5 @@ viewSignTxStep ctx voterStep buildTxStep =
 
 
 viewError : Maybe String -> Html msg
-viewError error =
-    case error of
-        Nothing ->
-            text ""
-
-        Just err ->
-            Html.div [ HA.class "mt-4 p-4 bg-red-50 border rounded-md", HA.style "border-color" "#C6C6C6" ]
-                [ Html.p [ HA.class "text-red-600 font-medium mb-2" ] [ text "Error:" ]
-                , Html.pre [ HA.class "text-sm whitespace-pre-wrap" ] [ text err ]
-                ]
+viewError =
+    Helper.viewError

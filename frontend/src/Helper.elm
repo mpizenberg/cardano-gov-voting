@@ -1,12 +1,12 @@
 module Helper exposing
     ( shortenedHex, prettyAdaLovelace
-    , viewNumberInput, textFieldInline, firstTextField, viewSelect
-    , labeledField, textField, viewTextarea, radioInput
+    , textFieldInline, viewSelect
+    , textField
     , formContainer, boxContainer
     , viewButton, viewWalletButton
     , applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle
     , viewActionTypeIcon
-    , viewNetworkButton
+    , cardContainer, cardContent, cardHeader, infoBox, inputStyle, markdownRenderer, renderMarkdownContent, sectionTitle, successBox, textareaStyle, viewError, viewPendingState, warningBox
     )
 
 {-| Helper module for miscellaneous functions that didn’t fit elsewhere,
@@ -20,9 +20,9 @@ and are potentially useful in multiple places.
 
 # Form elements
 
-@docs viewNumberInput, textFieldInline, firstTextField, viewSelect
+@docs textFieldInline, viewSelect
 
-@docs labeledField, textField, viewTextarea, radioInput
+@docs textField
 
 
 # Containers
@@ -46,10 +46,12 @@ and are potentially useful in multiple places.
 
 -}
 
-import Cardano.Address exposing (NetworkId(..))
-import Html exposing (Html, button, text)
+import Html exposing (Html, button, div, text)
 import Html.Attributes as HA
-import Html.Events exposing (onClick, onMouseLeave, onMouseOver)
+import Html.Events exposing (onClick)
+import Markdown.Block
+import Markdown.Parser as Md
+import Markdown.Renderer exposing (defaultHtmlRenderer)
 import Natural exposing (Natural)
 import Numeral
 
@@ -100,37 +102,6 @@ prettyAdaLovelace n =
 -- FORM ELEMENTS ###############################################################
 
 
-{-| Helper view function for a simple number input.
--}
-viewNumberInput : String -> Int -> (String -> msg) -> Html msg
-viewNumberInput label n msgOnInput =
-    Html.div []
-        [ Html.label
-            [ HA.style "display" "block"
-            , HA.style "font-weight" "500"
-            , HA.style "color" "#374151"
-            , HA.style "margin-bottom" "0.25rem"
-            ]
-            [ text label ]
-        , Html.input
-            (inputBaseStyle
-                ++ [ HA.type_ "number"
-                   , HA.value (String.fromInt n)
-                   , HA.min "0"
-                   , Html.Events.onInput msgOnInput
-                   , HA.style "padding-left" "0.25rem"
-                   , HA.style "padding-right" "0.25rem"
-                   , HA.style "padding-top" "0.5rem"
-                   , HA.style "padding-bottom" "0.5rem"
-                   , HA.style "margin-bottom" "0.5rem"
-                   , HA.style "width" "8rem"
-                   , HA.style "outline" "none"
-                   ]
-            )
-            []
-        ]
-
-
 textFieldInline : String -> (String -> msg) -> Html msg
 textFieldInline value toMsg =
     Html.span [ HA.class "inline-block mr-2" ]
@@ -144,24 +115,6 @@ textFieldInline value toMsg =
                    , HA.style "border-radius" "0"
                    , HA.style "outline" "none"
                    , HA.style "box-shadow" "none"
-                   ]
-            )
-            []
-        ]
-
-
-firstTextField : String -> String -> (String -> msg) -> Html msg
-firstTextField placeholder value toMsg =
-    Html.span [ HA.style "display" "block", HA.style "margin-bottom" "0.5rem", HA.style "width" "100%" ]
-        [ Html.input
-            (inputBaseStyle
-                ++ [ HA.type_ "text"
-                   , HA.value value
-                   , HA.placeholder placeholder
-                   , Html.Events.onInput toMsg
-                   , HA.class "w-full"
-                   , HA.style "width" "100%"
-                   , HA.style "padding" "0.5rem 0.2rem"
                    ]
             )
             []
@@ -194,15 +147,6 @@ inputBaseStyle =
     ]
 
 
-labeledField : String -> Html msg -> Html msg
-labeledField labelText field =
-    -- Add a new labeledField function for the reference form layout
-    Html.div [ HA.class " pl-4 first:pl-0" ]
-        [ Html.label [ HA.class "block mb-1 text-sm" ] [ text labelText ]
-        , field
-        ]
-
-
 textField : String -> String -> (String -> msg) -> Html msg
 textField label value toMsg =
     Html.span [ HA.style "display" "block", HA.style "margin-bottom" "0.5rem" ]
@@ -216,38 +160,6 @@ textField label value toMsg =
             , HA.style "padding" "0.5rem 0.75rem"
             ]
             []
-        ]
-
-
-viewTextarea : String -> (String -> msg) -> Html msg
-viewTextarea value onInputMsg =
-    Html.textarea
-        [ HA.value value
-        , Html.Events.onInput onInputMsg
-        , HA.style "background-color" "#C6C6C6"
-        , HA.style "padding" "10px"
-        , HA.style "height" "100px"
-        , HA.style "border-radius" "4px"
-        , HA.class "w-full rounded"
-        , HA.style "margin-bottom" "40px"
-        ]
-        []
-
-
-radioInput : { group : String, label : String, checked : Bool, onClick : msg } -> Html msg
-radioInput { group, label, checked, onClick } =
-    Html.div [ HA.class "flex items-center mb-4" ]
-        [ Html.input
-            [ HA.type_ "radio"
-            , HA.name group
-            , HA.id label
-            , HA.value label
-            , HA.checked checked
-            , Html.Events.onInput (\_ -> onClick)
-            , HA.class "mr-2"
-            ]
-            []
-        , Html.label [ HA.for label, HA.class "text-base" ] [ text label ]
         ]
 
 
@@ -291,116 +203,6 @@ viewWalletButton label msg content =
     button
         (onClick msg :: buttonCommonStyle)
         (text label :: content)
-
-
-viewNetworkButton : String -> Bool -> (NetworkId -> msg) -> Html msg
-viewNetworkButton label isMainnet onChangeMsg =
-    let
-        networkId =
-            if isMainnet then
-                Mainnet
-
-            else
-                Testnet
-
-        otherNetworkId =
-            if isMainnet then
-                Testnet
-
-            else
-                Mainnet
-
-        otherLabel =
-            if isMainnet then
-                "Preview"
-
-            else
-                "Mainnet"
-    in
-    Html.div
-        [ HA.style "position" "relative"
-        , HA.style "display" "inline-block"
-        , HA.style "margin-left" "0.75rem"
-        , HA.attribute "class" "network-button-container"
-        ]
-        [ button
-            ([ HA.style "display" "flex"
-             , HA.style "align-items" "center"
-             , HA.style "gap" "0.5rem"
-             , HA.style "background-color" "#272727"
-             , HA.style "color" "#f7fafc"
-             , HA.style "border-radius" "9999px"
-             , HA.style "font-size" "0.875rem"
-             , HA.style "font-weight" "500"
-             , HA.style "padding" "0.5rem 1rem"
-             , HA.style "height" "2.5rem"
-             , HA.style "transition" "all 0.2s"
-             , HA.attribute "data-dropdown-toggle" "network-dropdown"
-             ]
-                ++ buttonCommonStyle
-            )
-            [ Html.div
-                [ HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                ]
-                [ Html.div
-                    [ HA.style "width" "0.75rem"
-                    , HA.style "height" "0.75rem"
-                    , HA.style "border-radius" "9999px"
-                    , HA.style "background-color"
-                        (if isMainnet then
-                            "#10b981"
-
-                         else
-                            "#3b82f6"
-                        )
-                    , HA.style "margin-right" "0.5rem"
-                    ]
-                    []
-                , text label
-                ]
-            ]
-        , Html.div
-            [ HA.id "network-dropdown"
-            , HA.style "position" "absolute"
-            , HA.style "top" "100%"
-            , HA.style "right" "0"
-            , HA.style "margin-top" "0.25rem"
-            , HA.style "width" "160px"
-            , HA.style "background-color" "#ffffff"
-            , HA.style "border" "1px solid #e2e8f0"
-            , HA.style "border-radius" "0.5rem"
-            , HA.style "box-shadow" "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
-            , HA.style "z-index" "50"
-            , HA.style "display" "none"
-            ]
-            [ Html.div
-                ([ HA.style "padding" "0.5rem 1rem"
-                 , HA.style "cursor" "pointer"
-                 , HA.style "display" "flex"
-                 , HA.style "align-items" "center"
-                 , HA.style "gap" "0.5rem"
-                 , onClick (onChangeMsg otherNetworkId)
-                 ]
-                    ++ applyDropdownItemStyle (onChangeMsg otherNetworkId)
-                )
-                [ Html.div
-                    [ HA.style "width" "0.75rem"
-                    , HA.style "height" "0.75rem"
-                    , HA.style "border-radius" "9999px"
-                    , HA.style "background-color"
-                        (if not isMainnet then
-                            "#10b981"
-
-                         else
-                            "#3b82f6"
-                        )
-                    ]
-                    []
-                , text otherLabel
-                ]
-            ]
-        ]
 
 
 buttonCommonStyle : List (Html.Attribute msg)
@@ -531,3 +333,396 @@ viewActionTypeIcon actionType =
 
         _ ->
             Html.span iconStyle [ text "🔄" ]
+
+
+
+-- SECTION STYLING #############################################################
+
+
+{-| Standard section title with consistent styling
+-}
+sectionTitle : String -> Html msg
+sectionTitle title =
+    Html.h2
+        [ HA.style "font-weight" "600"
+        , HA.style "font-size" "1.875rem"
+        , HA.style "color" "#1A202C"
+        , HA.style "margin-top" "1rem"
+        , HA.style "margin-bottom" "1rem"
+        ]
+        [ text title ]
+
+
+
+-- CARD STYLING ################################################################
+
+
+{-| Container for card-style UI elements with standard styling
+-}
+cardContainer : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+cardContainer attributes content =
+    div
+        ([ HA.style "border" "1px solid #E2E8F0"
+         , HA.style "border-radius" "0.75rem"
+         , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
+         , HA.style "background-color" "#FFFFFF"
+         , HA.style "overflow" "hidden"
+         , HA.style "margin-bottom" "1.5rem"
+         ]
+            ++ attributes
+        )
+        content
+
+
+{-| Standard header section for cards with title styling
+-}
+cardHeader : String -> List (Html msg) -> Html msg
+cardHeader title extraContent =
+    div
+        [ HA.style "background-color" "#F7FAFC"
+        , HA.style "padding" "1rem 1.25rem"
+        , HA.style "border-bottom" "1px solid #EDF2F7"
+        ]
+        ([ Html.h3
+            [ HA.style "font-weight" "600"
+            , HA.style "font-size" "1.125rem"
+            , HA.style "color" "#1A202C"
+            , HA.style "line-height" "1.4"
+            ]
+            [ text title ]
+         ]
+            ++ extraContent
+        )
+
+
+{-| Standard content section for cards with consistent padding
+-}
+cardContent : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+cardContent attributes content =
+    div
+        ([ HA.style "padding" "1.25rem" ] ++ attributes)
+        content
+
+
+
+-- INFORMATION BOXES ###########################################################
+
+
+{-| Standard information box for displaying notices
+-}
+infoBox : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+infoBox attributes content =
+    div
+        ([ HA.style "background-color" "#F9FAFB"
+         , HA.style "border" "1px solid #E2E8F0"
+         , HA.style "border-radius" "0.5rem"
+         , HA.style "padding" "1rem"
+         , HA.style "margin-bottom" "1rem"
+         ]
+            ++ attributes
+        )
+        content
+
+
+{-| Success message box with green styling
+-}
+successBox : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+successBox attributes content =
+    div
+        ([ HA.style "background-color" "#F0FDF4"
+         , HA.style "border" "1px solid #D1FAE5"
+         , HA.style "border-radius" "0.5rem"
+         , HA.style "padding" "1rem"
+         , HA.style "margin-bottom" "1rem"
+         , HA.style "color" "#065F46"
+         ]
+            ++ attributes
+        )
+        content
+
+
+{-| Warning message box with amber styling
+-}
+warningBox : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+warningBox attributes content =
+    div
+        ([ HA.style "background-color" "#FFFBEB"
+         , HA.style "border" "1px solid #FEF3C7"
+         , HA.style "border-radius" "0.5rem"
+         , HA.style "padding" "1rem"
+         , HA.style "margin-bottom" "1rem"
+         , HA.style "color" "#92400E"
+         ]
+            ++ attributes
+        )
+        content
+
+
+
+-- FORM INPUT STYLING #########################################################
+
+
+{-| Standard input styling for text inputs
+-}
+inputStyle : List (Html.Attribute msg)
+inputStyle =
+    [ HA.style "width" "100%"
+    , HA.style "padding" "0.75rem"
+    , HA.style "border" "1px solid #E2E8F0"
+    , HA.style "border-radius" "0.375rem"
+    , HA.style "font-size" "0.875rem"
+    , HA.style "background-color" "white"
+    ]
+
+
+{-| Standard textarea styling
+-}
+textareaStyle : List (Html.Attribute msg)
+textareaStyle =
+    [ HA.style "width" "100%"
+    , HA.style "padding" "0.75rem"
+    , HA.style "border" "1px solid #E2E8F0"
+    , HA.style "border-radius" "0.375rem"
+    , HA.style "min-height" "120px"
+    , HA.style "resize" "vertical"
+    , HA.style "font-family" "inherit"
+    , HA.style "font-size" "0.875rem"
+    ]
+
+
+
+-- UI COMPONENTS ##############################################################
+
+
+{-| Generic error display component
+-}
+viewError : Maybe String -> Html msg
+viewError error =
+    case error of
+        Nothing ->
+            text ""
+
+        Just err ->
+            div
+                [ HA.style "background-color" "#FEF2F2"
+                , HA.style "border" "1px solid #FEE2E2"
+                , HA.style "border-radius" "0.5rem"
+                , HA.style "padding" "1rem"
+                , HA.style "margin-top" "1rem"
+                ]
+                [ Html.div
+                    [ HA.style "display" "flex"
+                    , HA.style "align-items" "center"
+                    , HA.style "margin-bottom" "0.5rem"
+                    ]
+                    [ Html.span
+                        [ HA.style "color" "#DC2626"
+                        , HA.style "font-weight" "bold"
+                        , HA.style "margin-right" "0.5rem"
+                        , HA.style "font-size" "1.25rem"
+                        ]
+                        [ text "!" ]
+                    , Html.p
+                        [ HA.style "color" "#DC2626"
+                        , HA.style "font-weight" "600"
+                        , HA.style "margin" "0"
+                        ]
+                        [ text "Error" ]
+                    ]
+                , Html.pre
+                    [ HA.style "background-color" "#FFFFFF"
+                    , HA.style "border" "1px solid #FEE2E2"
+                    , HA.style "border-radius" "0.25rem"
+                    , HA.style "padding" "0.75rem"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "white-space" "pre-wrap"
+                    , HA.style "overflow-x" "auto"
+                    , HA.style "font-family" "monospace"
+                    , HA.style "color" "#991B1B"
+                    , HA.style "margin" "0"
+                    ]
+                    [ text err ]
+                ]
+
+
+{-| Loading/pending state indicator
+-}
+viewPendingState : String -> Html msg
+viewPendingState loadingText =
+    div
+        [ HA.style "display" "flex"
+        , HA.style "flex-direction" "column"
+        , HA.style "align-items" "center"
+        , HA.style "justify-content" "center"
+        , HA.style "padding" "2rem"
+        ]
+        [ div
+            [ HA.style "width" "3rem"
+            , HA.style "height" "3rem"
+            , HA.style "border" "3px solid #E2E8F0"
+            , HA.style "border-top" "3px solid #3B82F6"
+            , HA.style "border-radius" "50%"
+            , HA.style "animation" "spin 1s linear infinite"
+            , HA.style "margin-bottom" "1rem"
+            ]
+            []
+        , Html.p
+            [ HA.style "color" "#4A5568"
+            ]
+            [ text loadingText ]
+        , Html.node "style"
+            []
+            [ text """
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            """
+            ]
+        ]
+
+
+
+-- MARKDOWN RENDERING ##########################################################
+
+
+{-| Standard markdown renderer with consistent styling
+-}
+markdownRenderer : Markdown.Renderer.Renderer (Html msg)
+markdownRenderer =
+    { defaultHtmlRenderer
+        | heading = customHeadingRenderer
+        , link =
+            \link content ->
+                Html.a
+                    [ HA.href link.destination
+                    , HA.target "_blank"
+                    , HA.rel "noopener noreferrer"
+                    , HA.style "color" "#3182CE"
+                    , HA.style "text-decoration" "underline"
+                    ]
+                    content
+        , paragraph =
+            \children ->
+                Html.p
+                    [ HA.style "margin-bottom" "1rem"
+                    , HA.style "line-height" "1.6"
+                    ]
+                    children
+        , blockQuote =
+            \children ->
+                Html.blockquote
+                    [ HA.style "border-left" "4px solid #CBD5E0"
+                    , HA.style "padding-left" "1rem"
+                    , HA.style "margin-left" "0"
+                    , HA.style "margin-right" "0"
+                    , HA.style "color" "#4A5568"
+                    ]
+                    children
+        , codeBlock =
+            \block ->
+                Html.pre
+                    [ HA.style "background-color" "#F7FAFC"
+                    , HA.style "padding" "1rem"
+                    , HA.style "border-radius" "0.375rem"
+                    , HA.style "overflow-x" "auto"
+                    , HA.style "font-family" "monospace"
+                    , HA.style "font-size" "0.875rem"
+                    , HA.style "margin-bottom" "1rem"
+                    ]
+                    [ Html.code [] [ text block.body ] ]
+    }
+
+
+{-| Helper to render markdown content from a string
+-}
+renderMarkdownContent : String -> Html msg
+renderMarkdownContent content =
+    case Md.parse content of
+        Err deadEnds ->
+            let
+                deadEndsString =
+                    List.map Md.deadEndToString deadEnds
+                        |> String.join "\n"
+            in
+            Html.div []
+                [ Html.p [ HA.style "color" "#EF4444" ] [ text "Error parsing markdown:" ]
+                , Html.pre
+                    [ HA.style "overflow-x" "auto"
+                    , HA.style "font-size" "0.75rem"
+                    , HA.style "padding" "0.5rem"
+                    , HA.style "background" "#F1F5F9"
+                    , HA.style "border-radius" "0.25rem"
+                    ]
+                    [ text deadEndsString ]
+                ]
+
+        Ok blocks ->
+            case Markdown.Renderer.render markdownRenderer blocks of
+                Err errors ->
+                    Html.p [ HA.style "color" "#EF4444" ] [ text errors ]
+
+                Ok rendered ->
+                    Html.div
+                        [ HA.style "line-height" "1.6"
+                        , HA.style "color" "#374151"
+                        ]
+                        rendered
+
+
+customHeadingRenderer : { level : Markdown.Block.HeadingLevel, rawText : String, children : List (Html msg) } -> Html msg
+customHeadingRenderer { level, children } =
+    case level of
+        Markdown.Block.H1 ->
+            Html.h1
+                [ HA.style "font-size" "2rem"
+                , HA.style "font-weight" "700"
+                , HA.style "margin-top" "1.5rem"
+                , HA.style "margin-bottom" "1rem"
+                ]
+                children
+
+        Markdown.Block.H2 ->
+            Html.h2
+                [ HA.style "font-size" "1.5rem"
+                , HA.style "font-weight" "600"
+                , HA.style "margin-top" "1.5rem"
+                , HA.style "margin-bottom" "1rem"
+                ]
+                children
+
+        Markdown.Block.H3 ->
+            Html.h3
+                [ HA.style "font-size" "1.25rem"
+                , HA.style "font-weight" "600"
+                , HA.style "margin-top" "1rem"
+                , HA.style "margin-bottom" "0.75rem"
+                ]
+                children
+
+        Markdown.Block.H4 ->
+            Html.h4
+                [ HA.style "font-size" "1.125rem"
+                , HA.style "font-weight" "600"
+                , HA.style "margin-top" "1rem"
+                , HA.style "margin-bottom" "0.75rem"
+                ]
+                children
+
+        Markdown.Block.H5 ->
+            Html.h5
+                [ HA.style "font-size" "1rem"
+                , HA.style "font-weight" "600"
+                , HA.style "margin-top" "0.75rem"
+                , HA.style "margin-bottom" "0.5rem"
+                ]
+                children
+
+        Markdown.Block.H6 ->
+            Html.h6
+                [ HA.style "font-size" "0.875rem"
+                , HA.style "font-weight" "600"
+                , HA.style "margin-top" "0.75rem"
+                , HA.style "margin-bottom" "0.5rem"
+                ]
+                children

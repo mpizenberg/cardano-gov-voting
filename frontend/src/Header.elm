@@ -136,7 +136,7 @@ view { mobileMenuIsOpen, toggleMobileMenu, networkDropdownIsOpen, toggleNetworkD
                     , div [ class "mt-4 px-4 z-20 relative" ]
                         [ div [ class "w-full space-y-2" ]
                             [ WalletConnector.viewMobile walletConnectorMsgs walletConnector
-                            , viewMobileNetworkSelector networkId toggleNetworkDropdown onNetworkChange
+                            , viewMobileNetworkSelector networkId onNetworkChange
                             ]
                         ]
                     ]
@@ -279,8 +279,8 @@ viewNetworkSelector currentNetwork dropdownOpen toggleDropdown onNetworkChange =
         ]
 
 
-viewMobileNetworkSelector : NetworkId -> msg -> (NetworkId -> msg) -> Html msg
-viewMobileNetworkSelector currentNetwork toggleNetwork onNetworkChange =
+viewMobileNetworkSelector : NetworkId -> (NetworkId -> msg) -> Html msg
+viewMobileNetworkSelector currentNetwork onNetworkChange =
     let
         isMainnet =
             currentNetwork == Mainnet

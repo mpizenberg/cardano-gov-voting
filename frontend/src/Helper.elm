@@ -32,7 +32,7 @@ and are potentially useful in multiple places.
 
 # Form elements
 
-@docs textFieldInline, viewSelect, textField, inputBaseStyle
+@docs textFieldInline
 
 
 # Containers
@@ -57,28 +57,28 @@ and are potentially useful in multiple places.
 
 # UI Structure Components
 
-@docs sectionTitle, cardContainer, cardHeader, cardContent, infoBox, viewError
+@docs sectionTitle, infoBox, viewError
 
 
 # Markdown Processing
 
-@docs markdownRenderer, renderMarkdownContent
+@docs renderMarkdownContent
 
 
 # Page Structure Components
 
-@docs viewStepWithCircle, viewPageHeader, viewHeaderBackground
+@docs viewStepWithCircle, viewPageHeader
 
 
 # Voter Identification Components
 
 @docs viewVoterGrid, viewVoterCard, voterCustomCard, votingPowerDisplay, scriptInfoContainer, viewVoterCredDetails, viewVoterDetailsItem, viewCredInfo
-@docs viewUtxoRefForm, scriptSignerSection, scriptSignerCheckbox, viewVoterIdentificationCard, viewIdentifiedVoterCard, viewVoterInfoItem
+@docs viewUtxoRefForm, scriptSignerSection, scriptSignerCheckbox, viewIdentifiedVoterCard, viewVoterInfoItem
 
 
 # Proposal Selection Components
 
-@docs proposalListContainer, proposalListHeader, proposalGrid, showMoreButton, proposalCard, selectedProposalCard, proposalDetailsGrid, proposalDetailsItem
+@docs proposalListContainer, showMoreButton, proposalCard, selectedProposalCard, proposalDetailsItem
 
 
 # Storage Configuration Components
@@ -89,8 +89,8 @@ and are potentially useful in multiple places.
 
 # Rationale Components
 
-@docs rationaleCard, rationaleMarkdownInput, rationaleTextArea, pdfAutogenCheckbox, voteNumberInput, referenceCard, referenceForm, referenceOption
-@docs rationaleCompletedCard, optionalSection, formattedInternalVote, voteItem, formattedReferences, formattedReference
+@docs rationaleCard, rationaleMarkdownInput, rationaleTextArea, pdfAutogenCheckbox, voteNumberInput, referenceCard, referenceForm
+@docs rationaleCompletedCard, optionalSection, formattedInternalVote, formattedReferences
 
 
 # Document Creation Components
@@ -101,12 +101,12 @@ and are potentially useful in multiple places.
 
 # Transaction Components
 
-@docs stepCard, txResultCard, successBadge, voteButton, txDetailsContainer, txPreContainer, missingStepsList, missingStepItem, loadingSpinner
+@docs stepCard, txResultCard, voteButton, txDetailsContainer, txPreContainer, missingStepsList, missingStepItem, loadingSpinner
 
 
 # Signing Components
 
-@docs signingStepCard, keyListItem, signingButton, viewPendingState
+@docs signingStepCard, keyListItem, signingButton
 
 -}
 
@@ -1223,7 +1223,7 @@ showMoreButton hasMore visibleCount totalCount clickMsg =
 {-| Card for an individual proposal
 -}
 proposalCard : { id : String, title : String, abstract : String, actionType : String, actionId : String, linkUrl : String, linkHex : String, index : Int } -> msg -> Html msg -> Html msg
-proposalCard { id, title, abstract, actionType, actionId, linkUrl, linkHex, index } selectMsg actionIcon =
+proposalCard { title, abstract, actionType, linkUrl, linkHex, index } selectMsg actionIcon =
     div
         [ HA.style "border" "1px solid #E2E8F0"
         , HA.style "border-radius" "0.75rem"
@@ -1433,6 +1433,7 @@ storageConfigCard title headerContent bodyContent =
                     ]
                     [ text title ]
                 ]
+            , div [] headerContent
             ]
         , div
             [ HA.style "padding" "1.25rem" ]
@@ -1573,7 +1574,7 @@ storageHeaderInput { label, value, onInputMsg } =
 {-| Form for a header item with name and value inputs
 -}
 storageHeaderForm : Int -> String -> String -> msg -> (String -> msg) -> (String -> msg) -> Html msg
-storageHeaderForm index name value deleteMsg nameChangeMsg valueChangeMsg =
+storageHeaderForm _ name value deleteMsg nameChangeMsg valueChangeMsg =
     div
         [ HA.style "border" "1px solid #E2E8F0"
         , HA.style "border-radius" "0.5rem"
@@ -1805,7 +1806,7 @@ voteNumberInput label value onInputMsg =
 {-| Card for references with add button in header
 -}
 referenceCard : List a -> Int -> List (Html msg) -> msg -> Html msg
-referenceCard _ index content addMsg =
+referenceCard _ _ content addMsg =
     div
         [ HA.style "border" "1px solid #E2E8F0"
         , HA.style "border-radius" "0.75rem"
@@ -2276,6 +2277,18 @@ jsonLdDocumentCard jsonRationale downloadButton =
                 , HA.style "margin-bottom" "1rem"
                 ]
                 [ text "Here is the JSON-LD rationale file generated from your rationale inputs." ]
+            , div
+                [ HA.style "max-height" "200px"
+                , HA.style "overflow-y" "auto"
+                , HA.style "background-color" "#F9FAFB"
+                , HA.style "border" "1px solid #E2E8F0"
+                , HA.style "border-radius" "0.375rem"
+                , HA.style "padding" "0.75rem"
+                , HA.style "font-family" "monospace"
+                , HA.style "font-size" "0.75rem"
+                , HA.style "margin-bottom" "1rem"
+                ]
+                [ text jsonRationale ]
             , downloadButton
             ]
         ]

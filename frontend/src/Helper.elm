@@ -1,15 +1,27 @@
 module Helper exposing
     ( shortenedHex, prettyAdaLovelace
-    , textFieldInline, viewSelect
-    , textField
+    , textFieldInline
     , formContainer, boxContainer
     , viewButton, viewWalletButton
     , applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle
     , viewActionTypeIcon
-    , addAuthorButton, authorForm, authorsCard, cardContainer, cardContent, cardHeader, codeSnippetBox, downloadJSONButton, externalLinkDisplay, fileInfoItem, formButtonsRow, formattedInternalVote, formattedReference, formattedReferences, infoBox, inputStyle, jsonLdDocumentCard, keyListItem, labeledField, loadSignatureButton, loadingSpinner, markdownRenderer, missingStepItem, missingStepsList, noAuthorsPlaceholder, optionalSection, pdfAutogenCheckbox, primaryButton, proposalCard, proposalDetailsGrid, proposalDetailsItem, proposalGrid, proposalListContainer, proposalListHeader, rationaleCard, rationaleCompletedCard, rationaleMarkdownInput, rationaleTextArea, readOnlyField, referenceCard, referenceForm, referenceOption, renderMarkdownContent, scriptInfoContainer, scriptSignerCheckbox, scriptSignerSection, secondaryButton, sectionTitle, selectedProposalCard, showMoreButton, signatureField, signerCard, signingButton, signingStepCard, stepCard, stepNotAvailableCard, storageConfigCard, storageConfigItem, storageHeaderForm, storageHeaderInput, storageInfoGrid, storageMethodOption, storageNotAvailableCard, storageProviderCard, storageProviderForm, storageProviderGrid, storageStepCard, storageSuccessCard, storageUploadCard, successBadge, successBox, textareaStyle, txDetailsContainer, txPreContainer, txResultCard, uploadingSpinner, viewCredInfo, viewError, viewHeaderBackground, viewIdentifiedVoterCard, viewPageHeader, viewPendingState, viewStepWithCircle, viewUtxoRefForm, viewVoterCard, viewVoterCredDetails, viewVoterDetailsItem, viewVoterGrid, viewVoterIdentificationCard, viewVoterInfoItem, voteButton, voteItem, voteNumberInput, voterCustomCard, votingPowerDisplay, warningBox
+    , sectionTitle, infoBox, viewError
+    , renderMarkdownContent
+    , viewStepWithCircle, viewPageHeader
+    , viewVoterGrid, viewVoterCard, voterCustomCard, votingPowerDisplay, scriptInfoContainer, viewVoterCredDetails, viewVoterDetailsItem, viewCredInfo
+    , viewUtxoRefForm, scriptSignerSection, scriptSignerCheckbox, viewIdentifiedVoterCard, viewVoterInfoItem
+    , proposalListContainer, showMoreButton, proposalCard, selectedProposalCard, proposalDetailsItem
+    , storageConfigCard, storageProviderGrid, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, storageHeaderInput
+    , storageHeaderForm, storageInfoGrid, storageNotAvailableCard, storageUploadCard, uploadingSpinner, storageSuccessCard, fileInfoItem, externalLinkDisplay
+    , rationaleCard, rationaleMarkdownInput, rationaleTextArea, pdfAutogenCheckbox, voteNumberInput, referenceCard, referenceForm
+    , rationaleCompletedCard, optionalSection, formattedInternalVote, formattedReferences
+    , stepNotAvailableCard, jsonLdDocumentCard, downloadJSONButton, authorsCard, addAuthorButton, codeSnippetBox, noAuthorsPlaceholder
+    , signerCard, authorForm, labeledField, readOnlyField, signatureField, formButtonsRow, secondaryButton, primaryButton, loadSignatureButton
+    , stepCard, txResultCard, voteButton, txDetailsContainer, txPreContainer, missingStepsList, missingStepItem, loadingSpinner
+    , signingStepCard, keyListItem, signingButton
     )
 
-{-| Helper module for miscellaneous functions that didn’t fit elsewhere,
+{-| Helper module for miscellaneous functions that didn't fit elsewhere,
 and are potentially useful in multiple places.
 
 
@@ -20,9 +32,7 @@ and are potentially useful in multiple places.
 
 # Form elements
 
-@docs textFieldInline, viewSelect
-
-@docs textField
+@docs textFieldInline, viewSelect, textField, inputBaseStyle
 
 
 # Containers
@@ -44,6 +54,60 @@ and are potentially useful in multiple places.
 
 @docs viewActionTypeIcon
 
+
+# UI Structure Components
+
+@docs sectionTitle, cardContainer, cardHeader, cardContent, infoBox, viewError
+
+
+# Markdown Processing
+
+@docs markdownRenderer, renderMarkdownContent
+
+
+# Page Structure Components
+
+@docs viewStepWithCircle, viewPageHeader, viewHeaderBackground
+
+
+# Voter Identification Components
+
+@docs viewVoterGrid, viewVoterCard, voterCustomCard, votingPowerDisplay, scriptInfoContainer, viewVoterCredDetails, viewVoterDetailsItem, viewCredInfo
+@docs viewUtxoRefForm, scriptSignerSection, scriptSignerCheckbox, viewVoterIdentificationCard, viewIdentifiedVoterCard, viewVoterInfoItem
+
+
+# Proposal Selection Components
+
+@docs proposalListContainer, proposalListHeader, proposalGrid, showMoreButton, proposalCard, selectedProposalCard, proposalDetailsGrid, proposalDetailsItem
+
+
+# Storage Configuration Components
+
+@docs storageConfigCard, storageProviderGrid, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, storageHeaderInput
+@docs storageHeaderForm, storageInfoGrid, storageNotAvailableCard, storageUploadCard, uploadingSpinner, storageSuccessCard, fileInfoItem, externalLinkDisplay
+
+
+# Rationale Components
+
+@docs rationaleCard, rationaleMarkdownInput, rationaleTextArea, pdfAutogenCheckbox, voteNumberInput, referenceCard, referenceForm, referenceOption
+@docs rationaleCompletedCard, optionalSection, formattedInternalVote, voteItem, formattedReferences, formattedReference
+
+
+# Document Creation Components
+
+@docs stepNotAvailableCard, jsonLdDocumentCard, downloadJSONButton, authorsCard, addAuthorButton, codeSnippetBox, noAuthorsPlaceholder
+@docs signerCard, authorForm, labeledField, readOnlyField, signatureField, formButtonsRow, secondaryButton, primaryButton, loadSignatureButton
+
+
+# Transaction Components
+
+@docs stepCard, txResultCard, successBadge, voteButton, txDetailsContainer, txPreContainer, missingStepsList, missingStepItem, loadingSpinner
+
+
+# Signing Components
+
+@docs signingStepCard, keyListItem, signingButton, viewPendingState
+
 -}
 
 import Html exposing (Html, button, div, text)
@@ -54,7 +118,7 @@ import Markdown.Parser as Md
 import Markdown.Renderer exposing (defaultHtmlRenderer)
 import Natural exposing (Natural)
 import Numeral
-import RemoteData exposing (RemoteData, WebData)
+import RemoteData
 import Url
 
 
@@ -393,15 +457,14 @@ cardHeader title extraContent =
         , HA.style "padding" "1rem 1.25rem"
         , HA.style "border-bottom" "1px solid #EDF2F7"
         ]
-        ([ Html.h3
+        (Html.h3
             [ HA.style "font-weight" "600"
             , HA.style "font-size" "1.125rem"
             , HA.style "color" "#1A202C"
             , HA.style "line-height" "1.4"
             ]
             [ text title ]
-         ]
-            ++ extraContent
+            :: extraContent
         )
 
 
@@ -410,7 +473,7 @@ cardHeader title extraContent =
 cardContent : List (Html.Attribute msg) -> List (Html msg) -> Html msg
 cardContent attributes content =
     div
-        ([ HA.style "padding" "1.25rem" ] ++ attributes)
+        (HA.style "padding" "1.25rem" :: attributes)
         content
 
 
@@ -434,73 +497,8 @@ infoBox attributes content =
         content
 
 
-{-| Success message box with green styling
--}
-successBox : List (Html.Attribute msg) -> List (Html msg) -> Html msg
-successBox attributes content =
-    div
-        ([ HA.style "background-color" "#F0FDF4"
-         , HA.style "border" "1px solid #D1FAE5"
-         , HA.style "border-radius" "0.5rem"
-         , HA.style "padding" "1rem"
-         , HA.style "margin-bottom" "1rem"
-         , HA.style "color" "#065F46"
-         ]
-            ++ attributes
-        )
-        content
-
-
-{-| Warning message box with amber styling
--}
-warningBox : List (Html.Attribute msg) -> List (Html msg) -> Html msg
-warningBox attributes content =
-    div
-        ([ HA.style "background-color" "#FFFBEB"
-         , HA.style "border" "1px solid #FEF3C7"
-         , HA.style "border-radius" "0.5rem"
-         , HA.style "padding" "1rem"
-         , HA.style "margin-bottom" "1rem"
-         , HA.style "color" "#92400E"
-         ]
-            ++ attributes
-        )
-        content
-
-
 
 -- FORM INPUT STYLING #########################################################
-
-
-{-| Standard input styling for text inputs
--}
-inputStyle : List (Html.Attribute msg)
-inputStyle =
-    [ HA.style "width" "100%"
-    , HA.style "padding" "0.75rem"
-    , HA.style "border" "1px solid #E2E8F0"
-    , HA.style "border-radius" "0.375rem"
-    , HA.style "font-size" "0.875rem"
-    , HA.style "background-color" "white"
-    ]
-
-
-{-| Standard textarea styling
--}
-textareaStyle : List (Html.Attribute msg)
-textareaStyle =
-    [ HA.style "width" "100%"
-    , HA.style "padding" "0.75rem"
-    , HA.style "border" "1px solid #E2E8F0"
-    , HA.style "border-radius" "0.375rem"
-    , HA.style "min-height" "120px"
-    , HA.style "resize" "vertical"
-    , HA.style "font-family" "inherit"
-    , HA.style "font-size" "0.875rem"
-    ]
-
-
-
 -- UI COMPONENTS ##############################################################
 
 
@@ -553,43 +551,6 @@ viewError error =
                     ]
                     [ text err ]
                 ]
-
-
-{-| Loading/pending state indicator
--}
-viewPendingState : String -> Html msg
-viewPendingState loadingText =
-    div
-        [ HA.style "display" "flex"
-        , HA.style "flex-direction" "column"
-        , HA.style "align-items" "center"
-        , HA.style "justify-content" "center"
-        , HA.style "padding" "2rem"
-        ]
-        [ div
-            [ HA.style "width" "3rem"
-            , HA.style "height" "3rem"
-            , HA.style "border" "3px solid #E2E8F0"
-            , HA.style "border-top" "3px solid #3B82F6"
-            , HA.style "border-radius" "50%"
-            , HA.style "animation" "spin 1s linear infinite"
-            , HA.style "margin-bottom" "1rem"
-            ]
-            []
-        , Html.p
-            [ HA.style "color" "#4A5568"
-            ]
-            [ text loadingText ]
-        , Html.node "style"
-            []
-            [ text """
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-            """
-            ]
-        ]
 
 
 
@@ -2034,15 +1995,6 @@ referenceForm index typeName label uri deleteMsg typeChangeMsg labelChangeMsg ur
         ]
 
 
-{-| Option for reference type dropdown
--}
-referenceOption : String -> Html msg
-referenceOption refType =
-    Html.option
-        [ HA.value refType ]
-        [ text refType ]
-
-
 {-| Card for completed rationale
 -}
 rationaleCompletedCard : String -> List (Html msg) -> msg -> Html msg
@@ -2073,7 +2025,7 @@ rationaleCompletedCard summary content editMsg =
                 [ HA.style "padding" "1.25rem"
                 ]
                 [ div [ HA.style "display" "grid", HA.style "gap" "1.5rem" ]
-                    ([ div []
+                    (div []
                         [ Html.p
                             [ HA.style "font-size" "0.9375rem"
                             , HA.style "line-height" "1.6"
@@ -2081,8 +2033,7 @@ rationaleCompletedCard summary content editMsg =
                             ]
                             [ text summary ]
                         ]
-                     ]
-                        ++ content
+                        :: content
                     )
                 ]
             ]

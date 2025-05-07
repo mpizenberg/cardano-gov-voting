@@ -27,7 +27,6 @@ The steps are sequential but allow going back to modify previous steps.
 
 import Api exposing (ActiveProposal, CcInfo, DrepInfo, IpfsAnswer(..), PoolInfo)
 import Blake2b exposing (blake2b256)
-import Browser.Dom as Dom
 import Bytes as ElmBytes
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Address as Address exposing (Address, Credential(..), CredentialHash, NetworkId(..))
@@ -49,12 +48,11 @@ import ConcurrentTask.Http
 import Dict exposing (Dict)
 import Dict.Any
 import File exposing (File)
-import File.Download
 import File.Select
-import Helper exposing (prettyAdaLovelace)
-import Html exposing (Html, button, div, text)
+import Helper
+import Html exposing (Html, div, text)
 import Html.Attributes as HA
-import Html.Events exposing (onCheck, onClick)
+import Html.Events
 import Html.Lazy
 import Http
 import Json.Decode as JD
@@ -62,7 +60,6 @@ import Json.Encode as JE
 import List.Extra
 import Markdown.Block
 import Markdown.Parser as Md
-import Markdown.Renderer as Md exposing (defaultHtmlRenderer)
 import Natural
 import Platform.Cmd as Cmd
 import ProposalMetadata exposing (ProposalMetadata)
@@ -485,8 +482,6 @@ type Msg
     | SkipRationaleSignaturesButtonClicked
     | ValidateRationaleSignaturesButtonClicked
     | ChangeAuthorsButtonClicked
-    | ConvertToPdfButtonClicked String
-    | GotSignedPdfFile (Result Http.Error ElmBytes.Bytes)
       -- Rationale Storage
     | PinJsonIpfsButtonClicked
     | GotIpfsAnswer (Result String IpfsAnswer)
@@ -494,7 +489,6 @@ type Msg
       -- Build Tx Step
     | BuildTxButtonClicked Vote
     | ChangeVoteButtonClicked
-    | ScrollToElement String
 
 
 {-| Configuration required by the update function.
@@ -547,21 +541,6 @@ update ctx msg (Model model) =
 innerUpdate : UpdateContext msg -> Msg -> InnerModel -> ( InnerModel, Cmd msg, Maybe MsgToParent )
 innerUpdate ctx msg model =
     case msg of
-        ScrollToElement elementId ->
-            ( model
-            , Dom.getElement elementId
-                |> Task.attempt
-                    (\result ->
-                        case result of
-                            Ok element ->
-                                ctx.wrapMsg (ScrollToElement elementId)
-
-                            Err _ ->
-                                ctx.wrapMsg NoMsg
-                    )
-            , Nothing
-            )
-
         ShowMoreProposals currentCount ->
             ( { model | visibleProposalCount = currentCount + 10 }
             , Cmd.none
@@ -1041,34 +1020,6 @@ innerUpdate ctx msg model =
             , Cmd.none
             , Nothing
             )
-
-        ConvertToPdfButtonClicked rawFileContent ->
-            ( model
-            , Api.defaultApiProvider.convertToPdf rawFileContent GotSignedPdfFile
-                |> Cmd.map ctx.wrapMsg
-            , Nothing
-            )
-
-        GotSignedPdfFile result ->
-            case model.rationaleSignatureStep of
-                Done form rationaleSignature ->
-                    case result of
-                        Err httpError ->
-                            ( { model
-                                | rationaleSignatureStep = Done form { rationaleSignature | error = Just <| "An error happened when trying to convert the JSON LD to a PDF: " ++ Debug.toString httpError }
-                              }
-                            , Cmd.none
-                            , Nothing
-                            )
-
-                        Ok elmBytes ->
-                            ( model
-                            , File.Download.bytes "rationale.pdf" "application/pdf" elmBytes
-                            , Nothing
-                            )
-
-                _ ->
-                    ( model, Cmd.none, Nothing )
 
         --
         -- Rationale Storage Step
@@ -2821,7 +2772,7 @@ viewIdentifiedVoter form voter =
             Maybe.map Gov.idToBech32 form.govId
                 |> Maybe.withDefault ""
 
-        ( voterTypeText, voterCred ) =
+        ( _, voterCred ) =
             getVoterDisplayInfo voter form govIdStr
     in
     Helper.viewIdentifiedVoterCard

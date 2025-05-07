@@ -21,7 +21,7 @@ import Cardano.Utxo exposing (TransactionId)
 import Dict exposing (Dict)
 import File exposing (File)
 import File.Select
-import Helper exposing (shortenedHex)
+import Helper
 import Html exposing (Html, a, div, text)
 import Html.Attributes as HA
 import Json.Decode as JD

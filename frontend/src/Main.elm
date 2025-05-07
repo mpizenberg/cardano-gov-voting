@@ -452,7 +452,6 @@ update msg model =
             )
 
         ( NetworkChanged newNet, _ ) ->
-            -- update the URL if you're on the prep page, or just store it
             let
                 route =
                     case model.page of
@@ -465,16 +464,14 @@ update msg model =
                         _ ->
                             RouteLanding
 
-                -- Create a fresh model with our new network
                 updatedModel =
                     { model
                         | networkId = newNet
                         , networkDropdownIsOpen = False
                         , -- Close dropdown after selection
-                          proposals = RemoteData.Loading -- Mark proposals as loading to trigger refresh
+                          proposals = RemoteData.Loading
                     }
             in
-            -- Use handleUrlChange which will properly reload the page with the new network
             handleUrlChange route updatedModel
 
         ( NoMsg, _ ) ->
@@ -674,7 +671,6 @@ update msg model =
                     , Cmd.batch cmds
                     )
 
-        -- Task port thingy
         ( OnTaskProgress ( taskPool, cmd ), _ ) ->
             ( { model | taskPool = taskPool }, cmd )
 
@@ -687,7 +683,7 @@ update msg model =
         ( ToggleWalletDropdown, _ ) ->
             ( { model
                 | walletDropdownIsOpen = not model.walletDropdownIsOpen
-                , networkDropdownIsOpen = False -- Close network dropdown when toggling wallet
+                , networkDropdownIsOpen = False
               }
             , Cmd.none
             )

@@ -657,8 +657,7 @@ innerUpdate ctx msg model =
             case model.voterStep of
                 Done prep _ ->
                     ( { model | voterStep = Preparing prep }
-                      -- Do not reset the dependent steps - remove these commented lines
-                      -- or replace with a more selective reset that preserves completed data
+                      -- TODO: also reset all dependents steps
                       -- |> resetProposal
                       -- |> resetRationaleCreation
                       -- |> resetRationaleSignature
@@ -2988,7 +2987,6 @@ viewProposalCardHelper wrapMsg networkId proposal =
         linkUrl =
             cardanoScanActionUrl networkId proposal.id
 
-        -- Fix: Ensure linkHex is a String
         linkHex =
             Helper.shortenedHex 5 (Bytes.toHex proposal.id.transactionId)
     in
@@ -3239,8 +3237,6 @@ viewCustomIpfsForm form =
                 , onInputMsg = IpfsServerChange
                 }
             ]
-
-        -- Headers section with title and add button
         , div
             [ HA.style "margin-top" "1.5rem"
             , HA.style "display" "flex"
@@ -3254,8 +3250,6 @@ viewCustomIpfsForm form =
                 [ text "HTTP Headers" ]
             , Helper.addAuthorButton AddHeaderButtonClicked
             ]
-
-        -- Headers list
         , if List.isEmpty form.headers then
             Html.p
                 [ HA.style "text-align" "center"

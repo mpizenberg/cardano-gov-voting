@@ -32,7 +32,7 @@ view { mobileMenuIsOpen, toggleMobileMenu, networkDropdownIsOpen, toggleNetworkD
     nav [ class "relative z-10 w-full bg-transparent" ]
         [ div [ class "container mx-auto py-6 overflow-visible" ]
             [ div [ class "flex items-center justify-between" ]
-                -- Logo section (unchanged)
+                -- Logo section
                 [ div [ style "flex-shrink" "0" ]
                     [ logoLink
                         [ style "display" "flex"
@@ -55,7 +55,7 @@ view { mobileMenuIsOpen, toggleMobileMenu, networkDropdownIsOpen, toggleNetworkD
                         ]
                     ]
 
-                -- Desktop menu (unchanged)
+                -- Desktop menu
                 , div [ class "hidden md:flex space-x-8" ]
                     (List.map viewDesktopMenuItem navigationItems)
 
@@ -69,7 +69,7 @@ view { mobileMenuIsOpen, toggleMobileMenu, networkDropdownIsOpen, toggleNetworkD
                         onNetworkChange
                     ]
 
-                -- Mobile menu button (unchanged)
+                -- Mobile menu button
                 , div [ class "md:hidden" ]
                     [ button
                         [ class "text-gray-600 hover:text-gray-900 focus:outline-none"
@@ -118,7 +118,7 @@ view { mobileMenuIsOpen, toggleMobileMenu, networkDropdownIsOpen, toggleNetworkD
                     ]
                 ]
 
-            -- Mobile menu (unchanged)
+            -- Mobile menu
             , div
                 [ class
                     ("md:hidden transition-all duration-300 ease-in-out "

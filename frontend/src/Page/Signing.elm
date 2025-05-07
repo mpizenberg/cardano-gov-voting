@@ -787,15 +787,15 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
                                 , HA.style "margin-bottom" "0.25rem"
                                 , HA.style "color" "#065F46"
                                 ]
-                                [ text <| keyName ++ ": " ++ shortenedHex 8 keyHash ]
+                                [ text <| keyName ++ ": " ++ Helper.shortenedHex 8 keyHash ]
                             , Html.div
                                 [ HA.style "color" "#059669"
                                 , HA.style "margin-bottom" "0.25rem"
                                 ]
-                                [ text <| "VKey: " ++ shortenedHex 8 (Bytes.toHex witness.vkey) ]
+                                [ text <| "VKey: " ++ Helper.shortenedHex 8 (Bytes.toHex witness.vkey) ]
                             , Html.div
                                 [ HA.style "color" "#059669" ]
-                                [ text <| "Signature: " ++ shortenedHex 8 (Bytes.toHex witness.signature) ]
+                                [ text <| "Signature: " ++ Helper.shortenedHex 8 (Bytes.toHex witness.signature) ]
                             ]
                         ]
 
@@ -821,7 +821,7 @@ viewExpectedSignatures expectedSigners vkeyWitnesses =
                             , HA.style "font-size" "0.875rem"
                             , HA.style "color" "#64748B"
                             ]
-                            [ text <| keyName ++ ": " ++ shortenedHex 8 keyHash ]
+                            [ text <| keyName ++ ": " ++ Helper.shortenedHex 8 keyHash ]
                         ]
     in
     Dict.map viewExpectedSigner expectedSigners

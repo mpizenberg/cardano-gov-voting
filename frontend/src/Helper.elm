@@ -2204,8 +2204,8 @@ formattedReference typeToString ref =
 
 {-| Standard card for when a step is not available
 -}
-stepNotAvailableCard : String -> Html msg
-stepNotAvailableCard message =
+stepNotAvailableCard : List (Html msg) -> Html msg
+stepNotAvailableCard content =
     div
         [ HA.style "border" "1px solid #E2E8F0"
         , HA.style "border-radius" "0.75rem"
@@ -2233,7 +2233,7 @@ stepNotAvailableCard message =
                 [ HA.style "color" "#4A5568"
                 , HA.style "font-size" "0.9375rem"
                 ]
-                [ text message ]
+                content
             ]
         ]
 
@@ -2906,8 +2906,8 @@ externalLinkDisplay url displayText =
 
 {-| Creates a standard step card with consistent styling
 -}
-stepCard : String -> String -> List (Html msg) -> Html msg
-stepCard _ _ content =
+stepCard : List (Html msg) -> Html msg
+stepCard content =
     div
         [ HA.style "border" "1px solid #E2E8F0"
         , HA.style "border-radius" "0.75rem"

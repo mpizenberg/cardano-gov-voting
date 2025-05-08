@@ -3381,19 +3381,19 @@ viewRationaleStep ctx pickProposalStep storageConfigStep step =
             ( _, Done _ _, _ ) ->
                 div []
                     [ Helper.sectionTitle "Vote Rationale"
-                    , Helper.stepNotAvailableCard "Please pick a proposal first."
+                    , Helper.stepNotAvailableCard [ text "Please pick a proposal first." ]
                     ]
 
             ( Done _ _, _, _ ) ->
                 div []
                     [ Helper.sectionTitle "Vote Rationale"
-                    , Helper.stepNotAvailableCard "Please validate the IPFS config step first."
+                    , Helper.stepNotAvailableCard [ text "Please validate the IPFS config step first." ]
                     ]
 
             _ ->
                 div []
                     [ Helper.sectionTitle "Vote Rationale"
-                    , Helper.stepNotAvailableCard "Please pick a proposal and validate the IPFS config step first."
+                    , Helper.stepNotAvailableCard [ text "Please pick a proposal and validate the IPFS config step first." ]
                     ]
 
 
@@ -3595,16 +3595,16 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
         [ Helper.sectionTitle "Rationale Signature" -- Always show the title
         , case ( pickProposalStep, rationaleCreationStep, step ) of
             ( _, Preparing _, _ ) ->
-                Helper.stepNotAvailableCard "Please complete the rationale creation step first."
+                Helper.stepNotAvailableCard [ text "Please complete the rationale creation step first." ]
 
             ( _, Validating _ _, _ ) ->
-                Helper.stepNotAvailableCard "Please wait for the rationale creation to complete."
+                Helper.stepNotAvailableCard [ text "Please wait for the rationale creation to complete." ]
 
             ( Done _ { id }, Done _ _, Preparing form ) ->
                 Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts id form
 
             ( _, Done _ _, Preparing _ ) ->
-                Helper.stepNotAvailableCard "Please select a proposal first."
+                Helper.stepNotAvailableCard [ text "Please select a proposal first." ]
 
             ( _, Done _ _, Validating _ _ ) ->
                 Helper.formContainer
@@ -3617,8 +3617,7 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
 
 viewCompletedRationaleSignature : ViewContext msg -> RationaleSignature -> Html msg
 viewCompletedRationaleSignature ctx ratSig =
-    Helper.stepCard "Rationale Signatures"
-        ""
+    Helper.stepCard
         [ if List.isEmpty ratSig.authors then
             Html.p
                 [ HA.style "color" "#4A5568"
@@ -3883,13 +3882,10 @@ viewBuildTxStep ctx model =
         [ Helper.sectionTitle "Tx Building"
         , case ( allPrepSteps ctx model, model.buildTxStep ) of
             ( Err _, _ ) ->
-                Helper.stepCard "Step Not Available"
-                    ""
-                    [ viewMissingStepsMessage ctx model ]
+                viewMissingStepsMessage ctx model
 
             ( Ok _, Preparing { error } ) ->
-                Helper.stepCard "Choose Your Vote"
-                    ""
+                Helper.stepCard
                     [ Html.p
                         [ HA.style "color" "#4A5568"
                         , HA.style "font-size" "0.9375rem"
@@ -3933,7 +3929,7 @@ viewBuildTxStep ctx model =
 
 viewMissingStepsMessage : ViewContext msg -> InnerModel -> Html Msg
 viewMissingStepsMessage ctx model =
-    div []
+    Helper.stepNotAvailableCard
         [ Html.p
             [ HA.style "color" "#4A5568"
             , HA.style "font-size" "0.9375rem"

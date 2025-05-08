@@ -3405,7 +3405,7 @@ viewRationaleForm form =
             [ Helper.rationaleCard
                 "Summary"
                 "Clearly state your stance, summarize your rationale with your main argument. Limited to 300 characters."
-                (Helper.rationaleTextArea form.summary RationaleSummaryChange)
+                (Helper.rationaleTextArea RationaleSummaryChange (Just 300) form.summary)
                 False
                 0
             , Helper.rationaleCard
@@ -3429,7 +3429,7 @@ viewRationaleForm form =
             , Helper.rationaleCard
                 "Conclusion"
                 "Optional: Final thoughts on your position."
-                (Helper.rationaleMarkdownInput form.conclusion ConclusionChange)
+                (Helper.rationaleTextArea ConclusionChange Nothing form.conclusion)
                 False
                 4
             , Helper.rationaleCard

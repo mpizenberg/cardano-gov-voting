@@ -1693,15 +1693,40 @@ rationaleMarkdownInput content msgOnInput =
 
 {-| Textarea specifically for the summary field with character count
 -}
-rationaleTextArea : String -> (String -> msg) -> Html msg
-rationaleTextArea summary msgOnInput =
+rationaleTextArea : (String -> msg) -> Maybe Int -> String -> Html msg
+rationaleTextArea msgOnInput maybeCharLimit summary =
+    let
+        summaryLength =
+            String.length summary
+
+        ( areaDescription, limitInfo, limitColor ) =
+            case maybeCharLimit of
+                Nothing ->
+                    ( "Plain text only. No size limit."
+                    , ""
+                    , "#4B5563"
+                    )
+
+                Just charLimit ->
+                    ( "Plain text only. Limited to " ++ String.fromInt charLimit ++ " characters."
+                    , String.fromInt summaryLength ++ "/" ++ String.fromInt charLimit ++ " characters"
+                    , if summaryLength > charLimit then
+                        "#EF4444"
+
+                      else if summaryLength > (charLimit * 3 // 4) then
+                        "#F59E0B"
+
+                      else
+                        "#4B5563"
+                    )
+    in
     div []
         [ div
             [ HA.style "margin-bottom" "0.5rem"
             , HA.style "color" "#4A5568"
             , HA.style "font-size" "0.75rem"
             ]
-            [ text "Plain text only. Limited to 300 characters." ]
+            [ text areaDescription ]
         , Html.textarea
             [ HA.value summary
             , Html.Events.onInput msgOnInput
@@ -1716,22 +1741,12 @@ rationaleTextArea summary msgOnInput =
             ]
             []
         , Html.p
-            [ HA.style "color"
-                (if String.length summary > 275 then
-                    if String.length summary > 300 then
-                        "#EF4444"
-
-                    else
-                        "#F59E0B"
-
-                 else
-                    "#4B5563"
-                )
+            [ HA.style "color" limitColor
             , HA.style "font-size" "0.75rem"
             , HA.style "margin-top" "0.5rem"
             , HA.style "text-align" "right"
             ]
-            [ text (String.fromInt (String.length summary) ++ "/300 characters") ]
+            [ text limitInfo ]
         ]
 
 

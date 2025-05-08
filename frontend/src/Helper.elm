@@ -418,10 +418,10 @@ viewActionTypeIcon actionType =
 sectionTitle : String -> Html msg
 sectionTitle title =
     Html.h2
-        [ HA.style "font-weight" "600"
+        [ HA.style "font-weight" "500"
         , HA.style "font-size" "1.875rem"
         , HA.style "color" "#1A202C"
-        , HA.style "margin-top" "1rem"
+        , HA.style "margin-top" "0.7rem"
         , HA.style "margin-bottom" "1rem"
         ]
         [ text title ]
@@ -718,7 +718,7 @@ viewStepWithCircle stepNumber stepId content =
           div
             [ HA.style "position" "absolute"
             , HA.style "left" "-0.10rem"
-            , HA.style "top" "3.5rem"
+            , HA.style "top" "2.9rem"
             , HA.style "width" "2.5rem"
             , HA.style "height" "2.5rem"
             , HA.style "border-radius" "50%"
@@ -1121,8 +1121,6 @@ viewVoterIdentificationCard title content =
         ]
         [ div
             [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
             ]
             [ Html.h3
                 [ HA.style "font-weight" "600"
@@ -1622,7 +1620,7 @@ storageHeaderForm _ name value deleteMsg nameChangeMsg valueChangeMsg =
 {-| Card for rationale form items with consistent styling
 -}
 rationaleCard : String -> String -> Html msg -> Bool -> Int -> Html msg
-rationaleCard title description content isPrimary index =
+rationaleCard title description content isPrimary _ =
     div
         [ HA.style "border" "1px solid #E2E8F0"
         , HA.style "border-radius" "0.75rem"
@@ -1633,30 +1631,6 @@ rationaleCard title description content isPrimary index =
         , HA.style "z-index" "1"
         ]
         [ div
-            [ HA.style "position" "absolute"
-            , HA.style "left" "50%"
-            , HA.style "top"
-                (if index == 0 then
-                    "0"
-
-                 else
-                    "-12px"
-                )
-            , HA.style "width" "12px"
-            , HA.style "height" "12px"
-            , HA.style "border-radius" "50%"
-            , HA.style "background-color"
-                (if isPrimary then
-                    "#272727"
-
-                 else
-                    "#94A3B8"
-                )
-            , HA.style "transform" "translateX(-50%)"
-            , HA.style "z-index" "2"
-            ]
-            []
-        , div
             [ HA.style "background-color"
                 (if isPrimary then
                     "#F1F5F9"
@@ -1693,20 +1667,28 @@ rationaleCard title description content isPrimary index =
 -}
 rationaleMarkdownInput : String -> (String -> msg) -> Html msg
 rationaleMarkdownInput content msgOnInput =
-    Html.textarea
-        [ HA.value content
-        , Html.Events.onInput msgOnInput
-        , HA.style "width" "100%"
-        , HA.style "padding" "0.75rem"
-        , HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.375rem"
-        , HA.style "min-height" "180px"
-        , HA.style "resize" "vertical"
-        , HA.style "font-family" "monospace"
-        , HA.style "font-size" "0.875rem"
-        , HA.style "line-height" "1.5"
+    div []
+        [ div
+            [ HA.style "margin-bottom" "0.5rem"
+            , HA.style "color" "#4A5568"
+            , HA.style "font-size" "0.75rem"
+            ]
+            [ text "Markdown formatting is supported. Use ## or deeper heading levels." ]
+        , Html.textarea
+            [ HA.value content
+            , Html.Events.onInput msgOnInput
+            , HA.style "width" "100%"
+            , HA.style "padding" "0.75rem"
+            , HA.style "border" "1px solid #E2E8F0"
+            , HA.style "border-radius" "0.375rem"
+            , HA.style "min-height" "180px"
+            , HA.style "resize" "vertical"
+            , HA.style "font-family" "monospace"
+            , HA.style "font-size" "0.875rem"
+            , HA.style "line-height" "1.5"
+            ]
+            []
         ]
-        []
 
 
 {-| Textarea specifically for the summary field with character count
@@ -1714,7 +1696,13 @@ rationaleMarkdownInput content msgOnInput =
 rationaleTextArea : String -> (String -> msg) -> Html msg
 rationaleTextArea summary msgOnInput =
     div []
-        [ Html.textarea
+        [ div
+            [ HA.style "margin-bottom" "0.5rem"
+            , HA.style "color" "#4A5568"
+            , HA.style "font-size" "0.75rem"
+            ]
+            [ text "Plain text only. Limited to 300 characters." ]
+        , Html.textarea
             [ HA.value summary
             , Html.Events.onInput msgOnInput
             , HA.style "width" "100%"
@@ -1817,18 +1805,6 @@ referenceCard _ _ content addMsg =
         , HA.style "z-index" "1"
         ]
         [ div
-            [ HA.style "position" "absolute"
-            , HA.style "left" "50%"
-            , HA.style "top" "-12px"
-            , HA.style "width" "12px"
-            , HA.style "height" "12px"
-            , HA.style "border-radius" "50%"
-            , HA.style "background-color" "#94A3B8"
-            , HA.style "transform" "translateX(-50%)"
-            , HA.style "z-index" "2"
-            ]
-            []
-        , div
             [ HA.style "background-color" "#F7FAFC"
             , HA.style "padding" "1rem 1.25rem"
             , HA.style "border-bottom" "1px solid #EDF2F7"
@@ -1948,7 +1924,10 @@ referenceForm index typeName label uri deleteMsg typeChangeMsg labelChangeMsg ur
                     , HA.style "font-size" "0.875rem"
                     , HA.style "background-color" "white"
                     ]
-                    []
+                    [ Html.option [ HA.value "relevant articles" ] [ text "Relevant Articles" ]
+                    , Html.option [ HA.value "governance metadata" ] [ text "Governance Metadata" ]
+                    , Html.option [ HA.value "other" ] [ text "Other" ]
+                    ]
                 ]
             , div []
                 [ Html.label
@@ -2000,7 +1979,7 @@ referenceForm index typeName label uri deleteMsg typeChangeMsg labelChangeMsg ur
 -}
 rationaleCompletedCard : String -> List (Html msg) -> msg -> Html msg
 rationaleCompletedCard summary content editMsg =
-    div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+    div []
         [ sectionTitle "Vote Rationale"
         , div
             [ HA.style "border" "1px solid #E2E8F0"
@@ -2913,7 +2892,7 @@ externalLinkDisplay url displayText =
 {-| Creates a standard step card with consistent styling
 -}
 stepCard : String -> String -> List (Html msg) -> Html msg
-stepCard title subtitle content =
+stepCard _ _ content =
     div
         [ HA.style "border" "1px solid #E2E8F0"
         , HA.style "border-radius" "0.75rem"
@@ -2922,30 +2901,6 @@ stepCard title subtitle content =
         , HA.style "overflow" "hidden"
         ]
         [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            ]
-            [ Html.h3
-                [ HA.style "font-weight" "600"
-                , HA.style "font-size" "1.125rem"
-                , HA.style "color" "#1A202C"
-                , HA.style "line-height" "1.4"
-                ]
-                [ text title ]
-            , if String.isEmpty subtitle then
-                text ""
-
-              else
-                Html.p
-                    [ HA.style "font-size" "0.875rem"
-                    , HA.style "color" "#4A5568"
-                    , HA.style "line-height" "1.6"
-                    , HA.style "margin-top" "0.25rem"
-                    ]
-                    [ text subtitle ]
-            ]
-        , div
             [ HA.style "padding" "1.25rem"
             ]
             content

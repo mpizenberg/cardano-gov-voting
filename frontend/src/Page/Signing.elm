@@ -379,18 +379,6 @@ view ctx model =
                             , HA.style "margin-bottom" "1.5rem"
                             ]
                             [ div
-                                [ HA.style "background-color" "#F7FAFC"
-                                , HA.style "padding" "1rem 1.25rem"
-                                , HA.style "border-bottom" "1px solid #EDF2F7"
-                                ]
-                                [ Html.h3
-                                    [ HA.style "font-weight" "600"
-                                    , HA.style "font-size" "1.125rem"
-                                    , HA.style "color" "#1A202C"
-                                    ]
-                                    [ text "Expected Signatures" ]
-                                ]
-                            , div
                                 [ HA.style "padding" "1.25rem" ]
                                 [ div [ HA.style "margin-bottom" "1rem" ] (viewExpectedSignatures expectedSigners vkeyWitnesses)
                                 , Html.p
@@ -523,18 +511,6 @@ view ctx model =
                             , HA.style "margin-bottom" "1.5rem"
                             ]
                             [ div
-                                [ HA.style "background-color" "#F7FAFC"
-                                , HA.style "padding" "1rem 1.25rem"
-                                , HA.style "border-bottom" "1px solid #EDF2F7"
-                                ]
-                                [ Html.h3
-                                    [ HA.style "font-weight" "600"
-                                    , HA.style "font-size" "1.125rem"
-                                    , HA.style "color" "#1A202C"
-                                    ]
-                                    [ text "Transaction Submission" ]
-                                ]
-                            , div
                                 [ HA.style "padding" "1.25rem" ]
                                 [ Html.p
                                     [ HA.style "color" "#4A5568"

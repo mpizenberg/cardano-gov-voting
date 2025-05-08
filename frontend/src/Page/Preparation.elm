@@ -2515,11 +2515,6 @@ view ctx (Model model) =
 --
 
 
-sectionTitle : String -> Html msg
-sectionTitle title =
-    Html.h2 [ HA.class "text-3xl font-medium mt-4 mb-4" ] [ text title ]
-
-
 viewVoterIdentificationStep : ViewContext msg -> Step VoterPreparationForm Witness.Voter Witness.Voter -> Html msg
 viewVoterIdentificationStep ctx step =
     case step of
@@ -2887,8 +2882,8 @@ viewProposalSelectionStep ctx model =
             viewProposalSelectionForm ctx model
 
         Validating _ _ ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ sectionTitle "Pick a Proposal"
+            div []
+                [ Helper.sectionTitle "Pick a Proposal"
                 , Helper.loadingSpinner "Validating the picked proposal..."
                 ]
 
@@ -2898,8 +2893,8 @@ viewProposalSelectionStep ctx model =
 
 viewProposalSelectionForm : ViewContext msg -> InnerModel -> Html msg
 viewProposalSelectionForm ctx model =
-    div [ HA.style "padding-top" "24px", HA.style "padding-bottom" "8px" ]
-        [ sectionTitle "Pick a Proposal"
+    div []
+        [ Helper.sectionTitle "Pick a Proposal"
         , case ctx.proposals of
             RemoteData.NotAsked ->
                 text "Proposals are not loading, please report this error."
@@ -3037,9 +3032,9 @@ viewSelectedProposal ctx { id, actionType, metadata, metadataUrl } =
                 Nothing ->
                     text ""
     in
-    div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+    div []
         [ div [ HA.class "flex items-center mb-4" ]
-            [ sectionTitle "Pick a Proposal" ]
+            [ Helper.sectionTitle "Pick a Proposal" ]
         , Helper.selectedProposalCard
             [ Helper.proposalDetailsItem "Proposal ID" (cardanoScanActionLink ctx.networkId id)
             , Helper.proposalDetailsItem "Type" actionTypeDisplay
@@ -3145,8 +3140,8 @@ viewStorageConfigStep ctx step =
     case step of
         Preparing form ->
             Html.map ctx.wrapMsg <|
-                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ sectionTitle "Storage Configuration"
+                div []
+                    [ Helper.sectionTitle "Storage Configuration"
                     , Html.p [ HA.class "mb-4" ]
                         [ text "Only the hash of your rationale is stored on Cardano,"
                         , text " so it's recommended to also store the actual JSON file containing the rationale in a permanent storage solution."
@@ -3178,13 +3173,13 @@ viewStorageConfigStep ctx step =
                     ]
 
         Validating _ _ ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+            div []
                 [ Helper.sectionTitle "Storage Configuration"
                 , Helper.loadingSpinner "Validating storage configuration..."
                 ]
 
         Done _ storageConfig ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+            div []
                 [ Helper.sectionTitle "Storage Configuration"
                 , Helper.storageConfigCard "Selected Storage Method"
                     []
@@ -3372,8 +3367,8 @@ viewRationaleStep ctx pickProposalStep storageConfigStep step =
                 viewRationaleForm form
 
             ( Done _ _, Done _ _, Validating _ _ ) ->
-                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ sectionTitle "Vote Rationale"
+                div []
+                    [ Helper.sectionTitle "Vote Rationale"
                     , Helper.formContainer
                         [ Html.p [ HA.class "text-gray-600" ] [ text "Auto-generation of PDF in progress ..." ]
                         , Html.p [ HA.class "mt-4" ] [ Helper.viewButton "Edit rationale" EditRationaleButtonClicked ]
@@ -3384,41 +3379,30 @@ viewRationaleStep ctx pickProposalStep storageConfigStep step =
                 viewCompletedRationale rationale
 
             ( _, Done _ _, _ ) ->
-                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ sectionTitle "Vote Rationale"
+                div []
+                    [ Helper.sectionTitle "Vote Rationale"
                     , Helper.stepNotAvailableCard "Please pick a proposal first."
                     ]
 
             ( Done _ _, _, _ ) ->
-                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ sectionTitle "Vote Rationale"
+                div []
+                    [ Helper.sectionTitle "Vote Rationale"
                     , Helper.stepNotAvailableCard "Please validate the IPFS config step first."
                     ]
 
             _ ->
-                div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                    [ sectionTitle "Vote Rationale"
+                div []
+                    [ Helper.sectionTitle "Vote Rationale"
                     , Helper.stepNotAvailableCard "Please pick a proposal and validate the IPFS config step first."
                     ]
 
 
 viewRationaleForm : RationaleForm -> Html Msg
 viewRationaleForm form =
-    div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-        [ sectionTitle "Vote Rationale"
+    div []
+        [ Helper.sectionTitle "Vote Rationale"
         , div [ HA.style "display" "grid", HA.style "gap" "1.5rem", HA.style "position" "relative" ]
-            [ div
-                [ HA.style "position" "absolute"
-                , HA.style "left" "50%"
-                , HA.style "top" "0"
-                , HA.style "bottom" "0"
-                , HA.style "width" "2px"
-                , HA.style "background-color" "#E2E8F0"
-                , HA.style "transform" "translateX(-50%)"
-                , HA.style "z-index" "0"
-                ]
-                []
-            , Helper.rationaleCard
+            [ Helper.rationaleCard
                 "Summary"
                 "Clearly state your stance, summarize your rationale with your main argument. Limited to 300 characters."
                 (Helper.rationaleTextArea form.summary RationaleSummaryChange)
@@ -3469,6 +3453,12 @@ viewStatementInput : Bool -> String -> Html Msg
 viewStatementInput hasAutoGen form =
     div []
         [ Helper.pdfAutogenCheckbox hasAutoGen TogglePdfAutogen
+        , div
+            [ HA.style "margin-bottom" "0.5rem"
+            , HA.style "color" "#4A5568"
+            , HA.style "font-size" "0.75rem"
+            ]
+            [ text "Markdown formatting is supported. Use ## or deeper heading levels. # headings are reserved for section titles." ]
         , Html.textarea
             [ HA.value form
             , Html.Events.onInput RationaleStatementChange
@@ -3601,40 +3591,28 @@ viewRationaleSignatureStep :
     -> Step RationaleSignatureForm {} RationaleSignature
     -> Html msg
 viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
-    case ( pickProposalStep, rationaleCreationStep, step ) of
-        ( _, Preparing _, _ ) ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ sectionTitle "Rationale Signature"
-                , Helper.stepNotAvailableCard "Please complete the rationale creation step first."
-                ]
+    div []
+        [ Helper.sectionTitle "Rationale Signature" -- Always show the title
+        , case ( pickProposalStep, rationaleCreationStep, step ) of
+            ( _, Preparing _, _ ) ->
+                Helper.stepNotAvailableCard "Please complete the rationale creation step first."
 
-        ( _, Validating _ _, _ ) ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ sectionTitle "Rationale Signature"
-                , Helper.stepNotAvailableCard "Please wait for the rationale creation to complete."
-                ]
+            ( _, Validating _ _, _ ) ->
+                Helper.stepNotAvailableCard "Please wait for the rationale creation to complete."
 
-        ( Done _ { id }, Done _ _, Preparing form ) ->
-            Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts id form
+            ( Done _ { id }, Done _ _, Preparing form ) ->
+                Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts id form
 
-        ( _, Done _ _, Preparing _ ) ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ sectionTitle "Rationale Signature"
-                , Helper.stepNotAvailableCard "Please select a proposal first."
-                ]
+            ( _, Done _ _, Preparing _ ) ->
+                Helper.stepNotAvailableCard "Please select a proposal first."
 
-        ( _, Done _ _, Validating _ _ ) ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ sectionTitle "Rationale Signature"
-                , Helper.formContainer
+            ( _, Done _ _, Validating _ _ ) ->
+                Helper.formContainer
                     [ Html.p [ HA.class "text-gray-600" ] [ text "Validating signatures..." ] ]
-                ]
 
-        ( _, Done _ _, Done _ ratSig ) ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-                [ sectionTitle "Rationale Signature"
-                , viewCompletedRationaleSignature ctx ratSig
-                ]
+            ( _, Done _ _, Done _ ratSig ) ->
+                viewCompletedRationaleSignature ctx ratSig
+        ]
 
 
 viewCompletedRationaleSignature : ViewContext msg -> RationaleSignature -> Html msg
@@ -3819,8 +3797,8 @@ viewPermanentStorageStep :
     -> Html msg
 viewPermanentStorageStep ctx rationaleSigStep storageConfigStep step =
     Html.map ctx.wrapMsg <|
-        div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-            [ sectionTitle "Rationale Storage"
+        div []
+            [ Helper.sectionTitle "Rationale Storage"
             , case ( rationaleSigStep, storageConfigStep, step ) of
                 ( Done _ _, Done _ _, Preparing form ) ->
                     Helper.storageUploadCard PinJsonIpfsButtonClicked (viewError form.error)
@@ -3901,8 +3879,8 @@ viewCompletedStorage r storage =
 
 viewBuildTxStep : ViewContext msg -> InnerModel -> Html Msg
 viewBuildTxStep ctx model =
-    div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
-        [ sectionTitle "Tx Building"
+    div []
+        [ Helper.sectionTitle "Tx Building"
         , case ( allPrepSteps ctx model, model.buildTxStep ) of
             ( Err _, _ ) ->
                 Helper.stepCard "Step Not Available"
@@ -4046,7 +4024,7 @@ viewSignTxStep ctx voterStep buildTxStep =
                 keyNames =
                     Dict.fromList (voterId ++ walletSpendingCredential ++ walletStakeCredential)
             in
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+            div []
                 [ Helper.sectionTitle "Tx Signing"
                 , Helper.signingStepCard
                     "Finalize Your Vote"
@@ -4097,7 +4075,7 @@ viewSignTxStep ctx voterStep buildTxStep =
                 ]
 
         _ ->
-            div [ HA.style "padding-top" "8px", HA.style "padding-bottom" "8px" ]
+            div []
                 [ Helper.sectionTitle "Tx Signing"
                 , Helper.signingStepCard
                     "Step Not Available"

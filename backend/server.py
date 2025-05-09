@@ -80,6 +80,13 @@ IPFS_DESCRIPTION = os.getenv(
     "IPFS_DESCRIPTION", "Files will be pinned using the pre-configured IPFS server."
 )
 
+# Preconfigured voter templates
+PRECONFIGURED_VOTERS_JSON = os.getenv("PRECONFIGURED_VOTERS_JSON", "[]")
+try:
+    json.loads(PRECONFIGURED_VOTERS_JSON)
+except Exception as e:
+    raise Exception(f"Invalid JSON for PRECONFIGURED_VOTERS_JSON: {e}")
+
 
 # Define an async HTTP client (using httpx) and attach it to the FastAPI app
 @asynccontextmanager
@@ -112,6 +119,7 @@ async def read_root(request: Request):
             "network_id": NETWORK_ID,
             "ipfs_label": IPFS_LABEL,
             "ipfs_description": IPFS_DESCRIPTION,
+            "preconfigured_voters": PRECONFIGURED_VOTERS_JSON,
         },
     )
 
@@ -125,6 +133,7 @@ async def get_page(full_path: str, request: Request):
             "network_id": NETWORK_ID,
             "ipfs_label": IPFS_LABEL,
             "ipfs_description": IPFS_DESCRIPTION,
+            "preconfigured_voters": PRECONFIGURED_VOTERS_JSON,
         },
     )
 

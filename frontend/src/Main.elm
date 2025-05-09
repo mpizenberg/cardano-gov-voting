@@ -61,7 +61,7 @@ import ConcurrentTask.Extra
 import Dict exposing (Dict)
 import Footer
 import Header
-import Helper
+import Helper exposing (PreconfVoter)
 import Html exposing (Html, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (preventDefaultOn)
@@ -86,6 +86,7 @@ type alias Flags =
     , db : Value
     , networkId : Int
     , ipfsPreconfig : { label : String, description : String }
+    , voterPreconfig : List PreconfVoter
     }
 
 
@@ -159,6 +160,7 @@ type alias Model =
     { page : Page
     , mobileMenuIsOpen : Bool
     , walletDropdownIsOpen : Bool
+    , networkDropdownIsOpen : Bool
     , walletsDiscovered : List WalletDescriptor
     , wallet : Maybe Cip30.Wallet
     , walletChangeAddress : Maybe Address
@@ -175,6 +177,7 @@ type alias Model =
     , db : Value
     , networkId : NetworkId
     , ipfsPreconfig : { label : String, description : String }
+    , voterPreconfig : List PreconfVoter
     , errors : List String
     }
 
@@ -194,13 +197,13 @@ type TaskCompleted
 
 
 init : Flags -> ( Model, Cmd Msg )
-init { url, jsonLdContexts, db, networkId, ipfsPreconfig } =
+init { url, jsonLdContexts, db, networkId, ipfsPreconfig, voterPreconfig } =
     let
         networkIdTyped =
             Address.networkIdFromInt networkId |> Maybe.withDefault Testnet
 
         config =
-            ModelConfig jsonLdContexts db networkIdTyped ipfsPreconfig
+            ModelConfig jsonLdContexts db networkIdTyped ipfsPreconfig voterPreconfig
     in
     initHelper (locationHrefToRoute url) config
 
@@ -225,14 +228,16 @@ type alias ModelConfig =
     , db : Value
     , networkId : NetworkId
     , ipfsPreconfig : { label : String, description : String }
+    , voterPreconfig : List PreconfVoter
     }
 
 
 initialModel : ModelConfig -> Model
-initialModel { jsonLdContexts, db, networkId, ipfsPreconfig } =
+initialModel { jsonLdContexts, db, networkId, ipfsPreconfig, voterPreconfig } =
     { page = LandingPage
     , mobileMenuIsOpen = False
     , walletDropdownIsOpen = False
+    , networkDropdownIsOpen = False
     , walletsDiscovered = []
     , wallet = Nothing
     , walletUtxos = Nothing
@@ -249,6 +254,7 @@ initialModel { jsonLdContexts, db, networkId, ipfsPreconfig } =
     , db = db
     , networkId = networkId
     , ipfsPreconfig = ipfsPreconfig
+    , voterPreconfig = voterPreconfig
     , errors = []
     }
 
@@ -269,8 +275,10 @@ type Msg
       -- Header
     | ToggleMobileMenu
     | ToggleWalletDropdown
+    | ToggleNetworkDropdown
     | ConnectWalletClicked { id : String }
     | DisconnectWalletClicked
+    | NetworkChanged NetworkId
       -- Preparation page
     | PreparationPageMsg Page.Preparation.Msg
     | GotPdfAsFile Value
@@ -439,6 +447,37 @@ networkIdFromString str =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
+        ( ToggleNetworkDropdown, _ ) ->
+            ( { model
+                | networkDropdownIsOpen = not model.networkDropdownIsOpen
+                , walletDropdownIsOpen = False -- Close wallet dropdown when toggling network
+              }
+            , Cmd.none
+            )
+
+        ( NetworkChanged newNet, _ ) ->
+            let
+                route =
+                    case model.page of
+                        PreparationPage _ ->
+                            RoutePreparation { networkId = newNet }
+
+                        SigningPage _ ->
+                            RouteSigning { networkId = newNet, tx = Nothing, expectedSigners = [] }
+
+                        _ ->
+                            RouteLanding
+
+                updatedModel =
+                    { model
+                        | networkId = newNet
+                        , networkDropdownIsOpen = False
+                        , -- Close dropdown after selection
+                          proposals = RemoteData.Loading
+                    }
+            in
+            handleUrlChange route updatedModel
+
         ( NoMsg, _ ) ->
             ( model, Cmd.none )
 
@@ -636,7 +675,6 @@ update msg model =
                     , Cmd.batch cmds
                     )
 
-        -- Task port thingy
         ( OnTaskProgress ( taskPool, cmd ), _ ) ->
             ( { model | taskPool = taskPool }, cmd )
 
@@ -647,7 +685,12 @@ update msg model =
             ( { model | mobileMenuIsOpen = not model.mobileMenuIsOpen }, Cmd.none )
 
         ( ToggleWalletDropdown, _ ) ->
-            ( { model | walletDropdownIsOpen = not model.walletDropdownIsOpen }, Cmd.none )
+            ( { model
+                | walletDropdownIsOpen = not model.walletDropdownIsOpen
+                , networkDropdownIsOpen = False
+              }
+            , Cmd.none
+            )
 
         ( ConnectWalletClicked { id }, _ ) ->
             ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = [] })) )
@@ -686,6 +729,7 @@ handleUrlChange route model =
                     , db = model.db
                     , networkId = networkId
                     , ipfsPreconfig = model.ipfsPreconfig
+                    , voterPreconfig = model.voterPreconfig
                     }
 
             else if RemoteData.isSuccess model.proposals then
@@ -707,6 +751,7 @@ handleUrlChange route model =
                     , db = model.db
                     , networkId = networkId
                     , ipfsPreconfig = model.ipfsPreconfig
+                    , voterPreconfig = model.voterPreconfig
                     }
 
             else
@@ -937,7 +982,7 @@ view model =
                 HA.style "background" "transparent"
 
             else
-                HA.style "background" "#d9d9d9"
+                HA.style "background" "#E2E8F0"
     in
     div
         [ HA.style "min-height" "100vh"
@@ -1044,17 +1089,16 @@ viewHeader model =
             }
     in
     Header.view
-        -- mobile menu stuff
         { mobileMenuIsOpen = model.mobileMenuIsOpen
         , toggleMobileMenu = ToggleMobileMenu
-
-        -- wallet connector stuff
+        , networkDropdownIsOpen = model.networkDropdownIsOpen
+        , toggleNetworkDropdown = ToggleNetworkDropdown
         , walletConnector = walletConnectorState
         , walletConnectorMsgs = walletConnectorMsgs
-
-        -- links stuff
         , logoLink = link RouteLanding
         , navigationItems = navigationItems
+        , networkId = model.networkId
+        , onNetworkChange = NetworkChanged
         }
 
 
@@ -1092,6 +1136,7 @@ viewContent model =
                     \tx expectedSigners ->
                         link (RouteSigning { networkId = model.networkId, tx = Just tx, expectedSigners = expectedSigners }) []
                 , ipfsPreconfig = model.ipfsPreconfig
+                , voterPreconfig = model.voterPreconfig
                 }
                 prepModel
 

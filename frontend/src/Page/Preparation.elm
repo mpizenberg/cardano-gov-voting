@@ -49,7 +49,7 @@ import Dict exposing (Dict)
 import Dict.Any
 import File exposing (File)
 import File.Select
-import Helper
+import Helper exposing (PreconfVoter)
 import Html exposing (Html, div, text)
 import Html.Attributes as HA
 import Html.Events
@@ -2473,6 +2473,7 @@ type alias ViewContext msg =
     , changeNetworkLink : NetworkId -> List (Html msg) -> Html msg
     , signingLink : Transaction -> List { keyName : String, keyHash : Bytes CredentialHash } -> List (Html msg) -> Html msg
     , ipfsPreconfig : { label : String, description : String }
+    , voterPreconfig : List PreconfVoter
     }
 
 
@@ -2530,24 +2531,13 @@ viewVoterIdentificationStep ctx step =
                 div []
                     [ Helper.sectionTitle "Voter identification"
                     , Html.p [ HA.class "mb-4" ]
-                        [ text "Select a predefined voter role or enter your own governance ID" ]
-                    , Helper.viewVoterGrid
-                        [ voterCard
-                            { voterType = "DRep"
-                            , description = "Vote as a Delegated Representative"
-                            , govId = "drep1ydpfkyjxzeqvalf6fgvj7lznrk8kcmfnvy9hyl6gr6ez6wgsjaelx"
-                            }
-                        , voterCard
-                            { voterType = "CC Member"
-                            , description = "Vote as a Constitutional Committee Member"
-                            , govId = "cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9"
-                            }
-                        , voterCard
-                            { voterType = "SPO"
-                            , description = "Vote as a Stake Pool Operator"
-                            , govId = "pool1nqheyct9a0mxn80cwp9pd5guncfu3rzwqtmru0l94accz7gjcgl"
-                            }
-                        ]
+                        (if List.isEmpty ctx.voterPreconfig then
+                            [ text "Enter your own governance ID" ]
+
+                         else
+                            [ text "Select a predefined voter role or enter your own governance ID" ]
+                        )
+                    , Helper.viewVoterGrid (List.map voterCard ctx.voterPreconfig)
                     , div [ HA.style "margin-bottom" "1.5rem" ]
                         [ viewCustomVoterCard form ]
                     , Html.Lazy.lazy viewValidGovIdForm form

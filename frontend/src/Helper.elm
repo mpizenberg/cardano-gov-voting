@@ -8,7 +8,7 @@ module Helper exposing
     , sectionTitle, infoBox, viewError
     , renderMarkdownContent
     , viewStepWithCircle, viewPageHeader
-    , viewVoterGrid, viewVoterCard, voterCustomCard, votingPowerDisplay, scriptInfoContainer, viewVoterCredDetails, viewVoterDetailsItem, viewCredInfo
+    , PreconfVoter, viewVoterGrid, viewVoterCard, voterCustomCard, votingPowerDisplay, scriptInfoContainer, viewVoterCredDetails, viewVoterDetailsItem, viewCredInfo
     , viewUtxoRefForm, scriptSignerSection, scriptSignerCheckbox, viewIdentifiedVoterCard, viewVoterInfoItem
     , proposalListContainer, showMoreButton, proposalCard, selectedProposalCard, proposalDetailsItem
     , storageConfigCard, storageProviderGrid, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, storageHeaderInput
@@ -72,7 +72,7 @@ and are potentially useful in multiple places.
 
 # Voter Identification Components
 
-@docs viewVoterGrid, viewVoterCard, voterCustomCard, votingPowerDisplay, scriptInfoContainer, viewVoterCredDetails, viewVoterDetailsItem, viewCredInfo
+@docs PreconfVoter, viewVoterGrid, viewVoterCard, voterCustomCard, votingPowerDisplay, scriptInfoContainer, viewVoterCredDetails, viewVoterDetailsItem, viewCredInfo
 @docs viewUtxoRefForm, scriptSignerSection, scriptSignerCheckbox, viewIdentifiedVoterCard, viewVoterInfoItem
 
 
@@ -809,19 +809,31 @@ viewHeaderBackground =
 -}
 viewVoterGrid : List (Html msg) -> Html msg
 viewVoterGrid cards =
-    div
-        [ HA.style "display" "grid"
-        , HA.style "grid-template-columns" "repeat(auto-fill, minmax(220px, 1fr))"
-        , HA.style "gap" "1.5rem"
-        , HA.style "margin-bottom" "1.5rem"
-        ]
-        cards
+    if List.isEmpty cards then
+        text ""
+
+    else
+        div
+            [ HA.style "display" "grid"
+            , HA.style "grid-template-columns" "repeat(auto-fill, minmax(220px, 1fr))"
+            , HA.style "gap" "1.5rem"
+            , HA.style "margin-bottom" "1.5rem"
+            ]
+            cards
+
+
+type alias PreconfVoter =
+    { voterType : String, description : String, govId : String }
 
 
 {-| Card for displaying a voter role option
 -}
-viewVoterCard : String -> String -> String -> msg -> Bool -> Html msg
-viewVoterCard title description govId selectMsg isSelected =
+viewVoterCard : (String -> msg) -> String -> PreconfVoter -> Html msg
+viewVoterCard selectMsg currentSelection { voterType, description, govId } =
+    let
+        isSelected =
+            currentSelection == govId
+    in
     div
         [ HA.style "border"
             (if isSelected then
@@ -841,7 +853,7 @@ viewVoterCard title description govId selectMsg isSelected =
         , HA.style "position" "relative"
         , HA.style "overflow" "hidden"
         , HA.style "cursor" "pointer"
-        , onClick selectMsg
+        , onClick (selectMsg govId)
         ]
         [ div
             [ HA.style "background-color"
@@ -863,7 +875,7 @@ viewVoterCard title description govId selectMsg isSelected =
                 , HA.style "color" "#1A202C"
                 , HA.style "line-height" "1.4"
                 ]
-                [ text title ]
+                [ text voterType ]
             ]
         , div
             [ HA.style "padding" "1.25rem"

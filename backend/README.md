@@ -30,6 +30,22 @@ IPFS_DESCRIPTION="Files will be stored using the pre-configured IPFS servers."
 
 # Network config: 0 for Preview, 1 for Mainnet
 NETWORK_ID=0
+
+# Preconfiguration of some voters for fast selection
+PRECONFIGURED_VOTERS_JSON="[
+  { \"voterType\": \"DRep\"
+  , \"description\": \"Vote as a Delegated Representative\"
+  , \"govId\": \"drep1ydpfkyjxzeqvalf6fgvj7lznrk8kcmfnvy9hyl6gr6ez6wgsjaelx\"
+  },
+  { \"voterType\": \"CC Member\"
+  , \"description\": \"Vote as a Constitutional Committee Member\"
+  , \"govId\": \"cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9\"
+  },
+  { \"voterType\": \"SPO\"
+  , \"description\": \"Vote as a Stake Pool Operator\"
+  , \"govId\": \"pool1nqheyct9a0mxn80cwp9pd5guncfu3rzwqtmru0l94accz7gjcgl\"
+  }
+]"
 ```
 
 Then you can start the python server.

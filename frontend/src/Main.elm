@@ -61,7 +61,7 @@ import ConcurrentTask.Extra
 import Dict exposing (Dict)
 import Footer
 import Header
-import Helper
+import Helper exposing (PreconfVoter)
 import Html exposing (Html, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (preventDefaultOn)
@@ -86,6 +86,7 @@ type alias Flags =
     , db : Value
     , networkId : Int
     , ipfsPreconfig : { label : String, description : String }
+    , voterPreconfig : List PreconfVoter
     }
 
 
@@ -176,6 +177,7 @@ type alias Model =
     , db : Value
     , networkId : NetworkId
     , ipfsPreconfig : { label : String, description : String }
+    , voterPreconfig : List PreconfVoter
     , errors : List String
     }
 
@@ -195,13 +197,13 @@ type TaskCompleted
 
 
 init : Flags -> ( Model, Cmd Msg )
-init { url, jsonLdContexts, db, networkId, ipfsPreconfig } =
+init { url, jsonLdContexts, db, networkId, ipfsPreconfig, voterPreconfig } =
     let
         networkIdTyped =
             Address.networkIdFromInt networkId |> Maybe.withDefault Testnet
 
         config =
-            ModelConfig jsonLdContexts db networkIdTyped ipfsPreconfig
+            ModelConfig jsonLdContexts db networkIdTyped ipfsPreconfig voterPreconfig
     in
     initHelper (locationHrefToRoute url) config
 
@@ -226,11 +228,12 @@ type alias ModelConfig =
     , db : Value
     , networkId : NetworkId
     , ipfsPreconfig : { label : String, description : String }
+    , voterPreconfig : List PreconfVoter
     }
 
 
 initialModel : ModelConfig -> Model
-initialModel { jsonLdContexts, db, networkId, ipfsPreconfig } =
+initialModel { jsonLdContexts, db, networkId, ipfsPreconfig, voterPreconfig } =
     { page = LandingPage
     , mobileMenuIsOpen = False
     , walletDropdownIsOpen = False
@@ -251,6 +254,7 @@ initialModel { jsonLdContexts, db, networkId, ipfsPreconfig } =
     , db = db
     , networkId = networkId
     , ipfsPreconfig = ipfsPreconfig
+    , voterPreconfig = voterPreconfig
     , errors = []
     }
 
@@ -725,6 +729,7 @@ handleUrlChange route model =
                     , db = model.db
                     , networkId = networkId
                     , ipfsPreconfig = model.ipfsPreconfig
+                    , voterPreconfig = model.voterPreconfig
                     }
 
             else if RemoteData.isSuccess model.proposals then
@@ -746,6 +751,7 @@ handleUrlChange route model =
                     , db = model.db
                     , networkId = networkId
                     , ipfsPreconfig = model.ipfsPreconfig
+                    , voterPreconfig = model.voterPreconfig
                     }
 
             else
@@ -1130,6 +1136,7 @@ viewContent model =
                     \tx expectedSigners ->
                         link (RouteSigning { networkId = model.networkId, tx = Just tx, expectedSigners = expectedSigners }) []
                 , ipfsPreconfig = model.ipfsPreconfig
+                , voterPreconfig = model.voterPreconfig
                 }
                 prepModel
 

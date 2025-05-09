@@ -48,6 +48,7 @@
                     label: {{ipfs_label|tojson}},
                     description: {{ipfs_description|tojson}},
                 },
+                voterPreconfig: JSON.parse({{preconfigured_voters|tojson}}),
             },
         });
         ElmCardano.init({

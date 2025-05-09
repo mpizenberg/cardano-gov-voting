@@ -2519,27 +2519,34 @@ viewVoterIdentificationStep : ViewContext msg -> Step VoterPreparationForm Witne
 viewVoterIdentificationStep ctx step =
     case step of
         Preparing form ->
+            let
+                currentGovId =
+                    Maybe.map Gov.idToBech32 form.govId |> Maybe.withDefault ""
+
+                voterCard =
+                    Helper.viewVoterCard VoterGovIdChange currentGovId
+            in
             Html.map ctx.wrapMsg <|
                 div []
                     [ Helper.sectionTitle "Voter identification"
                     , Html.p [ HA.class "mb-4" ]
                         [ text "Select a predefined voter role or enter your own governance ID" ]
                     , Helper.viewVoterGrid
-                        [ Helper.viewVoterCard "DRep"
-                            "Vote as a Delegated Representative"
-                            "drep1ydpfkyjxzeqvalf6fgvj7lznrk8kcmfnvy9hyl6gr6ez6wgsjaelx"
-                            (VoterGovIdChange "drep1ydpfkyjxzeqvalf6fgvj7lznrk8kcmfnvy9hyl6gr6ez6wgsjaelx")
-                            (form.govId == Just (Gov.idFromBech32 "drep1ydpfkyjxzeqvalf6fgvj7lznrk8kcmfnvy9hyl6gr6ez6wgsjaelx" |> Maybe.withDefault (DrepId (VKeyHash (Bytes.fromHex "" |> Maybe.withDefault Bytes.empty)))))
-                        , Helper.viewVoterCard "CC Member"
-                            "Vote as a Constitutional Committee Member"
-                            "cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9"
-                            (VoterGovIdChange "cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9")
-                            (form.govId == Just (Gov.idFromBech32 "cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9" |> Maybe.withDefault (CcHotCredId (VKeyHash (Bytes.fromHex "" |> Maybe.withDefault Bytes.empty)))))
-                        , Helper.viewVoterCard "SPO"
-                            "Vote as a Stake Pool Operator"
-                            "pool1nqheyct9a0mxn80cwp9pd5guncfu3rzwqtmru0l94accz7gjcgl"
-                            (VoterGovIdChange "pool1nqheyct9a0mxn80cwp9pd5guncfu3rzwqtmru0l94accz7gjcgl")
-                            (form.govId == Just (Gov.idFromBech32 "pool1nqheyct9a0mxn80cwp9pd5guncfu3rzwqtmru0l94accz7gjcgl" |> Maybe.withDefault (PoolId (Bytes.fromHex "" |> Maybe.withDefault Bytes.empty))))
+                        [ voterCard
+                            { voterType = "DRep"
+                            , description = "Vote as a Delegated Representative"
+                            , govId = "drep1ydpfkyjxzeqvalf6fgvj7lznrk8kcmfnvy9hyl6gr6ez6wgsjaelx"
+                            }
+                        , voterCard
+                            { voterType = "CC Member"
+                            , description = "Vote as a Constitutional Committee Member"
+                            , govId = "cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9"
+                            }
+                        , voterCard
+                            { voterType = "SPO"
+                            , description = "Vote as a Stake Pool Operator"
+                            , govId = "pool1nqheyct9a0mxn80cwp9pd5guncfu3rzwqtmru0l94accz7gjcgl"
+                            }
                         ]
                     , div [ HA.style "margin-bottom" "1.5rem" ]
                         [ viewCustomVoterCard form ]

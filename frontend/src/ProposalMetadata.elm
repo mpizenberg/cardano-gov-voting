@@ -3,6 +3,7 @@ module ProposalMetadata exposing (Body, ProposalMetadata, decoder, encode, fromR
 {-| Helper module to handle proposals metadata following [CIP-108](https://cips.cardano.org/cip/CIP-0108).
 -}
 
+import Bytes.Comparable as Bytes
 import Json.Decode as JD exposing (Decoder, Value)
 import Json.Encode as JE
 
@@ -13,6 +14,7 @@ even if the metadata itself doesn’t follow CIP-108.
 -}
 type alias ProposalMetadata =
     { raw : String
+    , computedHash : String
     , body : Body
     }
 
@@ -51,9 +53,15 @@ decoder =
 -}
 fromRaw : String -> ProposalMetadata
 fromRaw raw =
+    let
+        computedHash =
+            Bytes.fromText raw
+                |> Bytes.blake2b256
+                |> Bytes.toHex
+    in
     JD.decodeString (JD.field "body" bodyDecoder) raw
-        |> Result.map (ProposalMetadata raw)
-        |> Result.withDefault (ProposalMetadata raw noBody)
+        |> Result.map (ProposalMetadata raw computedHash)
+        |> Result.withDefault (ProposalMetadata raw computedHash noBody)
 
 
 bodyDecoder : Decoder Body

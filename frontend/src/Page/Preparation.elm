@@ -2954,6 +2954,14 @@ viewProposalCardHelper wrapMsg networkId proposal =
         idString =
             Gov.actionIdToString proposal.id
 
+        hashIsValid =
+            case proposal.metadata of
+                RemoteData.Success meta ->
+                    meta.computedHash == proposal.metadataHash
+
+                _ ->
+                    True
+
         title =
             case proposal.metadata of
                 RemoteData.Success meta ->
@@ -2984,6 +2992,7 @@ viewProposalCardHelper wrapMsg networkId proposal =
     in
     Helper.proposalCard
         { id = idString
+        , hashIsValid = hashIsValid
         , title = title
         , abstract = abstract
         , actionType = proposal.actionType
@@ -2997,9 +3006,9 @@ viewProposalCardHelper wrapMsg networkId proposal =
 
 
 viewSelectedProposal : ViewContext msg -> ActiveProposal -> Html msg
-viewSelectedProposal ctx { id, actionType, metadata, metadataUrl } =
+viewSelectedProposal ctx { id, actionType, metadata, metadataUrl, metadataHash } =
     let
-        ( title, content ) =
+        { title, maybeMetadata } =
             getProposalContent metadata metadataUrl
 
         actionTypeDisplay =
@@ -3015,19 +3024,21 @@ viewSelectedProposal ctx { id, actionType, metadata, metadataUrl } =
                 , Helper.viewActionTypeIcon actionType
                 ]
 
-        abstractContent =
-            case content of
-                Just abstractHtml ->
-                    Helper.proposalDetailsItem "Abstract"
+        ( hashIsValid, abstractContent ) =
+            case maybeMetadata of
+                Just { computedHash, abstract } ->
+                    ( computedHash == metadataHash
+                    , Helper.proposalDetailsItem "Abstract"
                         (div
                             [ HA.style "line-height" "1.6"
                             , HA.style "color" "#4A5568"
                             ]
-                            [ abstractHtml ]
+                            [ text abstract ]
                         )
+                    )
 
                 Nothing ->
-                    text ""
+                    ( True, text "" )
     in
     div []
         [ div [ HA.class "flex items-center mb-4" ]
@@ -3036,6 +3047,11 @@ viewSelectedProposal ctx { id, actionType, metadata, metadataUrl } =
             [ Helper.proposalDetailsItem "Proposal ID" (cardanoScanActionLink ctx.networkId id)
             , Helper.proposalDetailsItem "Type" actionTypeDisplay
             , Helper.proposalDetailsItem "Title" (Html.span [ HA.style "font-weight" "500" ] [ text title ])
+            , if hashIsValid then
+                text ""
+
+              else
+                text "INVALID HASH"
             , abstractContent
             ]
         , Html.p
@@ -3104,26 +3120,28 @@ strBothEnds startLength endLength str =
             ++ String.slice (strLength - endLength) strLength str
 
 
-getProposalContent : RemoteData String ProposalMetadata -> String -> ( String, Maybe (Html msg) )
+getProposalContent : RemoteData String ProposalMetadata -> String -> { title : String, maybeMetadata : Maybe { computedHash : String, abstract : String } }
 getProposalContent metadata metadataUrl =
     case metadata of
         RemoteData.NotAsked ->
-            ( "not loading", Nothing )
+            { title = "not loading", maybeMetadata = Nothing }
 
         RemoteData.Loading ->
-            ( "loading ...", Nothing )
+            { title = "loading ...", maybeMetadata = Nothing }
 
         RemoteData.Failure error ->
-            ( "ERROR for " ++ metadataUrl ++ ": " ++ Debug.toString error
-            , Nothing
-            )
+            { title = "ERROR for " ++ metadataUrl ++ ": " ++ Debug.toString error
+            , maybeMetadata = Nothing
+            }
 
         RemoteData.Success meta ->
-            ( meta.body.title |> Maybe.withDefault "unknown (unexpected metadata format)"
-            , Just <|
-                text <|
-                    Maybe.withDefault "Unknown abstract (unexpected metadata format)" meta.body.abstract
-            )
+            { title = meta.body.title |> Maybe.withDefault "unknown (unexpected metadata format)"
+            , maybeMetadata =
+                Just
+                    { computedHash = meta.computedHash
+                    , abstract = Maybe.withDefault "Unknown abstract (unexpected metadata format)" meta.body.abstract
+                    }
+            }
 
 
 

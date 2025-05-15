@@ -1232,8 +1232,8 @@ showMoreButton hasMore visibleCount totalCount clickMsg =
 
 {-| Card for an individual proposal
 -}
-proposalCard : { id : String, title : String, abstract : String, actionType : String, actionId : String, linkUrl : String, linkHex : String, index : Int } -> msg -> Html msg -> Html msg
-proposalCard { title, abstract, actionType, linkUrl, linkHex, index } selectMsg actionIcon =
+proposalCard : { id : String, hashIsValid : Bool, title : String, abstract : String, actionType : String, actionId : String, linkUrl : String, linkHex : String, index : Int } -> msg -> Html msg -> Html msg
+proposalCard { title, hashIsValid, abstract, actionType, linkUrl, linkHex, index } selectMsg actionIcon =
     div
         [ HA.style "border" "1px solid #E2E8F0"
         , HA.style "border-radius" "0.75rem"
@@ -1263,7 +1263,12 @@ proposalCard { title, abstract, actionType, linkUrl, linkHex, index } selectMsg 
                 , HA.style "word-wrap" "break-word"
                 , HA.style "flex" "1"
                 ]
-                [ text title ]
+                (if hashIsValid then
+                    [ text title ]
+
+                 else
+                    [ text <| title ++ " INVALID HASH" ]
+                )
             ]
         , div
             [ HA.style "padding" "1.25rem"

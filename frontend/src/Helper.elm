@@ -1286,7 +1286,7 @@ proposalCard { title, hashIsValid, abstract, actionType, linkUrl, linkHex, index
                 , HA.style "overflow" "hidden"
                 , HA.style "margin-bottom" "1.5rem"
                 ]
-                [ text abstract ]
+                [ renderMarkdownContent abstract ]
             , div
                 [ HA.style "font-size" "0.75rem"
                 , HA.style "color" "#718096"

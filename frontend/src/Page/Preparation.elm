@@ -3033,7 +3033,7 @@ viewSelectedProposal ctx { id, actionType, metadata, metadataUrl, metadataHash }
                             [ HA.style "line-height" "1.6"
                             , HA.style "color" "#4A5568"
                             ]
-                            [ text abstract ]
+                            [ Helper.renderMarkdownContent abstract ]
                         )
                     )
 

@@ -282,22 +282,13 @@ viewNetworkSelector currentNetwork dropdownOpen toggleDropdown onNetworkChange =
 viewMobileNetworkSelector : NetworkId -> (NetworkId -> msg) -> Html msg
 viewMobileNetworkSelector currentNetwork onNetworkChange =
     let
-        isMainnet =
-            currentNetwork == Mainnet
+        ( networkAsText, networkColor, otherNetwork ) =
+            case currentNetwork of
+                Mainnet ->
+                    ( "Mainnet", "#10b981", Testnet )
 
-        otherNetwork =
-            if isMainnet then
-                Testnet
-
-            else
-                Mainnet
-
-        networkColor =
-            if isMainnet then
-                "#10b981"
-
-            else
-                "#3b82f6"
+                Testnet ->
+                    ( "Preview", "#3b82f6", Mainnet )
     in
     div
         [ style "display" "inline-flex"
@@ -322,13 +313,7 @@ viewMobileNetworkSelector currentNetwork onNetworkChange =
             , style "margin-right" "0.5rem"
             ]
             []
-        , text
-            (if isMainnet then
-                "Mainnet"
-
-             else
-                "Preview"
-            )
+        , text networkAsText
         , div
             [ style "margin-left" "0.5rem"
             , style "font-size" "0.75rem"

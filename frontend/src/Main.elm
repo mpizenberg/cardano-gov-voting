@@ -457,26 +457,22 @@ update msg model =
 
         ( NetworkChanged newNet, _ ) ->
             let
-                route =
-                    case model.page of
-                        PreparationPage _ ->
-                            RoutePreparation { networkId = newNet }
-
-                        SigningPage _ ->
-                            RouteSigning { networkId = newNet, tx = Nothing, expectedSigners = [] }
-
-                        _ ->
-                            RouteLanding
-
                 updatedModel =
                     { model
                         | networkId = newNet
-                        , networkDropdownIsOpen = False
-                        , -- Close dropdown after selection
-                          proposals = RemoteData.Loading
+                        , networkDropdownIsOpen = False -- Close dropdown after selection
+                        , proposals = RemoteData.NotAsked
                     }
             in
-            handleUrlChange route updatedModel
+            case model.page of
+                PreparationPage _ ->
+                    handleUrlChange (RoutePreparation { networkId = newNet }) updatedModel
+
+                SigningPage _ ->
+                    handleUrlChange (RouteSigning { networkId = newNet, tx = Nothing, expectedSigners = [] }) updatedModel
+
+                _ ->
+                    ( updatedModel, Cmd.none )
 
         ( NoMsg, _ ) ->
             ( model, Cmd.none )

@@ -2532,7 +2532,7 @@ viewVoterIdentificationStep ctx step =
                     [ Helper.sectionTitle "Voter identification"
                     , Html.p [ HA.class "mb-4" ]
                         (if List.isEmpty ctx.voterPreconfig then
-                            [ text "Enter your own governance ID" ]
+                            [ text "" ]
 
                          else
                             [ text "Select a predefined voter role or enter your own governance ID" ]
@@ -2561,37 +2561,8 @@ viewVoterIdentificationStep ctx step =
 
 viewCustomVoterCard : VoterPreparationForm -> Html Msg
 viewCustomVoterCard form =
-    let
-        isCustomSelected =
-            case form.govId of
-                Nothing ->
-                    False
-
-                Just govId ->
-                    let
-                        defaultIds =
-                            [ "drep1ydpfkyjxzeqvalf6fgvj7lznrk8kcmfnvy9hyl6gr6ez6wgsjaelx"
-                            , "cc_hot1qdnedkra2957t6xzzwygdgyefd5ctpe4asywauqhtzlu9qqkttvd9"
-                            , "pool1nqheyct9a0mxn80cwp9pd5guncfu3rzwqtmru0l94accz7gjcgl"
-                            ]
-                    in
-                    not (List.member (Gov.idToBech32 govId) defaultIds)
-
-        currentValue =
-            case form.govId of
-                Just govId ->
-                    if isCustomSelected then
-                        Gov.idToBech32 govId
-
-                    else
-                        ""
-
-                Nothing ->
-                    ""
-    in
     Helper.voterCustomCard
-        { isSelected = isCustomSelected
-        , currentValue = currentValue
+        { currentValue = Maybe.withDefault "" <| Maybe.map Gov.idToBech32 form.govId
         , onInputMsg = VoterGovIdChange
         }
 

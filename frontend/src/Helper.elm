@@ -927,16 +927,10 @@ viewVoterCard selectMsg currentSelection { voterType, description, govId } =
 
 {-| Card for custom voter ID input
 -}
-voterCustomCard : { isSelected : Bool, currentValue : String, onInputMsg : String -> msg } -> Html msg
-voterCustomCard { isSelected, currentValue, onInputMsg } =
+voterCustomCard : { currentValue : String, onInputMsg : String -> msg } -> Html msg
+voterCustomCard { currentValue, onInputMsg } =
     div
-        [ HA.style "border"
-            (if isSelected then
-                "2px solid #272727"
-
-             else
-                "1px solid #E2E8F0"
-            )
+        [ HA.style "border" "1px solid #E2E8F0"
         , HA.style "border-radius" "0.75rem"
         , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
         , HA.style "background-color" "#FFFFFF"
@@ -946,13 +940,7 @@ voterCustomCard { isSelected, currentValue, onInputMsg } =
         , HA.style "transition" "all 0.3s ease"
         ]
         [ div
-            [ HA.style "background-color"
-                (if isSelected then
-                    "#F1F5F9"
-
-                 else
-                    "#F7FAFC"
-                )
+            [ HA.style "background-color" "#F7FAFC"
             , HA.style "padding" "1rem 1.25rem"
             , HA.style "border-bottom" "1px solid #EDF2F7"
             ]
@@ -1010,7 +998,7 @@ votingPowerDisplay accessor webData =
             text "loading ..."
 
         RemoteData.Failure _ ->
-            text "? Most likely, this voter is inactive, or not registered yet, or was just registered this epoch."
+            text "Is this the correct network? If yes, then most likely, this voter is inactive, not registered yet, or was just registered this epoch."
 
         RemoteData.Success success ->
             text <| prettyAdaLovelace <| Natural.fromSafeInt <| accessor success

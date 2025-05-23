@@ -52,6 +52,7 @@ import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
 import Cardano.Address as Address exposing (CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30 exposing (WalletDescriptor)
+import Cardano.Cip95 as Cip95
 import Cardano.Gov as Gov
 import Cardano.Transaction as Transaction exposing (Transaction)
 import Cardano.TxIntent
@@ -164,6 +165,7 @@ type alias Model =
     , walletsDiscovered : List WalletDescriptor
     , wallet : Maybe Cip30.Wallet
     , walletUtxos : Maybe (Utxo.RefDict Output)
+    , walletDrepId : Maybe (Bytes CredentialHash)
     , protocolParams : Maybe ProtocolParams
     , epoch : WebData Int
     , proposals : WebData (Dict String ActiveProposal)
@@ -240,6 +242,7 @@ initialModel { jsonLdContexts, db, networkId, ipfsPreconfig, voterPreconfig } =
     , walletsDiscovered = []
     , wallet = Nothing
     , walletUtxos = Nothing
+    , walletDrepId = Nothing
     , protocolParams = Nothing
     , epoch = RemoteData.NotAsked
     , proposals = RemoteData.NotAsked
@@ -517,6 +520,7 @@ update msg model =
                             , ccsInfo = model.ccsInfo
                             , poolsInfo = model.poolsInfo
                             , loadedWallet = loadedWallet
+                            , drepId = model.walletDrepId
                             , jsonLdContexts = model.jsonLdContexts
                             , jsonRationaleToFile = jsonRationaleToFile
                             , pdfBytesToFile = pdfBytesToFile
@@ -690,7 +694,7 @@ update msg model =
             ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = List.filter (\ext -> ext == 95) supportedExtensions, watchInterval = Just 5 })) )
 
         ( DisconnectWalletClicked, _ ) ->
-            ( { model | wallet = Nothing, walletUtxos = Nothing }
+            ( { model | wallet = Nothing, walletUtxos = Nothing, walletDrepId = Nothing }
             , Cmd.none
             )
 
@@ -783,13 +787,16 @@ handleUrlChange route model =
 
 type ApiResponse
     = Cip30ApiResponse Cip30.ApiResponse
+    | Cip95ApiResponse Cip95.ApiResponse
 
 
 walletResponseDecoder : Decoder (Cip30.Response ApiResponse)
 walletResponseDecoder =
     Cip30.responseDecoder <|
         Dict.fromList
-            [ ( 30, \method -> JD.map Cip30ApiResponse (Cip30.apiDecoder method) ) ]
+            [ ( 30, \method -> JD.map Cip30ApiResponse (Cip30.apiDecoder method) )
+            , ( 95, \method -> JD.map Cip95ApiResponse (Cip95.apiDecoder method) )
+            ]
 
 
 handleWalletResponse : Cip30.Response ApiResponse -> Model -> ( Model, Cmd Msg )
@@ -804,15 +811,32 @@ handleWalletResponse response model =
         -- We just connected to the wallet, let’s ask for all that is still missing
         Cip30.EnabledWallet wallet ->
             ( { model | wallet = Just wallet, walletUtxos = Nothing }
-              -- Retrieve UTXOs from the main wallet
-            , Cip30.getUtxos wallet { amount = Nothing, paginate = Nothing }
-                |> Cip30.encodeRequest
-                |> toWallet
+            , Cmd.batch
+                -- Retrieve UTXOs from the main wallet
+                [ Cip30.getUtxos wallet { amount = Nothing, paginate = Nothing }
+                    |> Cip30.encodeRequest
+                    |> toWallet
+
+                -- Retrieve the DRep ID of the wallet if it supports CIP-95
+                , if List.member 95 (Cip30.walletDescriptor wallet).supportedExtensions then
+                    Cip95.getPubDRepKey wallet
+                        |> Cip30.encodeRequest
+                        |> toWallet
+
+                  else
+                    Cmd.none
+                ]
             )
 
         -- We just received the utxos
         Cip30.ApiResponse _ (Cip30ApiResponse (Cip30.WalletUtxos utxos)) ->
             ( { model | walletUtxos = Just (Utxo.refDictFromList utxos) }
+            , Cmd.none
+            )
+
+        -- We just received the DRep ID of the wallet
+        Cip30.ApiResponse _ (Cip95ApiResponse (Cip95.DrepKey drepKey)) ->
+            ( { model | walletDrepId = Just <| Bytes.blake2b224 drepKey }
             , Cmd.none
             )
 
@@ -1117,6 +1141,7 @@ viewContent model =
             Page.Preparation.view
                 { wrapMsg = PreparationPageMsg
                 , loadedWallet = loadedWallet
+                , drepId = model.walletDrepId
                 , epoch = RemoteData.toMaybe model.epoch
                 , proposals = model.proposals
                 , jsonLdContexts = model.jsonLdContexts

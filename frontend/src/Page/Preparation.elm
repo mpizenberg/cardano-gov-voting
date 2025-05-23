@@ -510,6 +510,7 @@ type alias UpdateContext msg =
     , ccsInfo : Dict String CcInfo
     , poolsInfo : Dict String PoolInfo
     , loadedWallet : Maybe LoadedWallet
+    , drepId : Maybe (Bytes CredentialHash)
     , jsonLdContexts : JsonLdContexts
     , jsonRationaleToFile : { fileContent : String, fileName : String } -> Cmd msg
     , pdfBytesToFile : { fileContentHex : String, fileName : String } -> Cmd msg
@@ -2464,6 +2465,7 @@ allPrepSteps { loadedWallet, costModels } m =
 type alias ViewContext msg =
     { wrapMsg : Msg -> msg
     , loadedWallet : Maybe LoadedWallet
+    , drepId : Maybe (Bytes CredentialHash)
     , epoch : Maybe Int
     , proposals : WebData (Dict String ActiveProposal)
     , jsonLdContexts : JsonLdContexts
@@ -2525,18 +2527,30 @@ viewVoterIdentificationStep ctx step =
 
                 voterCard =
                     Helper.viewVoterCard VoterGovIdChange currentGovId
+
+                voterPreconfig =
+                    case ctx.drepId of
+                        Nothing ->
+                            ctx.voterPreconfig
+
+                        Just id ->
+                            { voterType = "DRep"
+                            , description = "Vote using your CIP-95 wallet DRep ID"
+                            , govId = Gov.idToBech32 <| Gov.DrepId <| VKeyHash id
+                            }
+                                :: ctx.voterPreconfig
             in
             Html.map ctx.wrapMsg <|
                 div []
                     [ Helper.sectionTitle "Voter identification"
                     , Html.p [ HA.class "mb-4" ]
-                        (if List.isEmpty ctx.voterPreconfig then
+                        (if List.isEmpty voterPreconfig then
                             [ text "" ]
 
                          else
-                            [ text "Select a predefined voter role or enter your own governance ID" ]
+                            [ text "Select a predefined voter role or enter a custom governance ID" ]
                         )
-                    , Helper.viewVoterGrid (List.map voterCard ctx.voterPreconfig)
+                    , Helper.viewVoterGrid (List.map voterCard voterPreconfig)
                     , div [ HA.style "margin-bottom" "1.5rem" ]
                         [ viewCustomVoterCard form ]
                     , Html.Lazy.lazy viewValidGovIdForm form

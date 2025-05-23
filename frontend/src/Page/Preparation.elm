@@ -524,7 +524,6 @@ type alias JsonLdContexts =
 
 type alias LoadedWallet =
     { wallet : Cip30.Wallet
-    , changeAddress : Address
     , utxos : Utxo.RefDict Output
     }
 
@@ -2419,7 +2418,7 @@ type alias TxRequirements =
 allPrepSteps : { a | loadedWallet : Maybe LoadedWallet, costModels : Maybe CostModels } -> InnerModel -> Result String TxRequirements
 allPrepSteps { loadedWallet, costModels } m =
     case ( costModels, ( m.voterStep, m.pickProposalStep, m.rationaleSignatureStep ), ( m.permanentStorageStep, loadedWallet ) ) of
-        ( Just theCostModels, ( Done _ voter, Done _ p, Done _ r ), ( Done _ s, Just { utxos, changeAddress } ) ) ->
+        ( Just theCostModels, ( Done _ voter, Done _ p, Done _ r ), ( Done _ s, Just { utxos, wallet } ) ) ->
             Ok
                 { voter = voter
                 , actionId = p.id
@@ -2432,7 +2431,7 @@ allPrepSteps { loadedWallet, costModels } m =
                             |> Bytes.fromU8
                     }
                 , localStateUtxos = Dict.Any.union m.someRefUtxos utxos
-                , walletAddress = changeAddress
+                , walletAddress = Cip30.walletChangeAddress wallet
                 , costModels = theCostModels
                 }
 
@@ -3984,8 +3983,8 @@ viewSignTxStep ctx voterStep buildTxStep =
 
                 walletSpendingCredential =
                     case ctx.loadedWallet of
-                        Just { changeAddress } ->
-                            Address.extractPubKeyHash changeAddress
+                        Just { wallet } ->
+                            Address.extractPubKeyHash (Cip30.walletChangeAddress wallet)
                                 |> Maybe.map (\hash -> [ ( Bytes.toHex hash, "Wallet spending key" ) ])
                                 |> Maybe.withDefault []
 
@@ -3994,8 +3993,8 @@ viewSignTxStep ctx voterStep buildTxStep =
 
                 walletStakeCredential =
                     case ctx.loadedWallet of
-                        Just { changeAddress } ->
-                            Address.extractStakeKeyHash changeAddress
+                        Just { wallet } ->
+                            Address.extractStakeKeyHash (Cip30.walletChangeAddress wallet)
                                 |> Maybe.map (\hash -> [ ( Bytes.toHex hash, "Wallet stake key" ) ])
                                 |> Maybe.withDefault []
 

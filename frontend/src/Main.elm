@@ -50,7 +50,7 @@ import Api exposing (ActiveProposal, CcInfo, DrepInfo, PoolInfo, ProtocolParams)
 import AppUrl exposing (AppUrl)
 import Browser
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano.Address as Address exposing (Address, CredentialHash, NetworkId(..))
+import Cardano.Address as Address exposing (CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30 exposing (WalletDescriptor)
 import Cardano.Gov as Gov
 import Cardano.Transaction as Transaction exposing (Transaction)
@@ -163,7 +163,6 @@ type alias Model =
     , networkDropdownIsOpen : Bool
     , walletsDiscovered : List WalletDescriptor
     , wallet : Maybe Cip30.Wallet
-    , walletChangeAddress : Maybe Address
     , walletUtxos : Maybe (Utxo.RefDict Output)
     , protocolParams : Maybe ProtocolParams
     , epoch : WebData Int
@@ -241,7 +240,6 @@ initialModel { jsonLdContexts, db, networkId, ipfsPreconfig, voterPreconfig } =
     , walletsDiscovered = []
     , wallet = Nothing
     , walletUtxos = Nothing
-    , walletChangeAddress = Nothing
     , protocolParams = Nothing
     , epoch = RemoteData.NotAsked
     , proposals = RemoteData.NotAsked
@@ -276,7 +274,7 @@ type Msg
     | ToggleMobileMenu
     | ToggleWalletDropdown
     | ToggleNetworkDropdown
-    | ConnectWalletClicked { id : String }
+    | ConnectWalletClicked { id : String, supportedExtensions : List Int }
     | DisconnectWalletClicked
     | NetworkChanged NetworkId
       -- Preparation page
@@ -489,7 +487,7 @@ update msg model =
                     ( { model | errors = Debug.toString err :: model.errors }, Cmd.none )
 
         ( WalletMsg value, _ ) ->
-            case JD.decodeValue Cip30.responseDecoder value of
+            case JD.decodeValue walletResponseDecoder value of
                 Ok response ->
                     handleWalletResponse response model
 
@@ -503,9 +501,9 @@ update msg model =
                 PreparationPage pageModel ->
                     let
                         loadedWallet =
-                            case ( model.wallet, model.walletChangeAddress, model.walletUtxos ) of
-                                ( Just wallet, Just address, Just utxos ) ->
-                                    Just { wallet = wallet, changeAddress = address, utxos = utxos }
+                            case ( model.wallet, model.walletUtxos ) of
+                                ( Just wallet, Just utxos ) ->
+                                    Just { wallet = wallet, utxos = utxos }
 
                                 _ ->
                                     Nothing
@@ -591,9 +589,9 @@ update msg model =
                         ctx =
                             { wrapMsg = MultisigPageMsg
                             , wallet =
-                                case ( model.wallet, model.walletChangeAddress, model.walletUtxos ) of
-                                    ( Just wallet, Just address, Just utxos ) ->
-                                        Just { wallet = wallet, changeAddress = address, utxos = utxos }
+                                case ( model.wallet, model.walletUtxos ) of
+                                    ( Just wallet, Just utxos ) ->
+                                        Just { wallet = wallet, utxos = utxos }
 
                                     _ ->
                                         Nothing
@@ -688,11 +686,11 @@ update msg model =
             , Cmd.none
             )
 
-        ( ConnectWalletClicked { id }, _ ) ->
-            ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = [] })) )
+        ( ConnectWalletClicked { id, supportedExtensions }, _ ) ->
+            ( model, toWallet (Cip30.encodeRequest (Cip30.enableWallet { id = id, extensions = List.filter (\ext -> ext == 95) supportedExtensions, watchInterval = Just 5 })) )
 
         ( DisconnectWalletClicked, _ ) ->
-            ( { model | wallet = Nothing, walletChangeAddress = Nothing, walletUtxos = Nothing }
+            ( { model | wallet = Nothing, walletUtxos = Nothing }
             , Cmd.none
             )
 
@@ -783,7 +781,18 @@ handleUrlChange route model =
             )
 
 
-handleWalletResponse : Cip30.Response -> Model -> ( Model, Cmd Msg )
+type ApiResponse
+    = Cip30ApiResponse Cip30.ApiResponse
+
+
+walletResponseDecoder : Decoder (Cip30.Response ApiResponse)
+walletResponseDecoder =
+    Cip30.responseDecoder <|
+        Dict.fromList
+            [ ( 30, \method -> JD.map Cip30ApiResponse (Cip30.apiDecoder method) ) ]
+
+
+handleWalletResponse : Cip30.Response ApiResponse -> Model -> ( Model, Cmd Msg )
 handleWalletResponse response model =
     case response of
         -- We just discovered available wallets
@@ -794,32 +803,21 @@ handleWalletResponse response model =
 
         -- We just connected to the wallet, let’s ask for all that is still missing
         Cip30.EnabledWallet wallet ->
-            ( { model | wallet = Just wallet }
-            , Cmd.batch
-                -- Retrieve the wallet change address
-                [ toWallet (Cip30.encodeRequest (Cip30.getChangeAddress wallet))
-
-                -- Retrieve UTXOs from the main wallet
-                , Cip30.getUtxos wallet { amount = Nothing, paginate = Nothing }
-                    |> Cip30.encodeRequest
-                    |> toWallet
-                ]
-            )
-
-        -- Received the wallet change address
-        Cip30.ApiResponse _ (Cip30.ChangeAddress address) ->
-            ( { model | walletChangeAddress = Just address }
-            , Cmd.none
+            ( { model | wallet = Just wallet, walletUtxos = Nothing }
+              -- Retrieve UTXOs from the main wallet
+            , Cip30.getUtxos wallet { amount = Nothing, paginate = Nothing }
+                |> Cip30.encodeRequest
+                |> toWallet
             )
 
         -- We just received the utxos
-        Cip30.ApiResponse _ (Cip30.WalletUtxos utxos) ->
+        Cip30.ApiResponse _ (Cip30ApiResponse (Cip30.WalletUtxos utxos)) ->
             ( { model | walletUtxos = Just (Utxo.refDictFromList utxos) }
             , Cmd.none
             )
 
         -- The wallet just signed a Tx
-        Cip30.ApiResponse _ (Cip30.SignedTx vkeyWitnesses) ->
+        Cip30.ApiResponse _ (Cip30ApiResponse (Cip30.SignedTx vkeyWitnesses)) ->
             case model.page of
                 SigningPage pageModel ->
                     ( { model | page = SigningPage <| Page.Signing.addWalletSignatures vkeyWitnesses pageModel }
@@ -831,7 +829,7 @@ handleWalletResponse response model =
                     ( model, Cmd.none )
 
         -- The wallet just submitted a Tx
-        Cip30.ApiResponse _ (Cip30.SubmittedTx txId) ->
+        Cip30.ApiResponse _ (Cip30ApiResponse (Cip30.SubmittedTx txId)) ->
             case model.page of
                 SigningPage pageModel ->
                     ( { model
@@ -1075,7 +1073,6 @@ viewHeader model =
             { walletDropdownIsOpen = model.walletDropdownIsOpen
             , walletsDiscovered = model.walletsDiscovered
             , wallet = model.wallet
-            , walletChangeAddress = model.walletChangeAddress
             }
 
         walletConnectorMsgs =
@@ -1110,9 +1107,9 @@ viewContent model =
         PreparationPage prepModel ->
             let
                 loadedWallet =
-                    case ( model.wallet, model.walletChangeAddress, model.walletUtxos ) of
-                        ( Just wallet, Just address, Just utxos ) ->
-                            Just { wallet = wallet, changeAddress = address, utxos = utxos }
+                    case ( model.wallet, model.walletUtxos ) of
+                        ( Just wallet, Just utxos ) ->
+                            Just { wallet = wallet, utxos = utxos }
 
                         _ ->
                             Nothing

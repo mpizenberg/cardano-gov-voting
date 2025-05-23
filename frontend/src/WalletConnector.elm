@@ -1,6 +1,6 @@
 module WalletConnector exposing (Msgs, State, view, viewMobile)
 
-import Cardano.Address as Address exposing (Address)
+import Cardano.Address as Address
 import Cardano.Cip30 as Cip30
 import Helper exposing (applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle, viewWalletButton)
 import Html exposing (Html, div, img, li, span, text, ul)
@@ -11,13 +11,12 @@ type alias State =
     { walletDropdownIsOpen : Bool
     , walletsDiscovered : List Cip30.WalletDescriptor
     , wallet : Maybe Cip30.Wallet
-    , walletChangeAddress : Maybe Address
     }
 
 
 type alias Msgs msg =
     { toggleWalletDropdown : msg
-    , connectWalletClicked : { id : String } -> msg
+    , connectWalletClicked : { id : String, supportedExtensions : List Int } -> msg
     , disconnectWalletClicked : msg
     }
 
@@ -29,7 +28,7 @@ view msg state =
             viewAvailableWallets state.walletsDiscovered state.walletDropdownIsOpen msg False
 
         Just wallet ->
-            viewConnectedWallet wallet state.walletChangeAddress msg
+            viewConnectedWallet wallet msg
 
 
 viewMobile : Msgs msg -> State -> Html msg
@@ -39,21 +38,16 @@ viewMobile msg state =
             viewAvailableWallets state.walletsDiscovered state.walletDropdownIsOpen msg True
 
         Just wallet ->
-            viewConnectedWallet wallet state.walletChangeAddress msg
+            viewConnectedWallet wallet msg
 
 
-viewConnectedWallet : Cip30.Wallet -> Maybe Address -> Msgs msg -> Html msg
-viewConnectedWallet wallet maybeChangeAddress msg =
+viewConnectedWallet : Cip30.Wallet -> Msgs msg -> Html msg
+viewConnectedWallet wallet msg =
     div [ class "flex items-center" ]
         [ div [ class "text-xs mr-3" ]
             [ div [ class "font-medium" ] [ text (Cip30.walletDescriptor wallet).name ]
-            , case maybeChangeAddress of
-                Just addr ->
-                    div [ class "text-xs text-gray-500" ]
-                        [ text (Helper.shortenedHex 9 (Address.toBech32 addr)) ]
-
-                Nothing ->
-                    text ""
+            , div [ class "text-xs text-gray-500" ]
+                [ text (Helper.shortenedHex 9 (Address.toBech32 <| Cip30.walletChangeAddress wallet)) ]
             ]
         , viewWalletButton "Disconnect" msg.disconnectWalletClicked []
         ]
@@ -100,7 +94,7 @@ viewAvailableWallets wallets dropdownOpen msg isMobile =
 
 viewWalletDropdownItem : Msgs msg -> Cip30.WalletDescriptor -> Html msg
 viewWalletDropdownItem msg wallet =
-    li (applyDropdownItemStyle (msg.connectWalletClicked { id = wallet.id }))
+    li (applyDropdownItemStyle (msg.connectWalletClicked { id = wallet.id, supportedExtensions = wallet.supportedExtensions }))
         [ if not (String.isEmpty wallet.icon) then
             div applyWalletIconContainerStyle
                 [ img

@@ -21,7 +21,7 @@ Key design considerations:
 -}
 
 import Bytes.Comparable as Bytes exposing (Bytes)
-import Cardano.Address as Address exposing (Address, Credential, CredentialHash, NetworkId(..))
+import Cardano.Address as Address exposing (Credential, CredentialHash, NetworkId(..))
 import Cardano.Cip30 as Cip30
 import Cardano.CoinSelection as CoinSelection
 import Cardano.Gov as Gov exposing (CostModels)
@@ -135,7 +135,6 @@ type alias UpdateContext msg =
 
 type alias LoadedWallet =
     { wallet : Cip30.Wallet
-    , changeAddress : Address
     , utxos : Utxo.RefDict Output
     }
 
@@ -402,7 +401,7 @@ buildRegisterTx w costModels unsortedCreds model =
         overpayedOutputWithScript =
             { address =
                 Address.Shelley
-                    { networkId = Address.extractNetworkId w.changeAddress |> Maybe.withDefault Testnet
+                    { networkId = Address.extractNetworkId (Cip30.walletChangeAddress w.wallet) |> Maybe.withDefault Testnet
                     , paymentCredential = drepCred
                     , stakeCredential = Nothing
                     }
@@ -428,7 +427,7 @@ buildRegisterTx w costModels unsortedCreds model =
                     Ok
                         [ Spend <|
                             FromWallet
-                                { address = w.changeAddress
+                                { address = Cip30.walletChangeAddress w.wallet
                                 , value = Cardano.Value.onlyLovelace depositAmount
                                 , guaranteedUtxos = []
                                 }
@@ -439,7 +438,7 @@ buildRegisterTx w costModels unsortedCreds model =
                     Ok
                         [ Spend <|
                             FromWallet
-                                { address = w.changeAddress
+                                { address = Cip30.walletChangeAddress w.wallet
                                 , value = Cardano.Value.onlyLovelace depositAmount
                                 , guaranteedUtxos = []
                                 }
@@ -450,14 +449,14 @@ buildRegisterTx w costModels unsortedCreds model =
                     Ok
                         [ Spend <|
                             FromWallet
-                                { address = w.changeAddress
+                                { address = Cip30.walletChangeAddress w.wallet
                                 , value = Cardano.Value.onlyLovelace depositAmount
                                 , guaranteedUtxos = []
                                 }
                         , registrationIntent
                         , Spend <|
                             FromWallet
-                                { address = w.changeAddress
+                                { address = Cip30.walletChangeAddress w.wallet
                                 , value = outputWithScript.amount
                                 , guaranteedUtxos = []
                                 }
@@ -473,7 +472,7 @@ buildRegisterTx w costModels unsortedCreds model =
                 , evalScriptsCosts = Uplc.evalScriptsCosts Uplc.defaultVmConfig
                 , costModels = costModels
                 }
-                (AutoFee { paymentSource = w.changeAddress })
+                (AutoFee { paymentSource = Cip30.walletChangeAddress w.wallet })
                 []
                 >> Result.mapError Debug.toString
             )
@@ -505,7 +504,7 @@ buildUnregisterTx w costModels unsortedCreds model =
                     , refund = refundAmount
                     }
     in
-    [ unregistrationIntent, SendTo w.changeAddress <| Cardano.Value.onlyLovelace refundAmount ]
+    [ unregistrationIntent, SendTo (Cip30.walletChangeAddress w.wallet) <| Cardano.Value.onlyLovelace refundAmount ]
         |> TxIntent.finalizeAdvanced
             { govState = TxIntent.emptyGovernanceState
             , localStateUtxos = w.utxos
@@ -513,7 +512,7 @@ buildUnregisterTx w costModels unsortedCreds model =
             , evalScriptsCosts = Uplc.evalScriptsCosts Uplc.defaultVmConfig
             , costModels = costModels
             }
-            (AutoFee { paymentSource = w.changeAddress })
+            (AutoFee { paymentSource = Cip30.walletChangeAddress w.wallet })
             []
         |> Result.mapError Debug.toString
         |> Result.map (\tx -> ( tx, nativeScript, scriptHash ))

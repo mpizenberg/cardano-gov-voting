@@ -3158,7 +3158,6 @@ viewStorageConfigStep ctx step =
                         , text " Here we provide an easy way to store it on IPFS."
                         ]
                     , Helper.storageConfigCard "IPFS Method"
-                        []
                         [ Helper.viewGrid 240
                             [ Helper.storageMethodOption ctx.ipfsPreconfig.label (form.storageMethod == PreconfigIPFS ctx.ipfsPreconfig) (StorageMethodSelected <| PreconfigIPFS ctx.ipfsPreconfig)
                             , Helper.storageMethodOption "Blockfrost IPFS" (form.storageMethod == BlockfrostIPFS) (StorageMethodSelected BlockfrostIPFS)
@@ -3192,7 +3191,6 @@ viewStorageConfigStep ctx step =
             div []
                 [ Helper.sectionTitle "Storage Configuration"
                 , Helper.storageConfigCard "Selected Storage Method"
-                    []
                     [ viewStorageConfigInfo storageConfig ]
                 , Html.p [ HA.style "margin-top" "1rem" ]
                     [ Html.map ctx.wrapMsg <| Helper.viewButton "Change storage configuration" ValidateStorageConfigButtonClicked ]
@@ -3416,41 +3414,27 @@ viewRationaleForm form =
                 "Summary"
                 "Clearly state your stance, summarize your rationale with your main argument. Limited to 300 characters."
                 (Helper.rationaleTextArea RationaleSummaryChange (Just 300) form.summary)
-                False
-                0
             , Helper.rationaleCard
                 "Rationale Statement"
                 "Fully describe your rationale, with your arguments in full details. Use markdown with heading level 2 (##) or higher."
                 (viewStatementInput form.pdfAutogen form.rationaleStatement)
-                True
-                1
             , Helper.rationaleCard
                 "Precedent Discussion"
                 "Optional: Discuss what you feel is relevant precedent."
                 (Helper.rationaleMarkdownInput form.precedentDiscussion PrecedentDiscussionChange)
-                False
-                2
             , Helper.rationaleCard
                 "Counter Argument Discussion"
                 "Optional: Discuss significant counter arguments to your position."
                 (Helper.rationaleMarkdownInput form.counterArgumentDiscussion CounterArgumentChange)
-                False
-                3
             , Helper.rationaleCard
                 "Conclusion"
                 "Optional: Final thoughts on your position."
                 (Helper.rationaleTextArea ConclusionChange Nothing form.conclusion)
-                False
-                4
             , Helper.rationaleCard
                 "Internal Vote"
                 "If you vote as a group, you can report the group internal votes."
                 (viewInternalVoteInput form.internalVote)
-                False
-                5
             , Helper.referenceCard
-                form.references
-                6
                 (List.indexedMap viewOneRefForm form.references)
                 AddRefButtonClicked
             ]
@@ -3627,34 +3611,36 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
 
 viewCompletedRationaleSignature : ViewContext msg -> RationaleSignature -> Html msg
 viewCompletedRationaleSignature ctx ratSig =
-    Helper.stepCard
-        [ if List.isEmpty ratSig.authors then
-            Html.p
-                [ HA.style "color" "#4A5568"
-                , HA.style "font-size" "0.9375rem"
-                ]
-                [ text "No signatures were added to this rationale." ]
-
-          else
-            div []
-                [ Html.p
+    div []
+        [ Helper.stepCard
+            [ if List.isEmpty ratSig.authors then
+                Html.p
                     [ HA.style "color" "#4A5568"
                     , HA.style "font-size" "0.9375rem"
-                    , HA.style "margin-bottom" "1rem"
                     ]
-                    [ text "This rationale includes the following signatures:" ]
-                , Html.ul
-                    [ HA.style "list-style-type" "none"
-                    , HA.style "padding" "0"
-                    , HA.style "display" "flex"
-                    , HA.style "flex-direction" "column"
-                    , HA.style "gap" "0.75rem"
+                    [ text "No author was added to this rationale." ]
+
+              else
+                div []
+                    [ Html.p
+                        [ HA.style "color" "#4A5568"
+                        , HA.style "font-size" "0.9375rem"
+                        , HA.style "margin-bottom" "1rem"
+                        ]
+                        [ text "This rationale has the following authors:" ]
+                    , Html.ul
+                        [ HA.style "list-style-type" "none"
+                        , HA.style "padding" "0"
+                        , HA.style "display" "flex"
+                        , HA.style "flex-direction" "column"
+                        , HA.style "gap" "0.75rem"
+                        ]
+                        (List.map viewSignerCard ratSig.authors)
                     ]
-                    (List.map viewSignerCard ratSig.authors)
-                ]
+            ]
         , Html.p
             [ HA.style "margin-top" "1rem" ]
-            [ Html.map ctx.wrapMsg <| Helper.viewButton "Edit Change signatures" ChangeAuthorsButtonClicked ]
+            [ Html.map ctx.wrapMsg <| Helper.viewButton "Change authors" ChangeAuthorsButtonClicked ]
         ]
 
 

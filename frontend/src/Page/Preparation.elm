@@ -1502,8 +1502,19 @@ confirmVoter ctx form loadedRefUtxos =
                 RemoteData.Success scriptInfo ->
                     validateScriptVoter ctx form loadedRefUtxos Witness.WithDrepCred scriptInfo
 
-        _ ->
-            Debug.todo ""
+        Just (CcHotCredId (ScriptHash _)) ->
+            case form.scriptInfo of
+                RemoteData.NotAsked ->
+                    justError "Script info isn’t loading yet govId is a script. Please report the error."
+
+                RemoteData.Loading ->
+                    justError "Script info is still loading, please wait."
+
+                RemoteData.Failure error ->
+                    justError <| "There was an error loading the script info. Are you sure you registered? " ++ Debug.toString error
+
+                RemoteData.Success scriptInfo ->
+                    validateScriptVoter ctx form loadedRefUtxos Witness.WithDrepCred scriptInfo
 
 
 validateScriptVoter : UpdateContext msg -> VoterPreparationForm -> Utxo.RefDict Output -> (Witness.Credential -> Witness.Voter) -> ScriptInfo -> ( Step VoterPreparationForm Witness.Voter Witness.Voter, Cmd Msg, Maybe MsgToParent )

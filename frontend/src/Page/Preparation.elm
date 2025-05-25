@@ -3637,10 +3637,9 @@ viewCompletedRationaleSignature ctx ratSig =
                         ]
                         (List.map viewSignerCard ratSig.authors)
                     ]
+            , Html.p [ HA.style "margin-top" "1rem" ] [ Helper.downloadJSONButton ratSig.signedJson ]
             ]
-        , Html.p
-            [ HA.style "margin-top" "1rem" ]
-            [ Html.map ctx.wrapMsg <| Helper.viewButton "Change authors" ChangeAuthorsButtonClicked ]
+        , Html.map ctx.wrapMsg <| Helper.viewButton "Change authors" ChangeAuthorsButtonClicked
         ]
 
 
@@ -3663,8 +3662,7 @@ viewRationaleSignatureForm jsonLdContexts actionId ({ authors } as form) =
                 ++ "   --out-file rationale-signed.json"
     in
     div []
-        [ Helper.jsonLdDocumentCard jsonRationale (Helper.downloadJSONButton jsonRationale)
-        , Helper.authorsCard
+        [ Helper.authorsCard
             [ div []
                 [ Html.h3
                     [ HA.style "font-weight" "600"
@@ -3862,6 +3860,7 @@ viewCompletedStorage r storage =
                 , HA.style "font-size" "0.9375rem"
                 ]
                 [ text "Your file has been uploaded to IPFS. File pinning is ongoing and may take a few hours to complete. We recommend saving a local copy of your JSON file in case you need to re-upload it in the future." ]
+            , Html.p [ HA.style "margin" "1rem 0rem" ] [ Helper.downloadJSONButton r.signedJson ]
             , Helper.storageInfoGrid infoItems
             ]
         , Helper.viewButton "Add another storage location" AddOtherStorageButtonCLicked

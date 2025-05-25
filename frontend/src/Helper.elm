@@ -15,7 +15,7 @@ module Helper exposing
     , storageHeaderForm, storageInfoGrid, storageNotAvailableCard, storageUploadCard, uploadingSpinner, storageSuccessCard, fileInfoItem, externalLinkDisplay
     , rationaleCard, rationaleMarkdownInput, rationaleTextArea, pdfAutogenCheckbox, voteNumberInput, referenceCard, referenceForm
     , rationaleCompletedCard, optionalSection, formattedInternalVote, formattedReferences
-    , stepNotAvailableCard, jsonLdDocumentCard, downloadJSONButton, authorsCard, addAuthorButton, codeSnippetBox, noAuthorsPlaceholder
+    , stepNotAvailableCard, downloadJSONButton, authorsCard, addAuthorButton, codeSnippetBox, noAuthorsPlaceholder
     , signerCard, authorForm, labeledField, readOnlyField, signatureField, formButtonsRow, secondaryButton, primaryButton, loadSignatureButton
     , stepCard, txResultCard, voteButton, txDetailsContainer, txPreContainer, missingStepsList, missingStepItem, loadingSpinner
     , signingStepCard, keyListItem, signingButton
@@ -95,7 +95,7 @@ and are potentially useful in multiple places.
 
 # Document Creation Components
 
-@docs stepNotAvailableCard, jsonLdDocumentCard, downloadJSONButton, authorsCard, addAuthorButton, codeSnippetBox, noAuthorsPlaceholder
+@docs stepNotAvailableCard, downloadJSONButton, authorsCard, addAuthorButton, codeSnippetBox, noAuthorsPlaceholder
 @docs signerCard, authorForm, labeledField, readOnlyField, signatureField, formButtonsRow, secondaryButton, primaryButton, loadSignatureButton
 
 
@@ -2041,56 +2041,6 @@ stepNotAvailableCard content =
     cardContainer []
         [ cardHeader [] "Step Not Available" "" []
         , cardContent [] content
-        ]
-
-
-{-| Card for JSON-LD rationale document
--}
-jsonLdDocumentCard : String -> Html msg -> Html msg
-jsonLdDocumentCard jsonRationale downloadButton =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        , HA.style "margin-bottom" "1.5rem"
-        ]
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            ]
-            [ Html.h3
-                [ HA.style "font-weight" "600"
-                , HA.style "font-size" "1.125rem"
-                , HA.style "color" "#1A202C"
-                , HA.style "line-height" "1.4"
-                ]
-                [ text "JSON-LD Rationale Document" ]
-            ]
-        , div
-            [ HA.style "padding" "1.25rem"
-            ]
-            [ Html.p
-                [ HA.style "color" "#4A5568"
-                , HA.style "margin-bottom" "1rem"
-                ]
-                [ text "Here is the JSON-LD rationale file generated from your rationale inputs." ]
-            , div
-                [ HA.style "max-height" "200px"
-                , HA.style "overflow-y" "auto"
-                , HA.style "background-color" "#F9FAFB"
-                , HA.style "border" "1px solid #E2E8F0"
-                , HA.style "border-radius" "0.375rem"
-                , HA.style "padding" "0.75rem"
-                , HA.style "font-family" "monospace"
-                , HA.style "font-size" "0.75rem"
-                , HA.style "margin-bottom" "1rem"
-                ]
-                [ text jsonRationale ]
-            , downloadButton
-            ]
         ]
 
 

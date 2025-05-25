@@ -3594,8 +3594,8 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
             ( _, Validating _ _, _ ) ->
                 Helper.stepNotAvailableCard [ text "Please wait for the rationale creation to complete." ]
 
-            ( Done _ { id }, Done _ _, Preparing form ) ->
-                Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts id form
+            ( Done _ _, Done _ _, Preparing form ) ->
+                Html.map ctx.wrapMsg <| viewRationaleSignatureForm form
 
             ( _, Done _ _, Preparing _ ) ->
                 Helper.stepNotAvailableCard [ text "Please select a proposal first." ]
@@ -3648,12 +3648,9 @@ viewSignerCard { name, witnessAlgorithm, publicKey, signature } =
     Helper.signerCard name signature witnessAlgorithm publicKey (Maybe.withDefault "" signature)
 
 
-viewRationaleSignatureForm : JsonLdContexts -> Gov.ActionId -> RationaleSignatureForm -> Html Msg
-viewRationaleSignatureForm jsonLdContexts actionId ({ authors } as form) =
+viewRationaleSignatureForm : RationaleSignatureForm -> Html Msg
+viewRationaleSignatureForm { authors } =
     let
-        jsonRationale =
-            (rationaleSignatureFromForm jsonLdContexts actionId { form | authors = [] }).signedJson
-
         cardanoSignerExample =
             "cardano-signer.js sign --cip100 \\\n"
                 ++ "   --data-file rationale.json \\\n"

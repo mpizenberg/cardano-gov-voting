@@ -1,7 +1,7 @@
 module Helper exposing
     ( shortenedHex, prettyAdaLovelace
     , textFieldInline
-    , formContainer, boxContainer
+    , formContainer, boxContainer, viewGrid
     , viewButton, viewWalletButton
     , applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle
     , viewActionTypeIcon
@@ -11,7 +11,7 @@ module Helper exposing
     , PreconfVoter, viewVoterGrid, viewVoterCard, voterCustomCard, votingPowerDisplay, scriptInfoContainer, viewVoterCredDetails, viewVoterDetailsItem, viewCredInfo
     , viewUtxoRefForm, scriptSignerSection, scriptSignerCheckbox, viewIdentifiedVoterCard, viewVoterInfoItem
     , proposalListContainer, showMoreButton, proposalCard, selectedProposalCard, proposalDetailsItem
-    , storageConfigCard, storageProviderGrid, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, storageHeaderInput
+    , storageConfigCard, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, storageHeaderInput
     , storageHeaderForm, storageInfoGrid, storageNotAvailableCard, storageUploadCard, uploadingSpinner, storageSuccessCard, fileInfoItem, externalLinkDisplay
     , rationaleCard, rationaleMarkdownInput, rationaleTextArea, pdfAutogenCheckbox, voteNumberInput, referenceCard, referenceForm
     , rationaleCompletedCard, optionalSection, formattedInternalVote, formattedReferences
@@ -37,7 +37,7 @@ and are potentially useful in multiple places.
 
 # Containers
 
-@docs formContainer, boxContainer
+@docs formContainer, boxContainer, viewGrid
 
 
 # Buttons
@@ -83,7 +83,7 @@ and are potentially useful in multiple places.
 
 # Storage Configuration Components
 
-@docs storageConfigCard, storageProviderGrid, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, storageHeaderInput
+@docs storageConfigCard, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, storageHeaderInput
 @docs storageHeaderForm, storageInfoGrid, storageNotAvailableCard, storageUploadCard, uploadingSpinner, storageSuccessCard, fileInfoItem, externalLinkDisplay
 
 
@@ -813,13 +813,18 @@ viewVoterGrid cards =
         text ""
 
     else
-        div
-            [ HA.style "display" "grid"
-            , HA.style "grid-template-columns" "repeat(auto-fill, minmax(220px, 1fr))"
-            , HA.style "gap" "1.5rem"
-            , HA.style "margin-bottom" "1.5rem"
-            ]
-            cards
+        viewGrid 220 cards
+
+
+viewGrid : Int -> List (Html msg) -> Html msg
+viewGrid minmaxWidth elems =
+    div
+        [ HA.style "display" "grid"
+        , HA.style "grid-template-columns" ("repeat(auto-fill, minmax(" ++ String.fromInt minmaxWidth ++ "px, 1fr))")
+        , HA.style "gap" "1.5rem"
+        , HA.style "margin-bottom" "1.5rem"
+        ]
+        elems
 
 
 type alias PreconfVoter =
@@ -1166,7 +1171,7 @@ proposalListContainer : String -> Int -> List (Html msg) -> Html msg
 proposalListContainer title totalCount content =
     div []
         [ proposalListHeader title totalCount
-        , proposalGrid content
+        , viewGrid 250 content
         ]
 
 
@@ -1177,18 +1182,6 @@ proposalListHeader title count =
     Html.p
         [ HA.style "margin-bottom" "1rem" ]
         [ text <| title ++ " (" ++ String.fromInt count ++ " available):" ]
-
-
-{-| Grid layout for proposal cards
--}
-proposalGrid : List (Html msg) -> Html msg
-proposalGrid cards =
-    div
-        [ HA.style "display" "grid"
-        , HA.style "grid-template-columns" "repeat(auto-fill, minmax(250px, 1fr))"
-        , HA.style "gap" "1.5rem"
-        ]
-        cards
 
 
 {-| Show more button for paginated proposals
@@ -1442,19 +1435,6 @@ storageConfigCard title headerContent bodyContent =
             [ HA.style "padding" "1.25rem" ]
             bodyContent
         ]
-
-
-{-| Grid for displaying storage provider options
--}
-storageProviderGrid : List (Html msg) -> Html msg
-storageProviderGrid providers =
-    div
-        [ HA.style "display" "grid"
-        , HA.style "grid-template-columns" "repeat(auto-fill, minmax(240px, 1fr))"
-        , HA.style "gap" "1rem"
-        , HA.style "margin-bottom" "1.5rem"
-        ]
-        providers
 
 
 {-| Option card for a storage method

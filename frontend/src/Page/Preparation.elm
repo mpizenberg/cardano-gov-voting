@@ -3159,7 +3159,7 @@ viewStorageConfigStep ctx step =
                         ]
                     , Helper.storageConfigCard "IPFS Method"
                         []
-                        [ Helper.storageProviderGrid
+                        [ Helper.viewGrid 240
                             [ Helper.storageMethodOption ctx.ipfsPreconfig.label (form.storageMethod == PreconfigIPFS ctx.ipfsPreconfig) (StorageMethodSelected <| PreconfigIPFS ctx.ipfsPreconfig)
                             , Helper.storageMethodOption "Blockfrost IPFS" (form.storageMethod == BlockfrostIPFS) (StorageMethodSelected BlockfrostIPFS)
                             , Helper.storageMethodOption "NMKR IPFS" (form.storageMethod == NmkrIPFS) (StorageMethodSelected NmkrIPFS)

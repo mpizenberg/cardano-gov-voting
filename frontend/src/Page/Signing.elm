@@ -22,7 +22,7 @@ import Dict exposing (Dict)
 import File exposing (File)
 import File.Select
 import Helper
-import Html exposing (Html, a, div, text)
+import Html exposing (Html, div, text)
 import Html.Attributes as HA
 import Json.Decode as JD
 import Json.Encode as JE
@@ -344,29 +344,9 @@ view ctx model =
                             [ text title ]
 
                     cardContainer content =
-                        div
-                            [ HA.style "border" "1px solid #E2E8F0"
-                            , HA.style "border-radius" "0.75rem"
-                            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-                            , HA.style "background-color" "#FFFFFF"
-                            , HA.style "overflow" "hidden"
-                            , HA.style "margin-bottom" "1.5rem"
-                            ]
-                            [ div
-                                [ HA.style "background-color" "#F7FAFC"
-                                , HA.style "padding" "1rem 1.25rem"
-                                , HA.style "border-bottom" "1px solid #EDF2F7"
-                                ]
-                                [ Html.h3
-                                    [ HA.style "font-weight" "600"
-                                    , HA.style "font-size" "1.125rem"
-                                    , HA.style "color" "#1A202C"
-                                    ]
-                                    [ text "Transaction Details" ]
-                                ]
-                            , div
-                                [ HA.style "padding" "1.25rem" ]
-                                content
+                        Helper.cardContainer []
+                            [ Helper.cardHeader [] "Transaction Details" "" []
+                            , Helper.cardContent [] content
                             ]
 
                     gatheredSignaturesSection =
@@ -386,7 +366,7 @@ view ctx model =
                                     , HA.style "font-style" "italic"
                                     , HA.style "font-size" "0.875rem"
                                     ]
-                                    [ text "At least one signature is required to pay the transaction fees." ]
+                                    [ text "At least one of these signatures is to pay the transaction fees." ]
                                 ]
                             ]
 
@@ -408,28 +388,9 @@ view ctx model =
                                         , ( "cborHex", JE.string <| Bytes.toHex <| Transaction.serialize someTx )
                                         ]
                         in
-                        div
-                            [ HA.style "border" "1px solid #E2E8F0"
-                            , HA.style "border-radius" "0.75rem"
-                            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-                            , HA.style "background-color" "#FFFFFF"
-                            , HA.style "overflow" "hidden"
-                            , HA.style "margin-bottom" "1.5rem"
-                            ]
-                            [ div
-                                [ HA.style "background-color" "#F7FAFC"
-                                , HA.style "padding" "1rem 1.25rem"
-                                , HA.style "border-bottom" "1px solid #EDF2F7"
-                                ]
-                                [ Html.h3
-                                    [ HA.style "font-weight" "600"
-                                    , HA.style "font-size" "1.125rem"
-                                    , HA.style "color" "#1A202C"
-                                    ]
-                                    [ text "Sign Transaction" ]
-                                ]
-                            , div
-                                [ HA.style "padding" "1.25rem" ]
+                        Helper.cardContainer []
+                            [ Helper.cardHeader [] "Sign Transaction" "" []
+                            , Helper.cardContent []
                                 [ if ctx.wallet == Nothing then
                                     Html.p
                                         [ HA.style "color" "#F59E0B"
@@ -620,23 +581,7 @@ view ctx model =
                                                 Testnet ->
                                                     "https://preview.cardanoscan.io/transaction/"
                                       in
-                                      a
-                                        [ HA.href (cardanoScanBaseUrl ++ Bytes.toHex txId)
-                                        , HA.target "_blank"
-                                        , HA.style "display" "inline-flex"
-                                        , HA.style "align-items" "center"
-                                        , HA.style "justify-content" "center"
-                                        , HA.style "white-space" "nowrap"
-                                        , HA.style "border-radius" "9999px"
-                                        , HA.style "font-size" "0.875rem"
-                                        , HA.style "font-weight" "500"
-                                        , HA.style "transition" "all 0.2s"
-                                        , HA.style "outline" "none"
-                                        , HA.style "background-color" "#272727"
-                                        , HA.style "color" "#f7fafc"
-                                        , HA.style "padding" "0.75rem 1.5rem"
-                                        ]
-                                        [ text "View on CardanoScan" ]
+                                      Helper.externalLinkButton { url = cardanoScanBaseUrl ++ Bytes.toHex txId, label = "View on CardanoScan" }
                                     ]
                                 ]
                             ]

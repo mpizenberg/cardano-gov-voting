@@ -1,8 +1,8 @@
 module Helper exposing
     ( shortenedHex, prettyAdaLovelace
     , textFieldInline
-    , formContainer, boxContainer
-    , viewButton, viewWalletButton
+    , formContainer, boxContainer, viewGrid, cardContainer, cardHeader, cardContent
+    , viewButton, viewWalletButton, externalLinkButton
     , applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle
     , viewActionTypeIcon
     , sectionTitle, infoBox, viewError
@@ -11,11 +11,11 @@ module Helper exposing
     , PreconfVoter, viewVoterGrid, viewVoterCard, voterCustomCard, votingPowerDisplay, scriptInfoContainer, viewVoterCredDetails, viewVoterDetailsItem, viewCredInfo
     , viewUtxoRefForm, scriptSignerSection, scriptSignerCheckbox, viewIdentifiedVoterCard, viewVoterInfoItem
     , proposalListContainer, showMoreButton, proposalCard, selectedProposalCard, proposalDetailsItem
-    , storageConfigCard, storageProviderGrid, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, storageHeaderInput
+    , storageConfigCard, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, addHeaderButton, storageHeaderInput
     , storageHeaderForm, storageInfoGrid, storageNotAvailableCard, storageUploadCard, uploadingSpinner, storageSuccessCard, fileInfoItem, externalLinkDisplay
     , rationaleCard, rationaleMarkdownInput, rationaleTextArea, pdfAutogenCheckbox, voteNumberInput, referenceCard, referenceForm
     , rationaleCompletedCard, optionalSection, formattedInternalVote, formattedReferences
-    , stepNotAvailableCard, jsonLdDocumentCard, downloadJSONButton, authorsCard, addAuthorButton, codeSnippetBox, noAuthorsPlaceholder
+    , stepNotAvailableCard, downloadJSONButton, authorsCard, addAuthorButton, codeSnippetBox, noAuthorsPlaceholder
     , signerCard, authorForm, labeledField, readOnlyField, signatureField, formButtonsRow, secondaryButton, primaryButton, loadSignatureButton
     , stepCard, txResultCard, voteButton, txDetailsContainer, txPreContainer, missingStepsList, missingStepItem, loadingSpinner
     , signingStepCard, keyListItem, signingButton
@@ -37,12 +37,12 @@ and are potentially useful in multiple places.
 
 # Containers
 
-@docs formContainer, boxContainer
+@docs formContainer, boxContainer, viewGrid, cardContainer, cardHeader, cardContent
 
 
 # Buttons
 
-@docs viewButton, viewWalletButton
+@docs viewButton, viewWalletButton, externalLinkButton
 
 
 # Wallet Styling
@@ -83,7 +83,7 @@ and are potentially useful in multiple places.
 
 # Storage Configuration Components
 
-@docs storageConfigCard, storageProviderGrid, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, storageHeaderInput
+@docs storageConfigCard, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, addHeaderButton, storageHeaderInput
 @docs storageHeaderForm, storageInfoGrid, storageNotAvailableCard, storageUploadCard, uploadingSpinner, storageSuccessCard, fileInfoItem, externalLinkDisplay
 
 
@@ -95,7 +95,7 @@ and are potentially useful in multiple places.
 
 # Document Creation Components
 
-@docs stepNotAvailableCard, jsonLdDocumentCard, downloadJSONButton, authorsCard, addAuthorButton, codeSnippetBox, noAuthorsPlaceholder
+@docs stepNotAvailableCard, downloadJSONButton, authorsCard, addAuthorButton, codeSnippetBox, noAuthorsPlaceholder
 @docs signerCard, authorForm, labeledField, readOnlyField, signatureField, formButtonsRow, secondaryButton, primaryButton, loadSignatureButton
 
 
@@ -110,7 +110,7 @@ and are potentially useful in multiple places.
 
 -}
 
-import Html exposing (Html, button, div, text)
+import Html exposing (Html, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onCheck, onClick)
 import Markdown.Block
@@ -261,9 +261,35 @@ boxContainer content =
 -- BUTTONS #####################################################################
 
 
+squareButton : List (Html.Attribute msg) -> String -> msg -> Html msg
+squareButton otherAttributes label msg =
+    Html.button
+        (HA.style "font-weight" "500"
+            :: HA.style "border" "1px solid #e2e8f0"
+            :: HA.style "border-radius" "0.5rem"
+            :: HA.style "padding" "0.75rem 1.5rem"
+            :: HA.style "cursor" "pointer"
+            :: HA.style "font-size" "0.875rem"
+            :: onClick msg
+            :: otherAttributes
+        )
+        [ text label ]
+
+
+blackSquareButton : List (Html.Attribute msg) -> String -> msg -> Html msg
+blackSquareButton otherAttributes label msg =
+    squareButton
+        (HA.style "background-color" "#272727"
+            :: HA.style "color" "white"
+            :: otherAttributes
+        )
+        label
+        msg
+
+
 viewButton : String -> msg -> Html msg
 viewButton label msg =
-    button
+    Html.button
         (onClick msg
             :: HA.style "margin-top" "0.5rem"
             :: HA.style "margin-bottom" "0.5em"
@@ -274,9 +300,30 @@ viewButton label msg =
 
 viewWalletButton : String -> msg -> List (Html msg) -> Html msg
 viewWalletButton label msg content =
-    button
+    Html.button
         (onClick msg :: buttonCommonStyle)
         (text label :: content)
+
+
+externalLinkButton : { url : String, label : String } -> Html msg
+externalLinkButton { url, label } =
+    Html.a
+        [ HA.href url
+        , HA.target "_blank"
+        , HA.style "display" "inline-flex"
+        , HA.style "align-items" "center"
+        , HA.style "justify-content" "center"
+        , HA.style "white-space" "nowrap"
+        , HA.style "border-radius" "9999px"
+        , HA.style "font-size" "0.875rem"
+        , HA.style "font-weight" "500"
+        , HA.style "transition" "all 0.2s"
+        , HA.style "outline" "none"
+        , HA.style "background-color" "#272727"
+        , HA.style "color" "#f7fafc"
+        , HA.style "padding" "0.75rem 1.5rem"
+        ]
+        [ text <| label ++ " ↗" ]
 
 
 buttonCommonStyle : List (Html.Attribute msg)
@@ -450,20 +497,25 @@ cardContainer attributes content =
 
 {-| Standard header section for cards with title styling
 -}
-cardHeader : String -> List (Html msg) -> Html msg
-cardHeader title extraContent =
+cardHeader : List (Html.Attribute msg) -> String -> String -> List (Html msg) -> Html msg
+cardHeader attributes title subtitle extraContent =
     div
-        [ HA.style "background-color" "#F7FAFC"
-        , HA.style "padding" "1rem 1.25rem"
-        , HA.style "border-bottom" "1px solid #EDF2F7"
-        ]
-        (Html.h3
-            [ HA.style "font-weight" "600"
-            , HA.style "font-size" "1.125rem"
-            , HA.style "color" "#1A202C"
-            , HA.style "line-height" "1.4"
+        ([ HA.style "background-color" "#F7FAFC"
+         , HA.style "padding" "1rem 1.25rem"
+         , HA.style "border-bottom" "1px solid #EDF2F7"
+         ]
+            ++ attributes
+        )
+        (div []
+            [ Html.h3
+                [ HA.style "font-weight" "600"
+                , HA.style "font-size" "1.125rem"
+                , HA.style "color" "#1A202C"
+                , HA.style "line-height" "1.4"
+                ]
+                [ text title ]
+            , Html.p [ HA.style "font-size" "0.875rem" ] [ text subtitle ]
             ]
-            [ text title ]
             :: extraContent
         )
 
@@ -813,13 +865,18 @@ viewVoterGrid cards =
         text ""
 
     else
-        div
-            [ HA.style "display" "grid"
-            , HA.style "grid-template-columns" "repeat(auto-fill, minmax(220px, 1fr))"
-            , HA.style "gap" "1.5rem"
-            , HA.style "margin-bottom" "1.5rem"
-            ]
-            cards
+        viewGrid 220 cards
+
+
+viewGrid : Int -> List (Html msg) -> Html msg
+viewGrid minmaxWidth elems =
+    div
+        [ HA.style "display" "grid"
+        , HA.style "grid-template-columns" ("repeat(auto-fill, minmax(" ++ String.fromInt minmaxWidth ++ "px, 1fr))")
+        , HA.style "gap" "1.5rem"
+        , HA.style "margin-bottom" "1.5rem"
+        ]
+        elems
 
 
 type alias PreconfVoter =
@@ -1112,37 +1169,19 @@ scriptSignerCheckbox keyHex isChecked onCheckMsg =
 -}
 viewVoterIdentificationCard : String -> List (Html msg) -> Html msg
 viewVoterIdentificationCard title content =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        ]
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            ]
-            [ Html.h3
-                [ HA.style "font-weight" "600"
-                , HA.style "font-size" "1.125rem"
-                , HA.style "color" "#1A202C"
-                , HA.style "line-height" "1.4"
-                ]
-                [ text title ]
-            ]
-        , div
-            [ HA.style "padding" "1.25rem" ]
-            content
+    cardContainer []
+        [ cardHeader [] title "" []
+        , cardContent [] content
         ]
 
 
 {-| Display identified voter card with information
 -}
-viewIdentifiedVoterCard : List (Html msg) -> Html msg -> Html msg
-viewIdentifiedVoterCard content changeButton =
+viewIdentifiedVoterCard : String -> List (Html msg) -> Html msg -> Html msg
+viewIdentifiedVoterCard title content changeButton =
     div []
         [ sectionTitle "Voter Information"
-        , viewVoterIdentificationCard "" content
+        , viewVoterIdentificationCard title content
         , Html.p
             [ HA.style "margin-top" "1rem" ]
             [ changeButton ]
@@ -1166,7 +1205,7 @@ proposalListContainer : String -> Int -> List (Html msg) -> Html msg
 proposalListContainer title totalCount content =
     div []
         [ proposalListHeader title totalCount
-        , proposalGrid content
+        , viewGrid 250 content
         ]
 
 
@@ -1179,18 +1218,6 @@ proposalListHeader title count =
         [ text <| title ++ " (" ++ String.fromInt count ++ " available):" ]
 
 
-{-| Grid layout for proposal cards
--}
-proposalGrid : List (Html msg) -> Html msg
-proposalGrid cards =
-    div
-        [ HA.style "display" "grid"
-        , HA.style "grid-template-columns" "repeat(auto-fill, minmax(250px, 1fr))"
-        , HA.style "gap" "1.5rem"
-        ]
-        cards
-
-
 {-| Show more button for paginated proposals
 -}
 showMoreButton : Bool -> Int -> Int -> msg -> Html msg
@@ -1200,18 +1227,12 @@ showMoreButton hasMore visibleCount totalCount clickMsg =
             [ HA.style "text-align" "center"
             , HA.style "margin-top" "2rem"
             ]
-            [ button
+            [ squareButton
                 [ HA.style "background-color" "#f9fafb"
                 , HA.style "color" "#272727"
-                , HA.style "font-weight" "500"
-                , HA.style "border" "1px solid #e2e8f0"
-                , HA.style "border-radius" "0.5rem"
-                , HA.style "padding" "0.75rem 1.5rem"
-                , HA.style "cursor" "pointer"
-                , HA.style "font-size" "0.875rem"
-                , onClick clickMsg
                 ]
-                [ text <| "Show More (" ++ String.fromInt (min 10 (totalCount - visibleCount)) ++ " of " ++ String.fromInt (totalCount - visibleCount) ++ " remaining)" ]
+                ("Show More (" ++ String.fromInt (min 10 (totalCount - visibleCount)) ++ " of " ++ String.fromInt (totalCount - visibleCount) ++ " remaining)")
+                clickMsg
             ]
 
     else
@@ -1325,21 +1346,12 @@ proposalCard { title, hashIsValid, abstract, actionType, linkUrl, linkHex, index
                         ]
                     ]
                 ]
-            , Html.button
+            , blackSquareButton
                 [ HA.style "width" "100%"
-                , HA.style "background-color" "#272727"
-                , HA.style "color" "white"
-                , HA.style "font-weight" "500"
-                , HA.style "font-size" "0.875rem"
-                , HA.style "padding" "0.75rem 0"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "0.5rem"
-                , HA.style "cursor" "pointer"
-                , HA.style "transition" "background-color 0.2s"
                 , HA.style "margin-top" "1rem"
-                , onClick selectMsg
                 ]
-                [ text "Select Proposal" ]
+                "Select Proposal"
+                selectMsg
             ]
         ]
 
@@ -1348,42 +1360,15 @@ proposalCard { title, hashIsValid, abstract, actionType, linkUrl, linkHex, index
 -}
 selectedProposalCard : List (Html msg) -> Html msg
 selectedProposalCard content =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        ]
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            ]
-            [ Html.h3
-                [ HA.style "font-weight" "600"
-                , HA.style "font-size" "1.125rem"
-                , HA.style "color" "#1A202C"
-                , HA.style "line-height" "1.4"
-                ]
-                [ text "Selected Proposal" ]
-            ]
-        , div
+    cardContainer []
+        [ cardHeader [] "Selected Proposal" "" []
+        , cardContent
             [ HA.style "padding" "1.25rem"
+            , HA.style "display" "grid"
+            , HA.style "gap" "0.75rem"
             ]
-            [ proposalDetailsGrid content ]
+            content
         ]
-
-
-{-| Grid layout for proposal details
--}
-proposalDetailsGrid : List (Html msg) -> Html msg
-proposalDetailsGrid items =
-    div
-        [ HA.style "display" "grid"
-        , HA.style "gap" "0.75rem"
-        ]
-        items
 
 
 {-| Style for individual details in selected proposal
@@ -1411,50 +1396,12 @@ proposalDetailsItem label content =
 
 {-| Main container for storage configuration section
 -}
-storageConfigCard : String -> List (Html msg) -> List (Html msg) -> Html msg
-storageConfigCard title headerContent bodyContent =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
+storageConfigCard : String -> List (Html msg) -> Html msg
+storageConfigCard title bodyContent =
+    cardContainer []
+        [ cardHeader [] title "" []
+        , cardContent [] bodyContent
         ]
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            , HA.style "display" "flex"
-            , HA.style "justify-content" "space-between"
-            ]
-            [ div []
-                [ Html.h3
-                    [ HA.style "font-weight" "600"
-                    , HA.style "font-size" "1.125rem"
-                    , HA.style "color" "#1A202C"
-                    , HA.style "line-height" "1.4"
-                    ]
-                    [ text title ]
-                ]
-            , div [] headerContent
-            ]
-        , div
-            [ HA.style "padding" "1.25rem" ]
-            bodyContent
-        ]
-
-
-{-| Grid for displaying storage provider options
--}
-storageProviderGrid : List (Html msg) -> Html msg
-storageProviderGrid providers =
-    div
-        [ HA.style "display" "grid"
-        , HA.style "grid-template-columns" "repeat(auto-fill, minmax(240px, 1fr))"
-        , HA.style "gap" "1rem"
-        , HA.style "margin-bottom" "1.5rem"
-        ]
-        providers
 
 
 {-| Option card for a storage method
@@ -1549,6 +1496,13 @@ storageConfigItem label content =
         ]
 
 
+{-| Helper button to add an HTTP header in custom IPFS configs.
+-}
+addHeaderButton : msg -> Html msg
+addHeaderButton addHeaderMsg =
+    blackSquareButton [] "+ Add Header" addHeaderMsg
+
+
 {-| Input for HTTP header
 -}
 storageHeaderInput : { label : String, value : String, onInputMsg : String -> msg } -> Html msg
@@ -1604,18 +1558,24 @@ storageHeaderForm _ name value deleteMsg nameChangeMsg valueChangeMsg =
                     , onInputMsg = valueChangeMsg
                     }
                 ]
-            , button
-                [ HA.style "background-color" "black"
-                , HA.style "color" "white"
-                , HA.style "width" "2.5rem"
-                , HA.style "height" "2.5rem"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "0.375rem"
-                , onClick deleteMsg
-                ]
-                [ text "🗑" ]
+            , iconButton "🗑" deleteMsg
             ]
         ]
+
+
+iconButton : String -> msg -> Html msg
+iconButton icon msg =
+    Html.button
+        [ HA.style "background-color" "black"
+        , HA.style "color" "white"
+        , HA.style "font-size" "1.25rem"
+        , HA.style "width" "2.2rem"
+        , HA.style "height" "2.2rem"
+        , HA.style "border" "none"
+        , HA.style "border-radius" "0.375rem"
+        , onClick msg
+        ]
+        [ text icon ]
 
 
 
@@ -1624,47 +1584,11 @@ storageHeaderForm _ name value deleteMsg nameChangeMsg valueChangeMsg =
 
 {-| Card for rationale form items with consistent styling
 -}
-rationaleCard : String -> String -> Html msg -> Bool -> Int -> Html msg
-rationaleCard title description content isPrimary _ =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        , HA.style "position" "relative"
-        , HA.style "z-index" "1"
-        ]
-        [ div
-            [ HA.style "background-color"
-                (if isPrimary then
-                    "#F1F5F9"
-
-                 else
-                    "#F7FAFC"
-                )
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            ]
-            [ Html.h3
-                [ HA.style "font-weight" "600"
-                , HA.style "font-size" "1.125rem"
-                , HA.style "color" "#1A202C"
-                , HA.style "line-height" "1.4"
-                ]
-                [ text title ]
-            , Html.p
-                [ HA.style "font-size" "0.875rem"
-                , HA.style "color" "#4A5568"
-                , HA.style "line-height" "1.6"
-                , HA.style "margin-top" "0.25rem"
-                ]
-                [ text description ]
-            ]
-        , div
-            [ HA.style "padding" "1.25rem"
-            ]
-            [ content ]
+rationaleCard : String -> String -> Html msg -> Html msg
+rationaleCard title description content =
+    cardContainer []
+        [ cardHeader [] title description []
+        , cardContent [] [ content ]
         ]
 
 
@@ -1813,61 +1737,18 @@ voteNumberInput label value onInputMsg =
 
 {-| Card for references with add button in header
 -}
-referenceCard : List a -> Int -> List (Html msg) -> msg -> Html msg
-referenceCard _ _ content addMsg =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        , HA.style "position" "relative"
-        , HA.style "z-index" "1"
-        ]
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            , HA.style "display" "flex"
+referenceCard : List (Html msg) -> msg -> Html msg
+referenceCard content addMsg =
+    cardContainer []
+        [ cardHeader
+            [ HA.style "display" "flex"
             , HA.style "justify-content" "space-between"
             , HA.style "align-items" "center"
             ]
-            [ div []
-                [ Html.h3
-                    [ HA.style "font-weight" "600"
-                    , HA.style "font-size" "1.125rem"
-                    , HA.style "color" "#1A202C"
-                    , HA.style "line-height" "1.4"
-                    ]
-                    [ text "References" ]
-                , Html.p
-                    [ HA.style "font-size" "0.875rem"
-                    , HA.style "color" "#4A5568"
-                    , HA.style "line-height" "1.6"
-                    , HA.style "margin-top" "0.25rem"
-                    ]
-                    [ text "Add links and references to support your rationale." ]
-                ]
-            , button
-                [ HA.style "background-color" "#272727"
-                , HA.style "color" "white"
-                , HA.style "font-weight" "500"
-                , HA.style "font-size" "0.875rem"
-                , HA.style "padding" "0.5rem 1rem"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "0.375rem"
-                , HA.style "cursor" "pointer"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , onClick addMsg
-                ]
-                [ Html.span [ HA.style "margin-right" "0.375rem" ] [ text "+" ]
-                , text "Add Reference"
-                ]
-            ]
-        , div
-            [ HA.style "padding" "1.25rem"
-            ]
+            "References"
+            "Add links and references to support your rationale."
+            [ blackSquareButton [] "+ Add Reference" addMsg ]
+        , cardContent []
             [ if List.isEmpty content then
                 Html.p
                     [ HA.style "text-align" "center"
@@ -1900,25 +1781,7 @@ referenceForm index typeName label uri deleteMsg typeChangeMsg labelChangeMsg ur
                 , HA.style "color" "#374151"
                 ]
                 [ text ("Reference " ++ String.fromInt (index + 1)) ]
-            , button
-                [ HA.style "background-color" "black"
-                , HA.style "color" "white"
-                , HA.style "width" "2rem"
-                , HA.style "height" "2rem"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "0.375rem"
-                , HA.style "cursor" "pointer"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , HA.style "justify-content" "center"
-                , onClick deleteMsg
-                ]
-                [ Html.div
-                    [ HA.style "font-size" "1.25rem"
-                    , HA.style "line-height" "1"
-                    ]
-                    [ text "🗑" ]
-                ]
+            , iconButton "🗑" deleteMsg
             ]
         , div
             [ HA.style "display" "grid"
@@ -2001,29 +1864,9 @@ rationaleCompletedCard : String -> List (Html msg) -> msg -> Html msg
 rationaleCompletedCard summary content editMsg =
     div []
         [ sectionTitle "Vote Rationale"
-        , div
-            [ HA.style "border" "1px solid #E2E8F0"
-            , HA.style "border-radius" "0.75rem"
-            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-            , HA.style "background-color" "#FFFFFF"
-            , HA.style "overflow" "hidden"
-            ]
-            [ div
-                [ HA.style "background-color" "#F7FAFC"
-                , HA.style "padding" "1rem 1.25rem"
-                , HA.style "border-bottom" "1px solid #EDF2F7"
-                ]
-                [ Html.h3
-                    [ HA.style "font-weight" "600"
-                    , HA.style "font-size" "1.125rem"
-                    , HA.style "color" "#1A202C"
-                    , HA.style "line-height" "1.4"
-                    ]
-                    [ text "Rationale Summary" ]
-                ]
-            , div
-                [ HA.style "padding" "1.25rem"
-                ]
+        , cardContainer []
+            [ cardHeader [] "Rationale Summary" "" []
+            , cardContent []
                 [ div [ HA.style "display" "grid", HA.style "gap" "1.5rem" ]
                     (div []
                         [ Html.p
@@ -2038,23 +1881,7 @@ rationaleCompletedCard summary content editMsg =
                 ]
             ]
         , Html.p [ HA.style "margin-top" "1rem" ]
-            [ button
-                [ HA.style "background-color" "#272727"
-                , HA.style "color" "white"
-                , HA.style "font-weight" "500"
-                , HA.style "font-size" "0.875rem"
-                , HA.style "padding" "0.5rem 1.5rem"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "9999px"
-                , HA.style "cursor" "pointer"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , HA.style "justify-content" "center"
-                , HA.style "height" "3rem"
-                , onClick editMsg
-                ]
-                [ text "Edit rationale" ]
-            ]
+            [ viewButton "Edit rationale" editMsg ]
         ]
 
 
@@ -2211,85 +2038,9 @@ formattedReference typeToString ref =
 -}
 stepNotAvailableCard : List (Html msg) -> Html msg
 stepNotAvailableCard content =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        ]
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            ]
-            [ Html.h3
-                [ HA.style "font-weight" "600"
-                , HA.style "font-size" "1.125rem"
-                , HA.style "color" "#1A202C"
-                , HA.style "line-height" "1.4"
-                ]
-                [ text "Step Not Available" ]
-            ]
-        , div
-            [ HA.style "padding" "1.25rem"
-            ]
-            [ Html.p
-                [ HA.style "color" "#4A5568"
-                , HA.style "font-size" "0.9375rem"
-                ]
-                content
-            ]
-        ]
-
-
-{-| Card for JSON-LD rationale document
--}
-jsonLdDocumentCard : String -> Html msg -> Html msg
-jsonLdDocumentCard jsonRationale downloadButton =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        , HA.style "margin-bottom" "1.5rem"
-        ]
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            ]
-            [ Html.h3
-                [ HA.style "font-weight" "600"
-                , HA.style "font-size" "1.125rem"
-                , HA.style "color" "#1A202C"
-                , HA.style "line-height" "1.4"
-                ]
-                [ text "JSON-LD Rationale Document" ]
-            ]
-        , div
-            [ HA.style "padding" "1.25rem"
-            ]
-            [ Html.p
-                [ HA.style "color" "#4A5568"
-                , HA.style "margin-bottom" "1rem"
-                ]
-                [ text "Here is the JSON-LD rationale file generated from your rationale inputs." ]
-            , div
-                [ HA.style "max-height" "200px"
-                , HA.style "overflow-y" "auto"
-                , HA.style "background-color" "#F9FAFB"
-                , HA.style "border" "1px solid #E2E8F0"
-                , HA.style "border-radius" "0.375rem"
-                , HA.style "padding" "0.75rem"
-                , HA.style "font-family" "monospace"
-                , HA.style "font-size" "0.75rem"
-                , HA.style "margin-bottom" "1rem"
-                ]
-                [ text jsonRationale ]
-            , downloadButton
-            ]
+    cardContainer []
+        [ cardHeader [] "Step Not Available" "" []
+        , cardContent [] content
         ]
 
 
@@ -2302,7 +2053,7 @@ downloadJSONButton jsonRationale =
         , HA.download "rationale.json"
         , HA.style "text-decoration" "none"
         ]
-        [ button
+        [ Html.button
             [ HA.style "background-color" "#272727"
             , HA.style "color" "white"
             , HA.style "font-weight" "500"
@@ -2327,13 +2078,7 @@ downloadJSONButton jsonRationale =
 -}
 authorsCard : List (Html msg) -> Html msg -> Html msg
 authorsCard headerContent content =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        ]
+    cardContainer []
         [ div
             [ HA.style "background-color" "#F7FAFC"
             , HA.style "padding" "1rem 1.25rem"
@@ -2343,10 +2088,7 @@ authorsCard headerContent content =
             , HA.style "align-items" "center"
             ]
             headerContent
-        , div
-            [ HA.style "padding" "1.25rem"
-            ]
-            [ content ]
+        , cardContent [] [ content ]
         ]
 
 
@@ -2354,22 +2096,7 @@ authorsCard headerContent content =
 -}
 addAuthorButton : msg -> Html msg
 addAuthorButton clickMsg =
-    button
-        [ HA.style "background-color" "#272727"
-        , HA.style "color" "white"
-        , HA.style "font-weight" "500"
-        , HA.style "font-size" "0.875rem"
-        , HA.style "padding" "0.5rem 1rem"
-        , HA.style "border" "none"
-        , HA.style "border-radius" "0.375rem"
-        , HA.style "cursor" "pointer"
-        , HA.style "display" "flex"
-        , HA.style "align-items" "center"
-        , onClick clickMsg
-        ]
-        [ Html.span [ HA.style "margin-right" "0.375rem" ] [ text "+" ]
-        , text "Add Author"
-        ]
+    blackSquareButton [] "+ Add Author" clickMsg
 
 
 {-| Code snippet box
@@ -2499,25 +2226,7 @@ authorForm index deleteMsg content =
                 , HA.style "color" "#1A202C"
                 ]
                 [ text ("Author " ++ String.fromInt (index + 1)) ]
-            , button
-                [ HA.style "background-color" "black"
-                , HA.style "color" "white"
-                , HA.style "width" "2rem"
-                , HA.style "height" "2rem"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "0.375rem"
-                , HA.style "cursor" "pointer"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , HA.style "justify-content" "center"
-                , onClick deleteMsg
-                ]
-                [ Html.div
-                    [ HA.style "font-size" "1.25rem"
-                    , HA.style "line-height" "1"
-                    ]
-                    [ text "🗑" ]
-                ]
+            , iconButton "🗑" deleteMsg
             ]
         , div
             [ HA.style "display" "grid"
@@ -2580,7 +2289,7 @@ signatureField signature replaceMsg =
                 , HA.style "color" "#4B5563"
                 ]
                 [ text "Signature" ]
-            , button
+            , Html.button
                 [ HA.style "font-size" "0.75rem"
                 , HA.style "color" "#4B5563"
                 , HA.style "background" "none"
@@ -2612,43 +2321,26 @@ formButtonsRow content =
 -}
 secondaryButton : String -> msg -> Html msg
 secondaryButton label clickMsg =
-    button
+    squareButton
         [ HA.style "background-color" "#F3F4F6"
         , HA.style "color" "#4B5563"
-        , HA.style "font-weight" "500"
-        , HA.style "font-size" "0.875rem"
-        , HA.style "padding" "0.75rem 1.5rem"
-        , HA.style "border" "1px solid #E5E7EB"
-        , HA.style "border-radius" "0.5rem"
-        , HA.style "cursor" "pointer"
-        , onClick clickMsg
         ]
-        [ text label ]
+        label
+        clickMsg
 
 
 {-| Primary button
 -}
 primaryButton : String -> msg -> Html msg
 primaryButton label clickMsg =
-    button
-        [ HA.style "background-color" "#272727"
-        , HA.style "color" "white"
-        , HA.style "font-weight" "500"
-        , HA.style "font-size" "0.875rem"
-        , HA.style "padding" "0.75rem 1.5rem"
-        , HA.style "border" "none"
-        , HA.style "border-radius" "0.5rem"
-        , HA.style "cursor" "pointer"
-        , onClick clickMsg
-        ]
-        [ text label ]
+    blackSquareButton [] label clickMsg
 
 
 {-| Load signature file button
 -}
 loadSignatureButton : msg -> Html msg
 loadSignatureButton msg =
-    button
+    Html.button
         [ HA.style "background-color" "#F9FAFB"
         , HA.style "color" "#272727"
         , HA.style "font-weight" "500"
@@ -2677,41 +2369,9 @@ loadSignatureButton msg =
 -}
 storageStepCard : String -> String -> List (Html msg) -> Html msg
 storageStepCard title subtitle content =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        ]
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            ]
-            [ Html.h3
-                [ HA.style "font-weight" "600"
-                , HA.style "font-size" "1.125rem"
-                , HA.style "color" "#1A202C"
-                , HA.style "line-height" "1.4"
-                ]
-                [ text title ]
-            , if String.isEmpty subtitle then
-                text ""
-
-              else
-                Html.p
-                    [ HA.style "font-size" "0.875rem"
-                    , HA.style "color" "#4A5568"
-                    , HA.style "line-height" "1.6"
-                    , HA.style "margin-top" "0.25rem"
-                    ]
-                    [ text subtitle ]
-            ]
-        , div
-            [ HA.style "padding" "1.25rem"
-            ]
-            content
+    cardContainer []
+        [ cardHeader [] title subtitle []
+        , cardContent [] content
         ]
 
 
@@ -2734,16 +2394,18 @@ storageNotAvailableCard =
 -}
 storageUploadCard : msg -> Html msg -> Html msg
 storageUploadCard uploadMsg errorDisplay =
-    storageStepCard
-        "Store on IPFS"
-        "Store your signed rationale document on IPFS to ensure it's accessible when your vote is recorded on chain."
-        [ Html.p
-            [ HA.style "margin-bottom" "1.5rem"
-            , HA.style "color" "#4A5568"
+    div []
+        [ storageStepCard
+            "Store on IPFS"
+            "Store your rationale on IPFS to ensure it's accessible when your vote is recorded on chain."
+            [ Html.p
+                [ HA.style "margin-bottom" "1.5rem"
+                , HA.style "color" "#4A5568"
+                ]
+                [ text "Your document will be stored using the configuration you selected earlier. The CID (content identifier) will be included with your vote transaction." ]
+            , errorDisplay
             ]
-            [ text "Your document will be stored using the configuration you selected earlier. The CID (content identifier) will be included with your vote transaction." ]
         , viewButton "📤 Upload to IPFS" uploadMsg
-        , errorDisplay
         ]
 
 
@@ -2796,56 +2458,16 @@ uploadingSpinner message =
 -}
 storageSuccessCard : List (Html msg) -> Html msg
 storageSuccessCard content =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        ]
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            , HA.style "display" "flex"
+    cardContainer []
+        [ cardHeader
+            [ HA.style "display" "flex"
             , HA.style "justify-content" "space-between"
             , HA.style "align-items" "center"
             ]
-            [ div []
-                [ Html.h3
-                    [ HA.style "font-weight" "600"
-                    , HA.style "font-size" "1.125rem"
-                    , HA.style "color" "#1A202C"
-                    , HA.style "line-height" "1.4"
-                    ]
-                    [ text "Upload Successful" ]
-                , Html.p
-                    [ HA.style "font-size" "0.875rem"
-                    , HA.style "color" "#4A5568"
-                    , HA.style "line-height" "1.6"
-                    , HA.style "margin-top" "0.25rem"
-                    ]
-                    [ text "Your rationale has been successfully uploaded to IPFS" ]
-                ]
-            , div
-                [ HA.style "background-color" "#F0FDF4"
-                , HA.style "color" "#16A34A"
-                , HA.style "padding" "0.375rem 0.75rem"
-                , HA.style "border-radius" "9999px"
-                , HA.style "font-size" "0.875rem"
-                , HA.style "font-weight" "500"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , HA.style "gap" "0.375rem"
-                ]
-                [ text "✓"
-                , text "Uploaded"
-                ]
-            ]
-        , div
-            [ HA.style "padding" "1.25rem"
-            ]
-            content
+            "Upload Successful"
+            "Your rationale has been successfully uploaded to IPFS"
+            [ successBadge "Uploaded" ]
+        , cardContent [] content
         ]
 
 
@@ -2913,65 +2535,24 @@ externalLinkDisplay url displayText =
 -}
 stepCard : List (Html msg) -> Html msg
 stepCard content =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        ]
-        [ div
-            [ HA.style "padding" "1.25rem"
-            ]
-            content
-        ]
+    cardContainer []
+        [ cardContent [] content ]
 
 
 {-| Creates a transaction result card with header and status badge
 -}
-txResultCard : String -> String -> Bool -> List (Html msg) -> Html msg
-txResultCard title subtitle showSuccess content =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        ]
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            , HA.style "display" "flex"
+txResultCard : String -> String -> List (Html msg) -> Html msg
+txResultCard title subtitle content =
+    cardContainer []
+        [ cardHeader
+            [ HA.style "display" "flex"
             , HA.style "justify-content" "space-between"
             , HA.style "align-items" "center"
             ]
-            [ div []
-                [ Html.h3
-                    [ HA.style "font-weight" "600"
-                    , HA.style "font-size" "1.125rem"
-                    , HA.style "color" "#1A202C"
-                    , HA.style "line-height" "1.4"
-                    ]
-                    [ text title ]
-                , Html.p
-                    [ HA.style "font-size" "0.875rem"
-                    , HA.style "color" "#4A5568"
-                    , HA.style "line-height" "1.6"
-                    , HA.style "margin-top" "0.25rem"
-                    ]
-                    [ text subtitle ]
-                ]
-            , if showSuccess then
-                successBadge "Ready"
-
-              else
-                text ""
-            ]
-        , div
-            [ HA.style "padding" "1.25rem"
-            ]
-            content
+            title
+            subtitle
+            [ successBadge "Ready" ]
+        , cardContent [] content
         ]
 
 
@@ -2990,16 +2571,14 @@ successBadge label =
         , HA.style "align-items" "center"
         , HA.style "gap" "0.375rem"
         ]
-        [ text "✓"
-        , text label
-        ]
+        [ text <| "✓ " ++ label ]
 
 
 {-| Vote button with consistent styling
 -}
 voteButton : String -> String -> msg -> Html msg
 voteButton label color clickMsg =
-    button
+    Html.button
         [ HA.style "background-color" color
         , HA.style "color" "white"
         , HA.style "font-weight" "500"
@@ -3167,7 +2746,7 @@ loadingSpinner message =
 signingStepCard : String -> String -> List (Html msg) -> Html msg
 signingStepCard title description content =
     cardContainer []
-        [ cardHeader title []
+        [ cardHeader [] title "" []
         , cardContent []
             [ Html.p
                 [ HA.style "color" "#4A5568"
@@ -3212,21 +2791,4 @@ keyListItem keyName hashHex =
 -}
 signingButton : String -> Html msg
 signingButton buttonText =
-    div
-        [ HA.style "text-align" "center" ]
-        [ button
-            [ HA.style "background-color" "#272727"
-            , HA.style "color" "white"
-            , HA.style "font-weight" "500"
-            , HA.style "font-size" "0.875rem"
-            , HA.style "padding" "0.5rem 1.5rem"
-            , HA.style "border" "none"
-            , HA.style "border-radius" "9999px"
-            , HA.style "cursor" "pointer"
-            , HA.style "display" "flex"
-            , HA.style "align-items" "center"
-            , HA.style "justify-content" "center"
-            , HA.style "height" "3rem"
-            ]
-            [ text buttonText ]
-        ]
+    div [] [ Html.button buttonCommonStyle [ text buttonText ] ]

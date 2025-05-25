@@ -1502,8 +1502,19 @@ confirmVoter ctx form loadedRefUtxos =
                 RemoteData.Success scriptInfo ->
                     validateScriptVoter ctx form loadedRefUtxos Witness.WithDrepCred scriptInfo
 
-        _ ->
-            Debug.todo ""
+        Just (CcHotCredId (ScriptHash _)) ->
+            case form.scriptInfo of
+                RemoteData.NotAsked ->
+                    justError "Script info isn’t loading yet govId is a script. Please report the error."
+
+                RemoteData.Loading ->
+                    justError "Script info is still loading, please wait."
+
+                RemoteData.Failure error ->
+                    justError <| "There was an error loading the script info. Are you sure you registered? " ++ Debug.toString error
+
+                RemoteData.Success scriptInfo ->
+                    validateScriptVoter ctx form loadedRefUtxos Witness.WithDrepCred scriptInfo
 
 
 validateScriptVoter : UpdateContext msg -> VoterPreparationForm -> Utxo.RefDict Output -> (Witness.Credential -> Witness.Voter) -> ScriptInfo -> ( Step VoterPreparationForm Witness.Voter Witness.Voter, Cmd Msg, Maybe MsgToParent )
@@ -2747,10 +2758,10 @@ viewIdentifiedVoter form voter =
             Maybe.map Gov.idToBech32 form.govId
                 |> Maybe.withDefault ""
 
-        ( _, voterCred ) =
+        ( title, voterCred ) =
             getVoterDisplayInfo voter form govIdStr
     in
-    Helper.viewIdentifiedVoterCard
+    Helper.viewIdentifiedVoterCard title
         [ case voterCred of
             Witness.WithKey cred ->
                 div [ HA.style "display" "flex", HA.style "flex-direction" "column", HA.style "gap" "0.75rem" ]
@@ -3147,8 +3158,7 @@ viewStorageConfigStep ctx step =
                         , text " Here we provide an easy way to store it on IPFS."
                         ]
                     , Helper.storageConfigCard "IPFS Method"
-                        []
-                        [ Helper.storageProviderGrid
+                        [ Helper.viewGrid 240
                             [ Helper.storageMethodOption ctx.ipfsPreconfig.label (form.storageMethod == PreconfigIPFS ctx.ipfsPreconfig) (StorageMethodSelected <| PreconfigIPFS ctx.ipfsPreconfig)
                             , Helper.storageMethodOption "Blockfrost IPFS" (form.storageMethod == BlockfrostIPFS) (StorageMethodSelected BlockfrostIPFS)
                             , Helper.storageMethodOption "NMKR IPFS" (form.storageMethod == NmkrIPFS) (StorageMethodSelected NmkrIPFS)
@@ -3181,7 +3191,6 @@ viewStorageConfigStep ctx step =
             div []
                 [ Helper.sectionTitle "Storage Configuration"
                 , Helper.storageConfigCard "Selected Storage Method"
-                    []
                     [ viewStorageConfigInfo storageConfig ]
                 , Html.p [ HA.style "margin-top" "1rem" ]
                     [ Html.map ctx.wrapMsg <| Helper.viewButton "Change storage configuration" ValidateStorageConfigButtonClicked ]
@@ -3242,7 +3251,7 @@ viewCustomIpfsForm form =
                 , HA.style "font-size" "1rem"
                 ]
                 [ text "HTTP Headers" ]
-            , Helper.addAuthorButton AddHeaderButtonClicked
+            , Helper.addHeaderButton AddHeaderButtonClicked
             ]
         , if List.isEmpty form.headers then
             Html.p
@@ -3405,41 +3414,27 @@ viewRationaleForm form =
                 "Summary"
                 "Clearly state your stance, summarize your rationale with your main argument. Limited to 300 characters."
                 (Helper.rationaleTextArea RationaleSummaryChange (Just 300) form.summary)
-                False
-                0
             , Helper.rationaleCard
                 "Rationale Statement"
                 "Fully describe your rationale, with your arguments in full details. Use markdown with heading level 2 (##) or higher."
                 (viewStatementInput form.pdfAutogen form.rationaleStatement)
-                True
-                1
             , Helper.rationaleCard
                 "Precedent Discussion"
                 "Optional: Discuss what you feel is relevant precedent."
                 (Helper.rationaleMarkdownInput form.precedentDiscussion PrecedentDiscussionChange)
-                False
-                2
             , Helper.rationaleCard
                 "Counter Argument Discussion"
                 "Optional: Discuss significant counter arguments to your position."
                 (Helper.rationaleMarkdownInput form.counterArgumentDiscussion CounterArgumentChange)
-                False
-                3
             , Helper.rationaleCard
                 "Conclusion"
                 "Optional: Final thoughts on your position."
                 (Helper.rationaleTextArea ConclusionChange Nothing form.conclusion)
-                False
-                4
             , Helper.rationaleCard
                 "Internal Vote"
                 "If you vote as a group, you can report the group internal votes."
                 (viewInternalVoteInput form.internalVote)
-                False
-                5
             , Helper.referenceCard
-                form.references
-                6
                 (List.indexedMap viewOneRefForm form.references)
                 AddRefButtonClicked
             ]
@@ -3599,8 +3594,8 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
             ( _, Validating _ _, _ ) ->
                 Helper.stepNotAvailableCard [ text "Please wait for the rationale creation to complete." ]
 
-            ( Done _ { id }, Done _ _, Preparing form ) ->
-                Html.map ctx.wrapMsg <| viewRationaleSignatureForm ctx.jsonLdContexts id form
+            ( Done _ _, Done _ _, Preparing form ) ->
+                Html.map ctx.wrapMsg <| viewRationaleSignatureForm form
 
             ( _, Done _ _, Preparing _ ) ->
                 Helper.stepNotAvailableCard [ text "Please select a proposal first." ]
@@ -3616,34 +3611,35 @@ viewRationaleSignatureStep ctx pickProposalStep rationaleCreationStep step =
 
 viewCompletedRationaleSignature : ViewContext msg -> RationaleSignature -> Html msg
 viewCompletedRationaleSignature ctx ratSig =
-    Helper.stepCard
-        [ if List.isEmpty ratSig.authors then
-            Html.p
-                [ HA.style "color" "#4A5568"
-                , HA.style "font-size" "0.9375rem"
-                ]
-                [ text "No signatures were added to this rationale." ]
-
-          else
-            div []
-                [ Html.p
+    div []
+        [ Helper.stepCard
+            [ if List.isEmpty ratSig.authors then
+                Html.p
                     [ HA.style "color" "#4A5568"
                     , HA.style "font-size" "0.9375rem"
-                    , HA.style "margin-bottom" "1rem"
                     ]
-                    [ text "This rationale includes the following signatures:" ]
-                , Html.ul
-                    [ HA.style "list-style-type" "none"
-                    , HA.style "padding" "0"
-                    , HA.style "display" "flex"
-                    , HA.style "flex-direction" "column"
-                    , HA.style "gap" "0.75rem"
+                    [ text "No author was added to this rationale." ]
+
+              else
+                div []
+                    [ Html.p
+                        [ HA.style "color" "#4A5568"
+                        , HA.style "font-size" "0.9375rem"
+                        , HA.style "margin-bottom" "1rem"
+                        ]
+                        [ text "This rationale has the following authors:" ]
+                    , Html.ul
+                        [ HA.style "list-style-type" "none"
+                        , HA.style "padding" "0"
+                        , HA.style "display" "flex"
+                        , HA.style "flex-direction" "column"
+                        , HA.style "gap" "0.75rem"
+                        ]
+                        (List.map viewSignerCard ratSig.authors)
                     ]
-                    (List.map viewSignerCard ratSig.authors)
-                ]
-        , Html.p
-            [ HA.style "margin-top" "1rem" ]
-            [ Html.map ctx.wrapMsg <| Helper.viewButton "Edit Change signatures" ChangeAuthorsButtonClicked ]
+            , Html.p [ HA.style "margin-top" "1rem" ] [ Helper.downloadJSONButton ratSig.signedJson ]
+            ]
+        , Html.map ctx.wrapMsg <| Helper.viewButton "Change authors" ChangeAuthorsButtonClicked
         ]
 
 
@@ -3652,12 +3648,9 @@ viewSignerCard { name, witnessAlgorithm, publicKey, signature } =
     Helper.signerCard name signature witnessAlgorithm publicKey (Maybe.withDefault "" signature)
 
 
-viewRationaleSignatureForm : JsonLdContexts -> Gov.ActionId -> RationaleSignatureForm -> Html Msg
-viewRationaleSignatureForm jsonLdContexts actionId ({ authors } as form) =
+viewRationaleSignatureForm : RationaleSignatureForm -> Html Msg
+viewRationaleSignatureForm { authors } =
     let
-        jsonRationale =
-            (rationaleSignatureFromForm jsonLdContexts actionId { form | authors = [] }).signedJson
-
         cardanoSignerExample =
             "cardano-signer.js sign --cip100 \\\n"
                 ++ "   --data-file rationale.json \\\n"
@@ -3666,8 +3659,7 @@ viewRationaleSignatureForm jsonLdContexts actionId ({ authors } as form) =
                 ++ "   --out-file rationale-signed.json"
     in
     div []
-        [ Helper.jsonLdDocumentCard jsonRationale (Helper.downloadJSONButton jsonRationale)
-        , Helper.authorsCard
+        [ Helper.authorsCard
             [ div []
                 [ Html.h3
                     [ HA.style "font-weight" "600"
@@ -3857,14 +3849,17 @@ viewCompletedStorage r storage =
                     (Helper.externalLinkDisplay link link)
                 ]
     in
-    Helper.storageSuccessCard
-        [ Html.p
-            [ HA.style "color" "#4A5568"
-            , HA.style "margin-bottom" "1.5rem"
-            , HA.style "font-size" "0.9375rem"
+    div []
+        [ Helper.storageSuccessCard
+            [ Html.p
+                [ HA.style "color" "#4A5568"
+                , HA.style "margin-bottom" "1.5rem"
+                , HA.style "font-size" "0.9375rem"
+                ]
+                [ text "Your file has been uploaded to IPFS. File pinning is ongoing and may take a few hours to complete. We recommend saving a local copy of your JSON file in case you need to re-upload it in the future." ]
+            , Html.p [ HA.style "margin" "1rem 0rem" ] [ Helper.downloadJSONButton r.signedJson ]
+            , Helper.storageInfoGrid infoItems
             ]
-            [ text "Your file has been uploaded to IPFS. File pinning is ongoing and may take a few hours to complete. We recommend saving a local copy of your JSON file in case you need to re-upload it in the future." ]
-        , Helper.storageInfoGrid infoItems
         , Helper.viewButton "Add another storage location" AddOtherStorageButtonCLicked
         ]
 
@@ -3907,21 +3902,20 @@ viewBuildTxStep ctx model =
                 Helper.loadingSpinner "Building transaction..."
 
             ( Ok _, Done _ { tx } ) ->
-                Helper.txResultCard
-                    "Transaction Built"
-                    "Your vote transaction has been created successfully"
-                    True
-                    [ Html.p
-                        [ HA.style "color" "#4A5568"
-                        , HA.style "font-size" "0.9375rem"
-                        , HA.style "margin-bottom" "1rem"
+                div []
+                    [ Helper.txResultCard
+                        "Transaction Built"
+                        "Your vote transaction has been created successfully"
+                        [ Html.p
+                            [ HA.style "color" "#4A5568"
+                            , HA.style "font-size" "0.9375rem"
+                            , HA.style "margin-bottom" "1rem"
+                            ]
+                            [ text "Transaction details (₳ displayed as lovelaces):" ]
+                        , Helper.txDetailsContainer
+                            [ Helper.txPreContainer <| prettyTx tx ]
                         ]
-                        [ text "Transaction details (₳ displayed as lovelaces):" ]
-                    , Helper.txDetailsContainer
-                        [ Helper.txPreContainer <| prettyTx tx ]
-                    , Html.p
-                        [ HA.style "margin-top" "1rem" ]
-                        [ Helper.viewButton "Change vote" ChangeVoteButtonClicked ]
+                    , Helper.viewButton "Change vote" ChangeVoteButtonClicked
                     ]
         ]
 
@@ -4053,20 +4047,20 @@ viewSignTxStep ctx voterStep buildTxStep =
                         , HA.style "font-size" "0.9375rem"
                         , HA.style "margin-bottom" "1.5rem"
                         ]
-                        [ text "Click the button below to proceed to the signing page where you can finalize and submit your voting transaction." ]
-                    , ctx.signingLink tx
-                        (expectedSignatures
-                            |> List.map
-                                (\keyHash ->
-                                    { keyHash = keyHash
-                                    , keyName =
-                                        Dict.get (Bytes.toHex keyHash) keyNames
-                                            |> Maybe.withDefault "Key hash"
-                                    }
-                                )
-                        )
-                        [ Helper.signingButton "Go to Signing Page" ]
+                        [ text "Click the button below to proceed to the signing page where you can sign and submit your voting transaction." ]
                     ]
+                , ctx.signingLink tx
+                    (expectedSignatures
+                        |> List.map
+                            (\keyHash ->
+                                { keyHash = keyHash
+                                , keyName =
+                                    Dict.get (Bytes.toHex keyHash) keyNames
+                                        |> Maybe.withDefault "Key hash"
+                                }
+                            )
+                    )
+                    [ Helper.signingButton "Go to Signing Page" ]
                 ]
 
         _ ->

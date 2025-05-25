@@ -2758,10 +2758,10 @@ viewIdentifiedVoter form voter =
             Maybe.map Gov.idToBech32 form.govId
                 |> Maybe.withDefault ""
 
-        ( _, voterCred ) =
+        ( title, voterCred ) =
             getVoterDisplayInfo voter form govIdStr
     in
-    Helper.viewIdentifiedVoterCard
+    Helper.viewIdentifiedVoterCard title
         [ case voterCred of
             Witness.WithKey cred ->
                 div [ HA.style "display" "flex", HA.style "flex-direction" "column", HA.style "gap" "0.75rem" ]

@@ -1169,37 +1169,19 @@ scriptSignerCheckbox keyHex isChecked onCheckMsg =
 -}
 viewVoterIdentificationCard : String -> List (Html msg) -> Html msg
 viewVoterIdentificationCard title content =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        ]
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            ]
-            [ Html.h3
-                [ HA.style "font-weight" "600"
-                , HA.style "font-size" "1.125rem"
-                , HA.style "color" "#1A202C"
-                , HA.style "line-height" "1.4"
-                ]
-                [ text title ]
-            ]
-        , div
-            [ HA.style "padding" "1.25rem" ]
-            content
+    cardContainer []
+        [ cardHeader [] title "" []
+        , cardContent [] content
         ]
 
 
 {-| Display identified voter card with information
 -}
-viewIdentifiedVoterCard : List (Html msg) -> Html msg -> Html msg
-viewIdentifiedVoterCard content changeButton =
+viewIdentifiedVoterCard : String -> List (Html msg) -> Html msg -> Html msg
+viewIdentifiedVoterCard title content changeButton =
     div []
         [ sectionTitle "Voter Information"
-        , viewVoterIdentificationCard "" content
+        , viewVoterIdentificationCard title content
         , Html.p
             [ HA.style "margin-top" "1rem" ]
             [ changeButton ]

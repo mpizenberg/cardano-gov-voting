@@ -450,20 +450,25 @@ cardContainer attributes content =
 
 {-| Standard header section for cards with title styling
 -}
-cardHeader : String -> List (Html msg) -> Html msg
-cardHeader title extraContent =
+cardHeader : List (Html.Attribute msg) -> String -> String -> List (Html msg) -> Html msg
+cardHeader attributes title subtitle extraContent =
     div
-        [ HA.style "background-color" "#F7FAFC"
-        , HA.style "padding" "1rem 1.25rem"
-        , HA.style "border-bottom" "1px solid #EDF2F7"
-        ]
-        (Html.h3
-            [ HA.style "font-weight" "600"
-            , HA.style "font-size" "1.125rem"
-            , HA.style "color" "#1A202C"
-            , HA.style "line-height" "1.4"
+        ([ HA.style "background-color" "#F7FAFC"
+         , HA.style "padding" "1rem 1.25rem"
+         , HA.style "border-bottom" "1px solid #EDF2F7"
+         ]
+            ++ attributes
+        )
+        (div []
+            [ Html.h3
+                [ HA.style "font-weight" "600"
+                , HA.style "font-size" "1.125rem"
+                , HA.style "color" "#1A202C"
+                , HA.style "line-height" "1.4"
+                ]
+                [ text title ]
+            , Html.p [ HA.style "font-size" "0.875rem" ] [ text subtitle ]
             ]
-            [ text title ]
             :: extraContent
         )
 
@@ -1342,7 +1347,7 @@ proposalCard { title, hashIsValid, abstract, actionType, linkUrl, linkHex, index
 selectedProposalCard : List (Html msg) -> Html msg
 selectedProposalCard content =
     cardContainer []
-        [ cardHeader "Selected Proposal" []
+        [ cardHeader [] "Selected Proposal" "" []
         , cardContent
             [ HA.style "padding" "1.25rem"
             , HA.style "display" "grid"
@@ -1380,7 +1385,7 @@ proposalDetailsItem label content =
 storageConfigCard : String -> List (Html msg) -> Html msg
 storageConfigCard title bodyContent =
     cardContainer []
-        [ cardHeader title []
+        [ cardHeader [] title "" []
         , cardContent [] bodyContent
         ]
 
@@ -1555,7 +1560,7 @@ storageHeaderForm _ name value deleteMsg nameChangeMsg valueChangeMsg =
 rationaleCard : String -> String -> Html msg -> Html msg
 rationaleCard title description content =
     cardContainer []
-        [ cardHeader title [ Html.p [ HA.style "font-size" "0.875rem" ] [ text description ] ]
+        [ cardHeader [] title description []
         , cardContent [] [ content ]
         ]
 
@@ -1708,31 +1713,14 @@ voteNumberInput label value onInputMsg =
 referenceCard : List (Html msg) -> msg -> Html msg
 referenceCard content addMsg =
     cardContainer []
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            , HA.style "display" "flex"
+        [ cardHeader
+            [ HA.style "display" "flex"
             , HA.style "justify-content" "space-between"
             , HA.style "align-items" "center"
             ]
-            [ div []
-                [ Html.h3
-                    [ HA.style "font-weight" "600"
-                    , HA.style "font-size" "1.125rem"
-                    , HA.style "color" "#1A202C"
-                    , HA.style "line-height" "1.4"
-                    ]
-                    [ text "References" ]
-                , Html.p
-                    [ HA.style "font-size" "0.875rem"
-                    , HA.style "color" "#4A5568"
-                    , HA.style "line-height" "1.6"
-                    , HA.style "margin-top" "0.25rem"
-                    ]
-                    [ text "Add links and references to support your rationale." ]
-                ]
-            , button
+            "References"
+            "Add links and references to support your rationale."
+            [ button
                 [ HA.style "background-color" "#272727"
                 , HA.style "color" "white"
                 , HA.style "font-weight" "500"
@@ -1749,9 +1737,7 @@ referenceCard content addMsg =
                 , text "Add Reference"
                 ]
             ]
-        , div
-            [ HA.style "padding" "1.25rem"
-            ]
+        , cardContent []
             [ if List.isEmpty content then
                 Html.p
                     [ HA.style "text-align" "center"
@@ -1886,7 +1872,7 @@ rationaleCompletedCard summary content editMsg =
     div []
         [ sectionTitle "Vote Rationale"
         , cardContainer []
-            [ cardHeader "Rationale Summary" []
+            [ cardHeader [] "Rationale Summary" "" []
             , cardContent []
                 [ div [ HA.style "display" "grid", HA.style "gap" "1.5rem" ]
                     (div []
@@ -2076,7 +2062,7 @@ formattedReference typeToString ref =
 stepNotAvailableCard : List (Html msg) -> Html msg
 stepNotAvailableCard content =
     cardContainer []
-        [ cardHeader "Step Not Available" []
+        [ cardHeader [] "Step Not Available" "" []
         , cardContent [] content
         ]
 
@@ -2507,19 +2493,7 @@ loadSignatureButton msg =
 storageStepCard : String -> String -> List (Html msg) -> Html msg
 storageStepCard title subtitle content =
     cardContainer []
-        [ cardHeader title
-            [ if String.isEmpty subtitle then
-                text ""
-
-              else
-                Html.p
-                    [ HA.style "font-size" "0.875rem"
-                    , HA.style "color" "#4A5568"
-                    , HA.style "line-height" "1.6"
-                    , HA.style "margin-top" "0.25rem"
-                    ]
-                    [ text subtitle ]
-            ]
+        [ cardHeader [] title subtitle []
         , cardContent [] content
         ]
 
@@ -2608,31 +2582,14 @@ uploadingSpinner message =
 storageSuccessCard : List (Html msg) -> Html msg
 storageSuccessCard content =
     cardContainer []
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            , HA.style "display" "flex"
+        [ cardHeader
+            [ HA.style "display" "flex"
             , HA.style "justify-content" "space-between"
             , HA.style "align-items" "center"
             ]
-            [ div []
-                [ Html.h3
-                    [ HA.style "font-weight" "600"
-                    , HA.style "font-size" "1.125rem"
-                    , HA.style "color" "#1A202C"
-                    , HA.style "line-height" "1.4"
-                    ]
-                    [ text "Upload Successful" ]
-                , Html.p
-                    [ HA.style "font-size" "0.875rem"
-                    , HA.style "color" "#4A5568"
-                    , HA.style "line-height" "1.6"
-                    , HA.style "margin-top" "0.25rem"
-                    ]
-                    [ text "Your rationale has been successfully uploaded to IPFS" ]
-                ]
-            , div
+            "Upload Successful"
+            "Your rationale has been successfully uploaded to IPFS"
+            [ div
                 [ HA.style "background-color" "#F0FDF4"
                 , HA.style "color" "#16A34A"
                 , HA.style "padding" "0.375rem 0.75rem"
@@ -2643,9 +2600,7 @@ storageSuccessCard content =
                 , HA.style "align-items" "center"
                 , HA.style "gap" "0.375rem"
                 ]
-                [ text "✓"
-                , text "Uploaded"
-                ]
+                [ text "✓ Uploaded" ]
             ]
         , cardContent [] content
         ]
@@ -2959,7 +2914,7 @@ loadingSpinner message =
 signingStepCard : String -> String -> List (Html msg) -> Html msg
 signingStepCard title description content =
     cardContainer []
-        [ cardHeader title []
+        [ cardHeader [] title "" []
         , cardContent []
             [ Html.p
                 [ HA.style "color" "#4A5568"

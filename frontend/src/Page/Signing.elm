@@ -344,29 +344,9 @@ view ctx model =
                             [ text title ]
 
                     cardContainer content =
-                        div
-                            [ HA.style "border" "1px solid #E2E8F0"
-                            , HA.style "border-radius" "0.75rem"
-                            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-                            , HA.style "background-color" "#FFFFFF"
-                            , HA.style "overflow" "hidden"
-                            , HA.style "margin-bottom" "1.5rem"
-                            ]
-                            [ div
-                                [ HA.style "background-color" "#F7FAFC"
-                                , HA.style "padding" "1rem 1.25rem"
-                                , HA.style "border-bottom" "1px solid #EDF2F7"
-                                ]
-                                [ Html.h3
-                                    [ HA.style "font-weight" "600"
-                                    , HA.style "font-size" "1.125rem"
-                                    , HA.style "color" "#1A202C"
-                                    ]
-                                    [ text "Transaction Details" ]
-                                ]
-                            , div
-                                [ HA.style "padding" "1.25rem" ]
-                                content
+                        Helper.cardContainer []
+                            [ Helper.cardHeader [] "Transaction Details" "" []
+                            , Helper.cardContent [] content
                             ]
 
                     gatheredSignaturesSection =
@@ -408,28 +388,9 @@ view ctx model =
                                         , ( "cborHex", JE.string <| Bytes.toHex <| Transaction.serialize someTx )
                                         ]
                         in
-                        div
-                            [ HA.style "border" "1px solid #E2E8F0"
-                            , HA.style "border-radius" "0.75rem"
-                            , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-                            , HA.style "background-color" "#FFFFFF"
-                            , HA.style "overflow" "hidden"
-                            , HA.style "margin-bottom" "1.5rem"
-                            ]
-                            [ div
-                                [ HA.style "background-color" "#F7FAFC"
-                                , HA.style "padding" "1rem 1.25rem"
-                                , HA.style "border-bottom" "1px solid #EDF2F7"
-                                ]
-                                [ Html.h3
-                                    [ HA.style "font-weight" "600"
-                                    , HA.style "font-size" "1.125rem"
-                                    , HA.style "color" "#1A202C"
-                                    ]
-                                    [ text "Sign Transaction" ]
-                                ]
-                            , div
-                                [ HA.style "padding" "1.25rem" ]
+                        Helper.cardContainer []
+                            [ Helper.cardHeader [] "Sign Transaction" "" []
+                            , Helper.cardContent []
                                 [ if ctx.wallet == Nothing then
                                     Html.p
                                         [ HA.style "color" "#F59E0B"

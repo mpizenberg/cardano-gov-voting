@@ -1,7 +1,7 @@
 module Helper exposing
     ( shortenedHex, prettyAdaLovelace
     , textFieldInline
-    , formContainer, boxContainer, viewGrid
+    , formContainer, boxContainer, viewGrid, cardContainer, cardHeader, cardContent
     , viewButton, viewWalletButton
     , applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle
     , viewActionTypeIcon
@@ -37,7 +37,7 @@ and are potentially useful in multiple places.
 
 # Containers
 
-@docs formContainer, boxContainer, viewGrid
+@docs formContainer, boxContainer, viewGrid, cardContainer, cardHeader, cardContent
 
 
 # Buttons
@@ -2589,19 +2589,7 @@ storageSuccessCard content =
             ]
             "Upload Successful"
             "Your rationale has been successfully uploaded to IPFS"
-            [ div
-                [ HA.style "background-color" "#F0FDF4"
-                , HA.style "color" "#16A34A"
-                , HA.style "padding" "0.375rem 0.75rem"
-                , HA.style "border-radius" "9999px"
-                , HA.style "font-size" "0.875rem"
-                , HA.style "font-weight" "500"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , HA.style "gap" "0.375rem"
-                ]
-                [ text "✓ Uploaded" ]
-            ]
+            [ successBadge "Uploaded" ]
         , cardContent [] content
         ]
 
@@ -2676,49 +2664,18 @@ stepCard content =
 
 {-| Creates a transaction result card with header and status badge
 -}
-txResultCard : String -> String -> Bool -> List (Html msg) -> Html msg
-txResultCard title subtitle showSuccess content =
-    div
-        [ HA.style "border" "1px solid #E2E8F0"
-        , HA.style "border-radius" "0.75rem"
-        , HA.style "box-shadow" "0 2px 4px rgba(0,0,0,0.06)"
-        , HA.style "background-color" "#FFFFFF"
-        , HA.style "overflow" "hidden"
-        ]
-        [ div
-            [ HA.style "background-color" "#F7FAFC"
-            , HA.style "padding" "1rem 1.25rem"
-            , HA.style "border-bottom" "1px solid #EDF2F7"
-            , HA.style "display" "flex"
+txResultCard : String -> String -> List (Html msg) -> Html msg
+txResultCard title subtitle content =
+    cardContainer []
+        [ cardHeader
+            [ HA.style "display" "flex"
             , HA.style "justify-content" "space-between"
             , HA.style "align-items" "center"
             ]
-            [ div []
-                [ Html.h3
-                    [ HA.style "font-weight" "600"
-                    , HA.style "font-size" "1.125rem"
-                    , HA.style "color" "#1A202C"
-                    , HA.style "line-height" "1.4"
-                    ]
-                    [ text title ]
-                , Html.p
-                    [ HA.style "font-size" "0.875rem"
-                    , HA.style "color" "#4A5568"
-                    , HA.style "line-height" "1.6"
-                    , HA.style "margin-top" "0.25rem"
-                    ]
-                    [ text subtitle ]
-                ]
-            , if showSuccess then
-                successBadge "Ready"
-
-              else
-                text ""
-            ]
-        , div
-            [ HA.style "padding" "1.25rem"
-            ]
-            content
+            title
+            subtitle
+            [ successBadge "Ready" ]
+        , cardContent [] content
         ]
 
 
@@ -2737,9 +2694,7 @@ successBadge label =
         , HA.style "align-items" "center"
         , HA.style "gap" "0.375rem"
         ]
-        [ text "✓"
-        , text label
-        ]
+        [ text <| "✓ " ++ label ]
 
 
 {-| Vote button with consistent styling

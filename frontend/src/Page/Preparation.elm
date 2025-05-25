@@ -3854,14 +3854,16 @@ viewCompletedStorage r storage =
                     (Helper.externalLinkDisplay link link)
                 ]
     in
-    Helper.storageSuccessCard
-        [ Html.p
-            [ HA.style "color" "#4A5568"
-            , HA.style "margin-bottom" "1.5rem"
-            , HA.style "font-size" "0.9375rem"
+    div []
+        [ Helper.storageSuccessCard
+            [ Html.p
+                [ HA.style "color" "#4A5568"
+                , HA.style "margin-bottom" "1.5rem"
+                , HA.style "font-size" "0.9375rem"
+                ]
+                [ text "Your file has been uploaded to IPFS. File pinning is ongoing and may take a few hours to complete. We recommend saving a local copy of your JSON file in case you need to re-upload it in the future." ]
+            , Helper.storageInfoGrid infoItems
             ]
-            [ text "Your file has been uploaded to IPFS. File pinning is ongoing and may take a few hours to complete. We recommend saving a local copy of your JSON file in case you need to re-upload it in the future." ]
-        , Helper.storageInfoGrid infoItems
         , Helper.viewButton "Add another storage location" AddOtherStorageButtonCLicked
         ]
 
@@ -3904,21 +3906,20 @@ viewBuildTxStep ctx model =
                 Helper.loadingSpinner "Building transaction..."
 
             ( Ok _, Done _ { tx } ) ->
-                Helper.txResultCard
-                    "Transaction Built"
-                    "Your vote transaction has been created successfully"
-                    True
-                    [ Html.p
-                        [ HA.style "color" "#4A5568"
-                        , HA.style "font-size" "0.9375rem"
-                        , HA.style "margin-bottom" "1rem"
+                div []
+                    [ Helper.txResultCard
+                        "Transaction Built"
+                        "Your vote transaction has been created successfully"
+                        [ Html.p
+                            [ HA.style "color" "#4A5568"
+                            , HA.style "font-size" "0.9375rem"
+                            , HA.style "margin-bottom" "1rem"
+                            ]
+                            [ text "Transaction details (₳ displayed as lovelaces):" ]
+                        , Helper.txDetailsContainer
+                            [ Helper.txPreContainer <| prettyTx tx ]
                         ]
-                        [ text "Transaction details (₳ displayed as lovelaces):" ]
-                    , Helper.txDetailsContainer
-                        [ Helper.txPreContainer <| prettyTx tx ]
-                    , Html.p
-                        [ HA.style "margin-top" "1rem" ]
-                        [ Helper.viewButton "Change vote" ChangeVoteButtonClicked ]
+                    , Helper.viewButton "Change vote" ChangeVoteButtonClicked
                     ]
         ]
 
@@ -4050,20 +4051,20 @@ viewSignTxStep ctx voterStep buildTxStep =
                         , HA.style "font-size" "0.9375rem"
                         , HA.style "margin-bottom" "1.5rem"
                         ]
-                        [ text "Click the button below to proceed to the signing page where you can finalize and submit your voting transaction." ]
-                    , ctx.signingLink tx
-                        (expectedSignatures
-                            |> List.map
-                                (\keyHash ->
-                                    { keyHash = keyHash
-                                    , keyName =
-                                        Dict.get (Bytes.toHex keyHash) keyNames
-                                            |> Maybe.withDefault "Key hash"
-                                    }
-                                )
-                        )
-                        [ Helper.signingButton "Go to Signing Page" ]
+                        [ text "Click the button below to proceed to the signing page where you can sign and submit your voting transaction." ]
                     ]
+                , ctx.signingLink tx
+                    (expectedSignatures
+                        |> List.map
+                            (\keyHash ->
+                                { keyHash = keyHash
+                                , keyName =
+                                    Dict.get (Bytes.toHex keyHash) keyNames
+                                        |> Maybe.withDefault "Key hash"
+                                }
+                            )
+                    )
+                    [ Helper.signingButton "Go to Signing Page" ]
                 ]
 
         _ ->

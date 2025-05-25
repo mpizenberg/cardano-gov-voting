@@ -22,7 +22,7 @@ import Dict exposing (Dict)
 import File exposing (File)
 import File.Select
 import Helper
-import Html exposing (Html, a, div, text)
+import Html exposing (Html, div, text)
 import Html.Attributes as HA
 import Json.Decode as JD
 import Json.Encode as JE
@@ -366,7 +366,7 @@ view ctx model =
                                     , HA.style "font-style" "italic"
                                     , HA.style "font-size" "0.875rem"
                                     ]
-                                    [ text "At least one signature is required to pay the transaction fees." ]
+                                    [ text "At least one of these signatures is to pay the transaction fees." ]
                                 ]
                             ]
 
@@ -581,23 +581,7 @@ view ctx model =
                                                 Testnet ->
                                                     "https://preview.cardanoscan.io/transaction/"
                                       in
-                                      a
-                                        [ HA.href (cardanoScanBaseUrl ++ Bytes.toHex txId)
-                                        , HA.target "_blank"
-                                        , HA.style "display" "inline-flex"
-                                        , HA.style "align-items" "center"
-                                        , HA.style "justify-content" "center"
-                                        , HA.style "white-space" "nowrap"
-                                        , HA.style "border-radius" "9999px"
-                                        , HA.style "font-size" "0.875rem"
-                                        , HA.style "font-weight" "500"
-                                        , HA.style "transition" "all 0.2s"
-                                        , HA.style "outline" "none"
-                                        , HA.style "background-color" "#272727"
-                                        , HA.style "color" "#f7fafc"
-                                        , HA.style "padding" "0.75rem 1.5rem"
-                                        ]
-                                        [ text "View on CardanoScan" ]
+                                      Helper.externalLinkButton { url = cardanoScanBaseUrl ++ Bytes.toHex txId, label = "View on CardanoScan" }
                                     ]
                                 ]
                             ]

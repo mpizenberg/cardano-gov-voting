@@ -3251,7 +3251,7 @@ viewCustomIpfsForm form =
                 , HA.style "font-size" "1rem"
                 ]
                 [ text "HTTP Headers" ]
-            , Helper.addAuthorButton AddHeaderButtonClicked
+            , Helper.addHeaderButton AddHeaderButtonClicked
             ]
         , if List.isEmpty form.headers then
             Html.p

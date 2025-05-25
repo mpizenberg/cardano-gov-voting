@@ -2,7 +2,7 @@ module Helper exposing
     ( shortenedHex, prettyAdaLovelace
     , textFieldInline
     , formContainer, boxContainer, viewGrid, cardContainer, cardHeader, cardContent
-    , viewButton, viewWalletButton
+    , viewButton, viewWalletButton, externalLinkButton
     , applyDropdownContainerStyle, applyDropdownItemStyle, applyMobileDropdownContainerStyle, applyWalletIconContainerStyle, applyWalletIconStyle
     , viewActionTypeIcon
     , sectionTitle, infoBox, viewError
@@ -11,7 +11,7 @@ module Helper exposing
     , PreconfVoter, viewVoterGrid, viewVoterCard, voterCustomCard, votingPowerDisplay, scriptInfoContainer, viewVoterCredDetails, viewVoterDetailsItem, viewCredInfo
     , viewUtxoRefForm, scriptSignerSection, scriptSignerCheckbox, viewIdentifiedVoterCard, viewVoterInfoItem
     , proposalListContainer, showMoreButton, proposalCard, selectedProposalCard, proposalDetailsItem
-    , storageConfigCard, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, storageHeaderInput
+    , storageConfigCard, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, addHeaderButton, storageHeaderInput
     , storageHeaderForm, storageInfoGrid, storageNotAvailableCard, storageUploadCard, uploadingSpinner, storageSuccessCard, fileInfoItem, externalLinkDisplay
     , rationaleCard, rationaleMarkdownInput, rationaleTextArea, pdfAutogenCheckbox, voteNumberInput, referenceCard, referenceForm
     , rationaleCompletedCard, optionalSection, formattedInternalVote, formattedReferences
@@ -42,7 +42,7 @@ and are potentially useful in multiple places.
 
 # Buttons
 
-@docs viewButton, viewWalletButton
+@docs viewButton, viewWalletButton, externalLinkButton
 
 
 # Wallet Styling
@@ -83,7 +83,7 @@ and are potentially useful in multiple places.
 
 # Storage Configuration Components
 
-@docs storageConfigCard, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, storageHeaderInput
+@docs storageConfigCard, storageMethodOption, storageProviderForm, storageProviderCard, storageConfigItem, addHeaderButton, storageHeaderInput
 @docs storageHeaderForm, storageInfoGrid, storageNotAvailableCard, storageUploadCard, uploadingSpinner, storageSuccessCard, fileInfoItem, externalLinkDisplay
 
 
@@ -110,7 +110,7 @@ and are potentially useful in multiple places.
 
 -}
 
-import Html exposing (Html, button, div, text)
+import Html exposing (Html, div, text)
 import Html.Attributes as HA
 import Html.Events exposing (onCheck, onClick)
 import Markdown.Block
@@ -261,9 +261,35 @@ boxContainer content =
 -- BUTTONS #####################################################################
 
 
+squareButton : List (Html.Attribute msg) -> String -> msg -> Html msg
+squareButton otherAttributes label msg =
+    Html.button
+        (HA.style "font-weight" "500"
+            :: HA.style "border" "1px solid #e2e8f0"
+            :: HA.style "border-radius" "0.5rem"
+            :: HA.style "padding" "0.75rem 1.5rem"
+            :: HA.style "cursor" "pointer"
+            :: HA.style "font-size" "0.875rem"
+            :: onClick msg
+            :: otherAttributes
+        )
+        [ text label ]
+
+
+blackSquareButton : List (Html.Attribute msg) -> String -> msg -> Html msg
+blackSquareButton otherAttributes label msg =
+    squareButton
+        (HA.style "background-color" "#272727"
+            :: HA.style "color" "white"
+            :: otherAttributes
+        )
+        label
+        msg
+
+
 viewButton : String -> msg -> Html msg
 viewButton label msg =
-    button
+    Html.button
         (onClick msg
             :: HA.style "margin-top" "0.5rem"
             :: HA.style "margin-bottom" "0.5em"
@@ -274,9 +300,30 @@ viewButton label msg =
 
 viewWalletButton : String -> msg -> List (Html msg) -> Html msg
 viewWalletButton label msg content =
-    button
+    Html.button
         (onClick msg :: buttonCommonStyle)
         (text label :: content)
+
+
+externalLinkButton : { url : String, label : String } -> Html msg
+externalLinkButton { url, label } =
+    Html.a
+        [ HA.href url
+        , HA.target "_blank"
+        , HA.style "display" "inline-flex"
+        , HA.style "align-items" "center"
+        , HA.style "justify-content" "center"
+        , HA.style "white-space" "nowrap"
+        , HA.style "border-radius" "9999px"
+        , HA.style "font-size" "0.875rem"
+        , HA.style "font-weight" "500"
+        , HA.style "transition" "all 0.2s"
+        , HA.style "outline" "none"
+        , HA.style "background-color" "#272727"
+        , HA.style "color" "#f7fafc"
+        , HA.style "padding" "0.75rem 1.5rem"
+        ]
+        [ text <| label ++ " ↗" ]
 
 
 buttonCommonStyle : List (Html.Attribute msg)
@@ -1198,18 +1245,12 @@ showMoreButton hasMore visibleCount totalCount clickMsg =
             [ HA.style "text-align" "center"
             , HA.style "margin-top" "2rem"
             ]
-            [ button
+            [ squareButton
                 [ HA.style "background-color" "#f9fafb"
                 , HA.style "color" "#272727"
-                , HA.style "font-weight" "500"
-                , HA.style "border" "1px solid #e2e8f0"
-                , HA.style "border-radius" "0.5rem"
-                , HA.style "padding" "0.75rem 1.5rem"
-                , HA.style "cursor" "pointer"
-                , HA.style "font-size" "0.875rem"
-                , onClick clickMsg
                 ]
-                [ text <| "Show More (" ++ String.fromInt (min 10 (totalCount - visibleCount)) ++ " of " ++ String.fromInt (totalCount - visibleCount) ++ " remaining)" ]
+                ("Show More (" ++ String.fromInt (min 10 (totalCount - visibleCount)) ++ " of " ++ String.fromInt (totalCount - visibleCount) ++ " remaining)")
+                clickMsg
             ]
 
     else
@@ -1323,21 +1364,12 @@ proposalCard { title, hashIsValid, abstract, actionType, linkUrl, linkHex, index
                         ]
                     ]
                 ]
-            , Html.button
+            , blackSquareButton
                 [ HA.style "width" "100%"
-                , HA.style "background-color" "#272727"
-                , HA.style "color" "white"
-                , HA.style "font-weight" "500"
-                , HA.style "font-size" "0.875rem"
-                , HA.style "padding" "0.75rem 0"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "0.5rem"
-                , HA.style "cursor" "pointer"
-                , HA.style "transition" "background-color 0.2s"
                 , HA.style "margin-top" "1rem"
-                , onClick selectMsg
                 ]
-                [ text "Select Proposal" ]
+                "Select Proposal"
+                selectMsg
             ]
         ]
 
@@ -1482,6 +1514,13 @@ storageConfigItem label content =
         ]
 
 
+{-| Helper button to add an HTTP header in custom IPFS configs.
+-}
+addHeaderButton : msg -> Html msg
+addHeaderButton addHeaderMsg =
+    blackSquareButton [] "+ Add Header" addHeaderMsg
+
+
 {-| Input for HTTP header
 -}
 storageHeaderInput : { label : String, value : String, onInputMsg : String -> msg } -> Html msg
@@ -1537,18 +1576,24 @@ storageHeaderForm _ name value deleteMsg nameChangeMsg valueChangeMsg =
                     , onInputMsg = valueChangeMsg
                     }
                 ]
-            , button
-                [ HA.style "background-color" "black"
-                , HA.style "color" "white"
-                , HA.style "width" "2.5rem"
-                , HA.style "height" "2.5rem"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "0.375rem"
-                , onClick deleteMsg
-                ]
-                [ text "🗑" ]
+            , iconButton "🗑" deleteMsg
             ]
         ]
+
+
+iconButton : String -> msg -> Html msg
+iconButton icon msg =
+    Html.button
+        [ HA.style "background-color" "black"
+        , HA.style "color" "white"
+        , HA.style "font-size" "1.25rem"
+        , HA.style "width" "2.2rem"
+        , HA.style "height" "2.2rem"
+        , HA.style "border" "none"
+        , HA.style "border-radius" "0.375rem"
+        , onClick msg
+        ]
+        [ text icon ]
 
 
 
@@ -1720,23 +1765,7 @@ referenceCard content addMsg =
             ]
             "References"
             "Add links and references to support your rationale."
-            [ button
-                [ HA.style "background-color" "#272727"
-                , HA.style "color" "white"
-                , HA.style "font-weight" "500"
-                , HA.style "font-size" "0.875rem"
-                , HA.style "padding" "0.5rem 1rem"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "0.375rem"
-                , HA.style "cursor" "pointer"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , onClick addMsg
-                ]
-                [ Html.span [ HA.style "margin-right" "0.375rem" ] [ text "+" ]
-                , text "Add Reference"
-                ]
-            ]
+            [ blackSquareButton [] "+ Add Reference" addMsg ]
         , cardContent []
             [ if List.isEmpty content then
                 Html.p
@@ -1770,25 +1799,7 @@ referenceForm index typeName label uri deleteMsg typeChangeMsg labelChangeMsg ur
                 , HA.style "color" "#374151"
                 ]
                 [ text ("Reference " ++ String.fromInt (index + 1)) ]
-            , button
-                [ HA.style "background-color" "black"
-                , HA.style "color" "white"
-                , HA.style "width" "2rem"
-                , HA.style "height" "2rem"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "0.375rem"
-                , HA.style "cursor" "pointer"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , HA.style "justify-content" "center"
-                , onClick deleteMsg
-                ]
-                [ Html.div
-                    [ HA.style "font-size" "1.25rem"
-                    , HA.style "line-height" "1"
-                    ]
-                    [ text "🗑" ]
-                ]
+            , iconButton "🗑" deleteMsg
             ]
         , div
             [ HA.style "display" "grid"
@@ -1888,23 +1899,7 @@ rationaleCompletedCard summary content editMsg =
                 ]
             ]
         , Html.p [ HA.style "margin-top" "1rem" ]
-            [ button
-                [ HA.style "background-color" "#272727"
-                , HA.style "color" "white"
-                , HA.style "font-weight" "500"
-                , HA.style "font-size" "0.875rem"
-                , HA.style "padding" "0.5rem 1.5rem"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "9999px"
-                , HA.style "cursor" "pointer"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , HA.style "justify-content" "center"
-                , HA.style "height" "3rem"
-                , onClick editMsg
-                ]
-                [ text "Edit rationale" ]
-            ]
+            [ viewButton "Edit rationale" editMsg ]
         ]
 
 
@@ -2126,7 +2121,7 @@ downloadJSONButton jsonRationale =
         , HA.download "rationale.json"
         , HA.style "text-decoration" "none"
         ]
-        [ button
+        [ Html.button
             [ HA.style "background-color" "#272727"
             , HA.style "color" "white"
             , HA.style "font-weight" "500"
@@ -2169,22 +2164,7 @@ authorsCard headerContent content =
 -}
 addAuthorButton : msg -> Html msg
 addAuthorButton clickMsg =
-    button
-        [ HA.style "background-color" "#272727"
-        , HA.style "color" "white"
-        , HA.style "font-weight" "500"
-        , HA.style "font-size" "0.875rem"
-        , HA.style "padding" "0.5rem 1rem"
-        , HA.style "border" "none"
-        , HA.style "border-radius" "0.375rem"
-        , HA.style "cursor" "pointer"
-        , HA.style "display" "flex"
-        , HA.style "align-items" "center"
-        , onClick clickMsg
-        ]
-        [ Html.span [ HA.style "margin-right" "0.375rem" ] [ text "+" ]
-        , text "Add Author"
-        ]
+    blackSquareButton [] "+ Add Author" clickMsg
 
 
 {-| Code snippet box
@@ -2314,25 +2294,7 @@ authorForm index deleteMsg content =
                 , HA.style "color" "#1A202C"
                 ]
                 [ text ("Author " ++ String.fromInt (index + 1)) ]
-            , button
-                [ HA.style "background-color" "black"
-                , HA.style "color" "white"
-                , HA.style "width" "2rem"
-                , HA.style "height" "2rem"
-                , HA.style "border" "none"
-                , HA.style "border-radius" "0.375rem"
-                , HA.style "cursor" "pointer"
-                , HA.style "display" "flex"
-                , HA.style "align-items" "center"
-                , HA.style "justify-content" "center"
-                , onClick deleteMsg
-                ]
-                [ Html.div
-                    [ HA.style "font-size" "1.25rem"
-                    , HA.style "line-height" "1"
-                    ]
-                    [ text "🗑" ]
-                ]
+            , iconButton "🗑" deleteMsg
             ]
         , div
             [ HA.style "display" "grid"
@@ -2395,7 +2357,7 @@ signatureField signature replaceMsg =
                 , HA.style "color" "#4B5563"
                 ]
                 [ text "Signature" ]
-            , button
+            , Html.button
                 [ HA.style "font-size" "0.75rem"
                 , HA.style "color" "#4B5563"
                 , HA.style "background" "none"
@@ -2427,43 +2389,26 @@ formButtonsRow content =
 -}
 secondaryButton : String -> msg -> Html msg
 secondaryButton label clickMsg =
-    button
+    squareButton
         [ HA.style "background-color" "#F3F4F6"
         , HA.style "color" "#4B5563"
-        , HA.style "font-weight" "500"
-        , HA.style "font-size" "0.875rem"
-        , HA.style "padding" "0.75rem 1.5rem"
-        , HA.style "border" "1px solid #E5E7EB"
-        , HA.style "border-radius" "0.5rem"
-        , HA.style "cursor" "pointer"
-        , onClick clickMsg
         ]
-        [ text label ]
+        label
+        clickMsg
 
 
 {-| Primary button
 -}
 primaryButton : String -> msg -> Html msg
 primaryButton label clickMsg =
-    button
-        [ HA.style "background-color" "#272727"
-        , HA.style "color" "white"
-        , HA.style "font-weight" "500"
-        , HA.style "font-size" "0.875rem"
-        , HA.style "padding" "0.75rem 1.5rem"
-        , HA.style "border" "none"
-        , HA.style "border-radius" "0.5rem"
-        , HA.style "cursor" "pointer"
-        , onClick clickMsg
-        ]
-        [ text label ]
+    blackSquareButton [] label clickMsg
 
 
 {-| Load signature file button
 -}
 loadSignatureButton : msg -> Html msg
 loadSignatureButton msg =
-    button
+    Html.button
         [ HA.style "background-color" "#F9FAFB"
         , HA.style "color" "#272727"
         , HA.style "font-weight" "500"
@@ -2701,7 +2646,7 @@ successBadge label =
 -}
 voteButton : String -> String -> msg -> Html msg
 voteButton label color clickMsg =
-    button
+    Html.button
         [ HA.style "background-color" color
         , HA.style "color" "white"
         , HA.style "font-weight" "500"
@@ -2914,21 +2859,4 @@ keyListItem keyName hashHex =
 -}
 signingButton : String -> Html msg
 signingButton buttonText =
-    div
-        [ HA.style "text-align" "center" ]
-        [ button
-            [ HA.style "background-color" "#272727"
-            , HA.style "color" "white"
-            , HA.style "font-weight" "500"
-            , HA.style "font-size" "0.875rem"
-            , HA.style "padding" "0.5rem 1.5rem"
-            , HA.style "border" "none"
-            , HA.style "border-radius" "9999px"
-            , HA.style "cursor" "pointer"
-            , HA.style "display" "flex"
-            , HA.style "align-items" "center"
-            , HA.style "justify-content" "center"
-            , HA.style "height" "3rem"
-            ]
-            [ text buttonText ]
-        ]
+    div [] [ Html.button buttonCommonStyle [ text buttonText ] ]

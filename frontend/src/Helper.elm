@@ -1276,7 +1276,22 @@ proposalCard { title, hashIsValid, abstract, actionType, linkUrl, linkHex, index
                     [ text title ]
 
                  else
-                    [ text <| title ++ " INVALID HASH" ]
+                    [ text title
+                    , Html.span
+                        [ HA.style "display" "inline-flex"
+                        , HA.style "align-items" "center"
+                        , HA.style "background-color" "#FEF2F2"
+                        , HA.style "color" "#DC2626"
+                        , HA.style "font-weight" "bold"
+                        , HA.style "padding" "0.25rem 0.5rem"
+                        , HA.style "border-radius" "0.375rem"
+                        , HA.style "font-size" "0.875rem"
+                        , HA.style "gap" "0.25rem"
+                        ]
+                        [ Html.span [] [ text "⚠️" ]
+                        , text "INVALID HASH"
+                        ]
+                    ]
                 )
             ]
         , div

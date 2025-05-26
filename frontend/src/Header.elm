@@ -11,8 +11,8 @@ import WalletConnector
 type alias ViewContext msg =
     { mobileMenuIsOpen : Bool
     , toggleMobileMenu : msg
-    , networkDropdownIsOpen : Bool -- New field for network dropdown state
-    , toggleNetworkDropdown : msg -- New field for toggling network dropdown
+    , networkDropdownIsOpen : Bool
+    , toggleNetworkDropdown : msg
     , walletConnector : WalletConnector.State
     , walletConnectorMsgs : WalletConnector.Msgs msg
     , logoLink : List (Html.Attribute msg) -> List (Html msg) -> Html msg
@@ -56,7 +56,7 @@ view { mobileMenuIsOpen, toggleMobileMenu, networkDropdownIsOpen, toggleNetworkD
                     ]
 
                 -- Desktop menu
-                , div [ class "hidden md:flex space-x-8" ]
+                , div [ class "hidden md:flex space-x-12" ]
                     (List.map viewDesktopMenuItem navigationItems)
 
                 -- Wallet and network selector
@@ -76,7 +76,7 @@ view { mobileMenuIsOpen, toggleMobileMenu, networkDropdownIsOpen, toggleNetworkD
                         , onClick toggleMobileMenu
                         ]
                         [ -- Hamburger icon
-                          div [ class "w-6 h-6 flex flex-col justify-around" ]
+                          div [ class "mr-4 w-6 h-6 flex flex-col justify-around" ]
                             [ span
                                 [ class
                                     ("block w-6 h-0.5 bg-gray-800 transition-all duration-300 "

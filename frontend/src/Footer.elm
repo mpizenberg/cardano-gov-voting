@@ -23,8 +23,6 @@ view { copyright, githubLink, disclaimerLink } =
     footer
         [ class "bg-transparent py-4 px-6 border-t"
         , style "border-color" "#C6C6C6"
-        , style "position" "absolute"
-        , style "bottom" "0"
         , style "width" "100%"
         ]
         [ div [ class "container mx-auto flex flex-col md:flex-row justify-between items-center space-y-2 md:space-y-0" ]

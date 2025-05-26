@@ -533,7 +533,7 @@ type alias ViewContext msg =
 
 view : ViewContext msg -> Model -> Html msg
 view ctx (Model model) =
-    div [ HA.style "max-width" "1440px", HA.style "margin" "0 auto" ]
+    div [ HA.style "max-width" "1536px", HA.style "margin" "0 auto" ]
         [ div
             [ HA.style "position" "relative"
             , HA.style "overflow" "hidden"

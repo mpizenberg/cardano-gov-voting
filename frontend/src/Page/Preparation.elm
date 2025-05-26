@@ -2491,7 +2491,7 @@ type alias ViewContext msg =
 
 view : ViewContext msg -> Model -> Html msg
 view ctx (Model model) =
-    div [ HA.style "max-width" "1440px", HA.style "margin" "0 auto" ]
+    div [ HA.style "max-width" "1536px", HA.style "margin" "0 auto" ]
         [ Helper.viewPageHeader
         , div
             [ HA.style "max-width" "840px"
@@ -3046,7 +3046,16 @@ viewSelectedProposal ctx { id, actionType, metadata, metadataUrl, metadataHash }
                 text ""
 
               else
-                text "INVALID HASH"
+                Html.span
+                    [ HA.style "background-color" "#FEF2F2"
+                    , HA.style "color" "#DC2626"
+                    , HA.style "font-weight" "bold"
+                    , HA.style "padding" "0.5rem"
+                    , HA.style "border-radius" "0.25rem"
+                    ]
+                    [ Html.span [] [ text "⚠️" ]
+                    , text "INVALID HASH"
+                    ]
             , abstractContent
             ]
         , Html.p

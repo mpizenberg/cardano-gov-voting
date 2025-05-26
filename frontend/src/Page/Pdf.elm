@@ -441,7 +441,7 @@ view ctx (Model model) =
                         ]
     in
     Html.map ctx.wrapMsg <|
-        div [ HA.style "max-width" "1440px", HA.style "margin" "0 auto" ]
+        div [ HA.style "max-width" "1536px", HA.style "margin" "0 auto" ]
             [ heroSection
             , div
                 [ HA.style "max-width" "840px"

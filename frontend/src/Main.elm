@@ -1005,7 +1005,6 @@ view model =
     div
         [ HA.style "min-height" "100vh"
         , HA.style "position" "relative"
-        , HA.style "padding-bottom" "80px"
         , backgroundStyle
         ]
         [ -- Gradient circles (only on landing page)

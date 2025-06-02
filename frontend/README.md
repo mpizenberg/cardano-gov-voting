@@ -1,4 +1,4 @@
-# Voting Frontend Staging
+# Voting Frontend
 
 The frontend for this voting tool is an [Elm][elm] application, based on the [elm-cardano][elm-cardano] framework.
 It’s a non-conventional choice with tradeoffs, but also strong benefits, both for user experience and open contributions.

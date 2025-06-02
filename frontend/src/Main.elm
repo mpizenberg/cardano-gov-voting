@@ -1018,7 +1018,7 @@ view model =
         , viewErrors model.errors
         , Footer.view
             { copyright = "© 2025 Cardano Stiftung"
-            , githubLink = "https://github.com/mpizenberg/cardano-gov-voting"
+            , githubLink = "https://github.com/cardano-foundation/cardano-gov-voting"
             , disclaimerLink = link RouteDisclaimer
             }
         ]

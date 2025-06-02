@@ -3,10 +3,9 @@ name: Backend
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [production]
 
 jobs:
-
   lint:
     runs-on: ubuntu-latest
     steps:

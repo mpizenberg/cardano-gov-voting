@@ -3,6 +3,7 @@ Minimalist server for Cardano governance uses
 ## Getting Started
 
 First create and modify the `.env` file containing the IPFS node access config.
+You can start by copying the the `.env.example`.
 You can either configure it as a regular IPFS RPC server with basic auth,
 or as NMKR server.
 

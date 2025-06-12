@@ -1514,7 +1514,7 @@ confirmVoter ctx form loadedRefUtxos =
                     justError <| "There was an error loading the script info. Are you sure you registered? " ++ Debug.toString error
 
                 RemoteData.Success scriptInfo ->
-                    validateScriptVoter ctx form loadedRefUtxos Witness.WithDrepCred scriptInfo
+                    validateScriptVoter ctx form loadedRefUtxos Witness.WithCommitteeHotCred scriptInfo
 
 
 validateScriptVoter : UpdateContext msg -> VoterPreparationForm -> Utxo.RefDict Output -> (Witness.Credential -> Witness.Voter) -> ScriptInfo -> ( Step VoterPreparationForm Witness.Voter Witness.Voter, Cmd Msg, Maybe MsgToParent )

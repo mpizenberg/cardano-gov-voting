@@ -80,6 +80,10 @@ IPFS_DESCRIPTION = os.getenv(
     "IPFS_DESCRIPTION", "Files will be pinned using the pre-configured IPFS server."
 )
 
+# Matomo Analytics
+MATOMO_URL = os.getenv("MATOMO_URL")
+MATOMO_SITE_ID = os.getenv("MATOMO_SITE_ID")
+
 # Preconfigured voter templates
 PRECONFIGURED_VOTERS_JSON = os.getenv("PRECONFIGURED_VOTERS_JSON", "[]")
 try:
@@ -120,6 +124,8 @@ async def read_root(request: Request):
             "ipfs_label": IPFS_LABEL,
             "ipfs_description": IPFS_DESCRIPTION,
             "preconfigured_voters": PRECONFIGURED_VOTERS_JSON,
+            "matomo_url": MATOMO_URL,
+            "matomo_site_id": MATOMO_SITE_ID,
         },
     )
 
@@ -134,6 +140,8 @@ async def get_page(full_path: str, request: Request):
             "ipfs_label": IPFS_LABEL,
             "ipfs_description": IPFS_DESCRIPTION,
             "preconfigured_voters": PRECONFIGURED_VOTERS_JSON,
+            "matomo_url": MATOMO_URL,
+            "matomo_site_id": MATOMO_SITE_ID,
         },
     )
 

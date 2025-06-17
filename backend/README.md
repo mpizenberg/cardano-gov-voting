@@ -12,7 +12,7 @@ or as NMKR server.
 > you can fill this `.env` file with the default (incorrect) values below,
 > since IPFS RPC config can be done directly in the frontend.
 
-````env
+```env
 # Regular IPFS RPC config with basic auth
 IPFS_FORMAT=basic
 IPFS_RPC_URL=https://ipfs-rpc.mycompany.org/api/v0
@@ -63,7 +63,8 @@ PRECONFIGURED_VOTERS_JSON="[
   , \"description\": \"Vote as a Stake Pool Operator\"
   , \"govId\": \"pool1nqheyct9a0mxn80cwp9pd5guncfu3rzwqtmru0l94accz7gjcgl\"
   }
-]```
+]"
+```
 
 ### Analytics Configuration
 
@@ -85,7 +86,7 @@ I suggest you use [`uv`](https://docs.astral.sh/uv/) for that, which takes care 
 
 ```sh
 uv run server.py
-````
+```
 
 The `/pretty-gov-pdf` endpoint converts governance JSON metadata into pretty PDFs, easier to read.
 This conversion is based on the [Typst](https://typst.app/docs/) markup language and compiler.

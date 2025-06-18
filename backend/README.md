@@ -32,6 +32,23 @@ IPFS_DESCRIPTION="Files will be stored using the pre-configured IPFS servers."
 # Network config: 0 for Preview, 1 for Mainnet
 NETWORK_ID=0
 
+# Matomo Analytics (optional - can be removed for self-hosted deployments)
+MATOMO_URL="https://cardanofoundation.matomo.cloud/"
+MATOMO_SITE_ID="13"
+MATOMO_JS_URL="https://cdn.matomo.cloud/cardanofoundation.matomo.cloud/matomo.js"
+MATOMO_SCRIPT='
+      var _paq = window._paq = window._paq || [];
+      _paq.push(["trackPageView"]);
+      _paq.push(["enableLinkTracking"]);
+      (function() {
+        var u="MATOMO_URL_PLACEHOLDER";
+        _paq.push(["setTrackerUrl", u+"matomo.php"]);
+        _paq.push(["setSiteId", "MATOMO_SITE_ID_PLACEHOLDER"]);
+        var d=document, g=d.createElement("script"), s=d.getElementsByTagName("script")[0];
+        g.async=true; g.src="MATOMO_JS_URL_PLACEHOLDER"; s.parentNode.insertBefore(g,s);
+      })();
+'
+
 # Preconfiguration of some voters for fast selection
 PRECONFIGURED_VOTERS_JSON="[
   { \"voterType\": \"DRep\"
@@ -48,6 +65,21 @@ PRECONFIGURED_VOTERS_JSON="[
   }
 ]"
 ```
+
+### Analytics Configuration
+
+The application includes optional Matomo analytics integration. All Matomo-related environment variables are optional and can be omitted for self-hosted deployments or if you prefer not to use analytics.
+
+- `MATOMO_URL`: Base URL of your Matomo instance
+- `MATOMO_SITE_ID`: Your site ID in Matomo
+- `MATOMO_JS_URL`: URL to the Matomo JavaScript file
+- `MATOMO_SCRIPT`: Complete Matomo tracking script with placeholders
+
+The placeholders in `MATOMO_SCRIPT` (`MATOMO_URL_PLACEHOLDER`, `MATOMO_SITE_ID_PLACEHOLDER`, `MATOMO_JS_URL_PLACEHOLDER`) will be automatically replaced with the corresponding environment variable values.
+
+If any of these variables are not set, analytics will be disabled.
+
+## Running the Server
 
 Then you can start the python server.
 I suggest you use [`uv`](https://docs.astral.sh/uv/) for that, which takes care of all the dependency stuff.

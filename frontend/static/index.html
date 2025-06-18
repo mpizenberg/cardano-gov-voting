@@ -33,6 +33,14 @@
         data-project-id="019599a1-e69a-7bb3-8d47-c5a7d18c7d31"
         defer
     ></script>
+    {% if matomo_script %}
+    <!-- Matomo -->
+    <!-- This script can be removed if you are self-hosting -->
+    <script>
+      {{matomo_script|safe}}
+    </script>
+    <!-- End Matomo Code -->
+    {% endif %}
 </head>
 
 <body>

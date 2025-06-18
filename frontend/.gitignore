@@ -1,4 +1,6 @@
 static/
+!static/logo/
+!static/logo/og-image.jpg
 node_modules/
 
 # Aiken compilation artifacts

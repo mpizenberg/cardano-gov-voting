@@ -718,6 +718,13 @@ handleUrlChange route model =
     let
         appUrl =
             routeToAppUrl route
+
+        pushUrlCmd =
+            if routeToAppUrl route == model.appUrl then
+                Cmd.none
+
+            else
+                pushUrl <| AppUrl.toString appUrl
     in
     case route of
         Route404 ->
@@ -729,7 +736,7 @@ handleUrlChange route model =
                 , page = LandingPage
                 , appUrl = appUrl
               }
-            , pushUrl <| AppUrl.toString appUrl
+            , pushUrlCmd
             )
 
         RoutePreparation { networkId } ->
@@ -740,9 +747,6 @@ handleUrlChange route model =
                         , page = PreparationPage <| Page.Preparation.init model.ipfsPreconfig
                         , appUrl = appUrl
                     }
-
-                updateUrlCmd =
-                    pushUrl <| AppUrl.toString appUrl
             in
             if networkId /= model.networkId then
                 initHelper route
@@ -754,12 +758,12 @@ handleUrlChange route model =
                     }
 
             else if RemoteData.isSuccess model.proposals then
-                ( newModel, updateUrlCmd )
+                ( newModel, pushUrlCmd )
 
             else
                 ( { newModel | proposals = RemoteData.Loading }
                 , Cmd.batch
-                    [ updateUrlCmd
+                    [ pushUrlCmd
                     , Api.defaultApiProvider.queryEpoch model.networkId GotEpoch
                     , Api.defaultApiProvider.loadGovProposals model.networkId GotProposals
                     ]
@@ -781,7 +785,7 @@ handleUrlChange route model =
                     , page = SigningPage <| Page.Signing.initialModel expectedSigners tx
                     , appUrl = appUrl
                   }
-                , pushUrl <| AppUrl.toString appUrl
+                , pushUrlCmd
                 )
 
         RouteMultisigRegistration ->
@@ -790,7 +794,7 @@ handleUrlChange route model =
                 , page = MultisigRegistrationPage Page.MultisigRegistration.initialModel
                 , appUrl = appUrl
               }
-            , pushUrl <| AppUrl.toString appUrl
+            , pushUrlCmd
             )
 
         RoutePdf ->
@@ -799,7 +803,7 @@ handleUrlChange route model =
                 , page = PdfPage Page.Pdf.initialModel
                 , appUrl = appUrl
               }
-            , pushUrl <| AppUrl.toString appUrl
+            , pushUrlCmd
             )
 
         RouteDisclaimer ->
@@ -808,7 +812,7 @@ handleUrlChange route model =
                 , page = DisclaimerPage
                 , appUrl = appUrl
               }
-            , pushUrl <| AppUrl.toString appUrl
+            , pushUrlCmd
             )
 
 

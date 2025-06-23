@@ -2666,8 +2666,8 @@ missingStepsList items =
 
 {-| Missing step item - either complete or incomplete
 -}
-missingStepItem : String -> Bool -> String -> Html msg
-missingStepItem stepName isMissing anchorId =
+missingStepItem : String -> Bool -> Maybe String -> Html msg
+missingStepItem stepName isMissing maybeAnchorId =
     if isMissing then
         Html.li
             [ HA.style "display" "flex"
@@ -2679,13 +2679,18 @@ missingStepItem stepName isMissing anchorId =
                 , HA.style "font-size" "1rem"
                 ]
                 [ text "⚠️" ]
-            , Html.a
-                [ HA.href ("#" ++ anchorId)
-                , HA.style "color" "#3182CE"
-                , HA.style "text-decoration" "underline"
-                , HA.style "cursor" "pointer"
-                ]
-                [ text stepName ]
+            , case maybeAnchorId of
+                Nothing ->
+                    text stepName
+
+                Just anchorId ->
+                    Html.a
+                        [ HA.href ("#" ++ anchorId)
+                        , HA.style "color" "#3182CE"
+                        , HA.style "text-decoration" "underline"
+                        , HA.style "cursor" "pointer"
+                        ]
+                        [ text stepName ]
             ]
 
     else

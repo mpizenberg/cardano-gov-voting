@@ -3939,12 +3939,12 @@ viewMissingStepsMessage ctx model =
             ]
             [ text "Please complete the following steps before building the transaction:" ]
         , Helper.missingStepsList
-            [ Helper.missingStepItem "Voter identification" (isStepIncomplete model.voterStep) "voter-step"
-            , Helper.missingStepItem "Proposal selection" (isStepIncomplete model.pickProposalStep) "proposal-step"
-            , Helper.missingStepItem "Rationale creation" (isStepIncomplete model.rationaleCreationStep) "rationale-step"
-            , Helper.missingStepItem "Rationale storage" (isStepIncomplete model.permanentStorageStep) "storage-step"
-            , Helper.missingStepItem "Connect wallet" (ctx.loadedWallet == Nothing) "connect-wallet"
-            , Helper.missingStepItem "Protocol parameters" (ctx.costModels == Nothing) "protocol-params"
+            [ Helper.missingStepItem "Voter identification" (isStepIncomplete model.voterStep) (Just "voter-step")
+            , Helper.missingStepItem "Proposal selection" (isStepIncomplete model.pickProposalStep) (Just "proposal-step")
+            , Helper.missingStepItem "Rationale creation" (isStepIncomplete model.rationaleCreationStep) (Just "rationale-step")
+            , Helper.missingStepItem "Rationale storage" (isStepIncomplete model.permanentStorageStep) (Just "storage-step")
+            , Helper.missingStepItem "Connect wallet" (ctx.loadedWallet == Nothing) Nothing
+            , Helper.missingStepItem "Protocol parameters" (ctx.costModels == Nothing) Nothing
             ]
         ]
 

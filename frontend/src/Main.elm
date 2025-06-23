@@ -159,6 +159,7 @@ port receiveTask : (Value -> msg) -> Sub msg
 
 type alias Model =
     { page : Page
+    , appUrl : AppUrl
     , mobileMenuIsOpen : Bool
     , walletDropdownIsOpen : Bool
     , networkDropdownIsOpen : Bool
@@ -236,6 +237,7 @@ type alias ModelConfig =
 initialModel : ModelConfig -> Model
 initialModel { jsonLdContexts, db, networkId, ipfsPreconfig, voterPreconfig } =
     { page = LandingPage
+    , appUrl = routeToAppUrl RouteLanding
     , mobileMenuIsOpen = False
     , walletDropdownIsOpen = False
     , networkDropdownIsOpen = False
@@ -479,7 +481,19 @@ update msg model =
             ( model, Cmd.none )
 
         ( UrlChanged route, _ ) ->
-            handleUrlChange route model
+            let
+                oldUrl =
+                    model.appUrl
+
+                newUrl =
+                    routeToAppUrl route
+            in
+            -- If the new URL is exactly the same, ignore
+            if newUrl == oldUrl then
+                ( model, Cmd.none )
+
+            else
+                handleUrlChange route model
 
         ( GotProtocolParams result, _ ) ->
             case result of
@@ -701,6 +715,10 @@ update msg model =
 
 handleUrlChange : Route -> Model -> ( Model, Cmd Msg )
 handleUrlChange route model =
+    let
+        appUrl =
+            routeToAppUrl route
+    in
     case route of
         Route404 ->
             Debug.todo "Handle 404 page"
@@ -709,17 +727,22 @@ handleUrlChange route model =
             ( { model
                 | errors = []
                 , page = LandingPage
+                , appUrl = appUrl
               }
-            , pushUrl <| AppUrl.toString <| routeToAppUrl route
+            , pushUrl <| AppUrl.toString appUrl
             )
 
         RoutePreparation { networkId } ->
             let
                 newModel =
-                    { model | errors = [], page = PreparationPage <| Page.Preparation.init model.ipfsPreconfig }
+                    { model
+                        | errors = []
+                        , page = PreparationPage <| Page.Preparation.init model.ipfsPreconfig
+                        , appUrl = appUrl
+                    }
 
                 updateUrlCmd =
-                    pushUrl <| AppUrl.toString <| routeToAppUrl route
+                    pushUrl <| AppUrl.toString appUrl
             in
             if networkId /= model.networkId then
                 initHelper route
@@ -756,32 +779,36 @@ handleUrlChange route model =
                 ( { model
                     | errors = []
                     , page = SigningPage <| Page.Signing.initialModel expectedSigners tx
+                    , appUrl = appUrl
                   }
-                , pushUrl <| AppUrl.toString <| routeToAppUrl route
+                , pushUrl <| AppUrl.toString appUrl
                 )
 
         RouteMultisigRegistration ->
             ( { model
                 | errors = []
                 , page = MultisigRegistrationPage Page.MultisigRegistration.initialModel
+                , appUrl = appUrl
               }
-            , pushUrl <| AppUrl.toString <| routeToAppUrl route
+            , pushUrl <| AppUrl.toString appUrl
             )
 
         RoutePdf ->
             ( { model
                 | errors = []
                 , page = PdfPage Page.Pdf.initialModel
+                , appUrl = appUrl
               }
-            , pushUrl <| AppUrl.toString <| routeToAppUrl route
+            , pushUrl <| AppUrl.toString appUrl
             )
 
         RouteDisclaimer ->
             ( { model
                 | errors = []
                 , page = DisclaimerPage
+                , appUrl = appUrl
               }
-            , pushUrl <| AppUrl.toString <| routeToAppUrl route
+            , pushUrl <| AppUrl.toString appUrl
             )
 
 

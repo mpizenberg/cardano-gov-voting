@@ -1,4 +1,4 @@
-module ProposalMetadata exposing (Body, ProposalMetadata, decoder, encode, fromRaw)
+module ProposalMetadata exposing (AuthorWitness, Body, ProposalMetadata, authorWitnessDecoder, decoder, encode, fromRaw)
 
 {-| Helper module to handle proposals metadata following [CIP-108](https://cips.cardano.org/cip/CIP-0108).
 -}
@@ -16,6 +16,17 @@ type alias ProposalMetadata =
     { raw : String
     , computedHash : String
     , body : Body
+    , authors : List AuthorWitness
+    }
+
+
+{-| Author witness for the proposal metadata.
+-}
+type alias AuthorWitness =
+    { name : String
+    , witnessAlgorithm : String
+    , publicKey : String
+    , signature : Maybe String
     }
 
 
@@ -58,10 +69,16 @@ fromRaw raw =
             Bytes.fromText raw
                 |> Bytes.blake2b256
                 |> Bytes.toHex
+
+        authorsDecoder =
+            JD.field "authors" (JD.list authorWitnessDecoder)
+                |> JD.maybe
+                |> JD.map (Maybe.withDefault [])
     in
-    JD.decodeString (JD.field "body" bodyDecoder) raw
-        |> Result.map (ProposalMetadata raw computedHash)
-        |> Result.withDefault (ProposalMetadata raw computedHash noBody)
+    Result.map2 (ProposalMetadata raw computedHash)
+        (JD.decodeString (JD.field "body" bodyDecoder) raw)
+        (JD.decodeString authorsDecoder raw)
+        |> Result.withDefault (ProposalMetadata raw computedHash noBody [])
 
 
 bodyDecoder : Decoder Body
@@ -69,3 +86,21 @@ bodyDecoder =
     JD.map2 Body
         (JD.maybe <| JD.field "title" JD.string)
         (JD.maybe <| JD.field "abstract" JD.string)
+
+
+{-| JSON decoder for author witness.
+-}
+authorWitnessDecoder : JD.Decoder AuthorWitness
+authorWitnessDecoder =
+    JD.map4
+        (\name witnessAlgorithm publicKey signature ->
+            { name = name
+            , witnessAlgorithm = witnessAlgorithm
+            , publicKey = publicKey
+            , signature = signature
+            }
+        )
+        (JD.field "name" JD.string)
+        (JD.at [ "witness", "witnessAlgorithm" ] JD.string)
+        (JD.at [ "witness", "publicKey" ] JD.string)
+        (JD.map Just <| JD.at [ "witness", "signature" ] JD.string)

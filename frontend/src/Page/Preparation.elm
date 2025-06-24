@@ -62,7 +62,7 @@ import Markdown.Block
 import Markdown.Parser as Md
 import Natural
 import Platform.Cmd as Cmd
-import ProposalMetadata exposing (ProposalMetadata)
+import ProposalMetadata exposing (AuthorWitness, ProposalMetadata)
 import RemoteData exposing (RemoteData, WebData)
 import ScriptInfo exposing (ScriptInfo)
 import Set exposing (Set)
@@ -296,14 +296,6 @@ type alias RationaleSignature =
     , rationale : Rationale
     , signedJson : String
     , error : Maybe String
-    }
-
-
-type alias AuthorWitness =
-    { name : String
-    , witnessAlgorithm : String
-    , publicKey : String
-    , signature : Maybe String
     }
 
 
@@ -2081,7 +2073,7 @@ handleJsonSignatureFileRead n authorName result =
 
 authorWitnessExtractDecoder : String -> JD.Decoder AuthorWitness
 authorWitnessExtractDecoder authorName =
-    JD.field "authors" (JD.list authorWitnessDecoder)
+    JD.field "authors" (JD.list ProposalMetadata.authorWitnessDecoder)
         |> JD.andThen
             (\authors ->
                 case List.head <| List.filter (\a -> a.name == authorName) authors of
@@ -2091,22 +2083,6 @@ authorWitnessExtractDecoder authorName =
                     Nothing ->
                         JD.fail <| "No witness found for author: " ++ authorName
             )
-
-
-authorWitnessDecoder : JD.Decoder AuthorWitness
-authorWitnessDecoder =
-    JD.map4
-        (\name witnessAlgorithm publicKey signature ->
-            { name = name
-            , witnessAlgorithm = witnessAlgorithm
-            , publicKey = publicKey
-            , signature = signature
-            }
-        )
-        (JD.field "name" JD.string)
-        (JD.at [ "witness", "witnessAlgorithm" ] JD.string)
-        (JD.at [ "witness", "publicKey" ] JD.string)
-        (JD.map Just <| JD.at [ "witness", "signature" ] JD.string)
 
 
 signatureDecodingError : JD.Error -> Step RationaleSignatureForm {} RationaleSignature -> Step RationaleSignatureForm {} RationaleSignature
@@ -3019,9 +2995,9 @@ viewSelectedProposal ctx { id, actionType, metadata, metadataUrl, metadataHash }
                 , Helper.viewActionTypeIcon actionType
                 ]
 
-        ( hashIsValid, abstractContent ) =
+        ( hashIsValid, abstractContent, authorsDetails ) =
             case maybeMetadata of
-                Just { computedHash, abstract } ->
+                Just { raw, computedHash, abstract, authors } ->
                     ( computedHash == metadataHash
                     , Helper.proposalDetailsItem "Abstract"
                         (div
@@ -3030,10 +3006,34 @@ viewSelectedProposal ctx { id, actionType, metadata, metadataUrl, metadataHash }
                             ]
                             [ Helper.renderMarkdownContent abstract ]
                         )
+                    , viewAuthorsDetails raw authors
                     )
 
                 Nothing ->
-                    ( True, text "" )
+                    ( True, text "", viewAuthorsDetails "" [] )
+
+        viewAuthorsDetails : String -> List AuthorWitness -> Html msg
+        viewAuthorsDetails rawMetadata authors =
+            Helper.proposalDetailsItem "Authors" <|
+                if List.isEmpty authors then
+                    text "No author with accompanying signature was found."
+
+                else
+                    div []
+                        [ Html.ul [] <| List.map viewOneAuthor authors
+                        , Html.p [] [ text "To verify the authors signatures, download the metadata and use cardano-signer as follows:" ]
+                        , Html.pre [] [ text cardanoSignerExample ]
+                        , Helper.downloadJSONButton "Download metadata.json" { filename = "metadata.json", rawJson = rawMetadata }
+                        ]
+
+        viewOneAuthor : AuthorWitness -> Html msg
+        viewOneAuthor { name, publicKey } =
+            Html.li [] [ text <| "name: " ++ name ++ ", public key: " ++ publicKey ]
+
+        cardanoSignerExample =
+            "cardano-signer.js verify --cip100 \\\n"
+                ++ "   --data-file metadata.json \\\n"
+                ++ "   --json-extended"
     in
     div []
         [ div [ HA.class "flex items-center mb-4" ]
@@ -3057,6 +3057,7 @@ viewSelectedProposal ctx { id, actionType, metadata, metadataUrl, metadataHash }
                     , text "INVALID HASH"
                     ]
             , abstractContent
+            , authorsDetails
             ]
         , Html.p
             [ HA.style "margin-top" "1rem" ]
@@ -3124,7 +3125,7 @@ strBothEnds startLength endLength str =
             ++ String.slice (strLength - endLength) strLength str
 
 
-getProposalContent : RemoteData String ProposalMetadata -> String -> { title : String, maybeMetadata : Maybe { computedHash : String, abstract : String } }
+getProposalContent : RemoteData String ProposalMetadata -> String -> { title : String, maybeMetadata : Maybe { raw : String, computedHash : String, abstract : String, authors : List AuthorWitness } }
 getProposalContent metadata metadataUrl =
     case metadata of
         RemoteData.NotAsked ->
@@ -3142,8 +3143,10 @@ getProposalContent metadata metadataUrl =
             { title = meta.body.title |> Maybe.withDefault "unknown (unexpected metadata format)"
             , maybeMetadata =
                 Just
-                    { computedHash = meta.computedHash
+                    { raw = meta.raw
+                    , computedHash = meta.computedHash
                     , abstract = Maybe.withDefault "Unknown abstract (unexpected metadata format)" meta.body.abstract
+                    , authors = meta.authors
                     }
             }
 
@@ -3646,7 +3649,7 @@ viewCompletedRationaleSignature ctx ratSig =
                         ]
                         (List.map viewSignerCard ratSig.authors)
                     ]
-            , Html.p [ HA.style "margin-top" "1rem" ] [ Helper.downloadJSONButton ratSig.signedJson ]
+            , Html.p [ HA.style "margin-top" "1rem" ] [ Helper.downloadJSONButton "Download JSON rationale" { filename = "rationale.json", rawJson = ratSig.signedJson } ]
             ]
         , Html.map ctx.wrapMsg <| Helper.viewButton "Change authors" ChangeAuthorsButtonClicked
         ]
@@ -3866,7 +3869,7 @@ viewCompletedStorage r storage =
                 , HA.style "font-size" "0.9375rem"
                 ]
                 [ text "Your file has been uploaded to IPFS. File pinning is ongoing and may take a few hours to complete. We recommend saving a local copy of your JSON file in case you need to re-upload it in the future." ]
-            , Html.p [ HA.style "margin" "1rem 0rem" ] [ Helper.downloadJSONButton r.signedJson ]
+            , Html.p [ HA.style "margin" "1rem 0rem" ] [ Helper.downloadJSONButton "Download JSON rationale" { filename = "rationale.json", rawJson = r.signedJson } ]
             , Helper.storageInfoGrid infoItems
             ]
         , Helper.viewButton "Add another storage location" AddOtherStorageButtonCLicked

@@ -2061,11 +2061,11 @@ stepNotAvailableCard content =
 
 {-| Download JSON button
 -}
-downloadJSONButton : String -> Html msg
-downloadJSONButton jsonRationale =
+downloadJSONButton : String -> { filename : String, rawJson : String } -> Html msg
+downloadJSONButton buttonText { filename, rawJson } =
     Html.a
-        [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode jsonRationale
-        , HA.download "rationale.json"
+        [ HA.href <| "data:application/json;charset=utf-8," ++ Url.percentEncode rawJson
+        , HA.download filename
         , HA.style "text-decoration" "none"
         ]
         [ Html.button
@@ -2084,7 +2084,7 @@ downloadJSONButton jsonRationale =
                 [ HA.style "margin-right" "0.5rem"
                 ]
                 [ text "📥" ]
-            , text "Download JSON rationale"
+            , text buttonText
             ]
         ]
 

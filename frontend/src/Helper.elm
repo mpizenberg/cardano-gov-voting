@@ -1397,7 +1397,8 @@ proposalDetailsItem label content =
         [ Html.span
             [ HA.style "font-weight" "500"
             , HA.style "color" "#4A5568"
-            , HA.style "margin-right" "0.3rem"
+            , HA.style "margin-right" "0.5rem"
+            , HA.style "min-width" "6rem"
             ]
             [ text (label ++ ":") ]
         , content

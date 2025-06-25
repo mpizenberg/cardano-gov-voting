@@ -3019,16 +3019,54 @@ viewSelectedProposal ctx { id, actionType, metadata, metadataUrl, metadataHash }
                     text "No author with accompanying signature was found."
 
                 else
-                    div []
-                        [ Html.ul [] <| List.map viewOneAuthor authors
-                        , Html.p [] [ text "To verify the authors signatures, download the metadata and use cardano-signer as follows:" ]
-                        , Html.pre [] [ text cardanoSignerExample ]
-                        , Helper.downloadJSONButton "Download metadata.json" { filename = "metadata.json", rawJson = rawMetadata }
+                    div
+                        [ HA.style "padding" "1rem"
+                        , HA.style "border" "1px solid #E2E8F0"
+                        , HA.style "border-radius" "0.5rem"
+                        , HA.style "background-color" "#F9FAFB"
+                        , HA.style "box-sizing" "border-box"
+                        , HA.style "word-break" "break-word"
+                        ]
+                        [ Html.ul
+                            [ HA.style "list-style-type" "disc"
+                            , HA.style "margin-left" "1.5rem"
+                            ]
+                            (List.map viewOneAuthor authors)
+                        , Html.p
+                            [ HA.style "margin-top" "1.5rem"
+                            ]
+                            [ text "To verify the authors signatures, download the metadata and use cardano-signer as follows:" ]
+                        , Html.pre
+                            [ HA.style "background-color" "#F9FAFB"
+                            , HA.style "padding" "0.75rem"
+                            , HA.style "border-radius" "0.25rem"
+                            , HA.style "margin-top" "0.5rem"
+                            , HA.style "color" "#1F2937"
+                            , HA.style "font-family" "monospace"
+                            , HA.style "background-color" "#E2E8F0"
+                            ]
+                            [ text cardanoSignerExample ]
+                        , Html.div [ HA.style "margin-top" "1rem" ]
+                            [ Helper.downloadJSONButton "Download metadata.json"
+                                { filename = "metadata.json"
+                                , rawJson = rawMetadata
+                                }
+                            ]
                         ]
 
         viewOneAuthor : AuthorWitness -> Html msg
         viewOneAuthor { name, publicKey } =
-            Html.li [] [ text <| "name: " ++ name ++ ", public key: " ++ publicKey ]
+            Html.li
+                [ HA.style "margin-bottom" "0.75rem"
+                , HA.style "line-height" "1.6"
+                , HA.style "color" "#4A5568"
+                ]
+                [ Html.strong [] [ text "Name: " ]
+                , text name
+                , Html.br [] []
+                , Html.strong [] [ text "Public key: " ]
+                , text publicKey
+                ]
 
         cardanoSignerExample =
             "cardano-signer.js verify --cip100 \\\n"
